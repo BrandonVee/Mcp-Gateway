@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
   AppstoreOutlined,
+  ClockCircleOutlined,
   CloudServerOutlined,
   DashboardOutlined,
   LogoutOutlined,
@@ -22,6 +23,7 @@ import {
 } from "antd";
 import { useState } from "react";
 import type { View } from "../types";
+import { formatTime } from "../utils/format";
 
 const { Header, Sider, Content } = Layout;
 
@@ -52,6 +54,7 @@ interface AppShellProps {
   userCount: number;
   serverCount: number;
   refreshing: boolean;
+  lastUpdatedAt: number | null;
   onNavigate: (view: View) => void;
   onRefresh: () => void;
   onLogout: () => void;
@@ -63,6 +66,7 @@ export function AppShell({
   userCount,
   serverCount,
   refreshing,
+  lastUpdatedAt,
   onNavigate,
   onRefresh,
   onLogout,
@@ -165,6 +169,11 @@ export function AppShell({
           </Flex>
 
           <Space size={12}>
+            {lastUpdatedAt && (
+              <Tag icon={<ClockCircleOutlined />} className="updated-tag">
+                {formatTime(lastUpdatedAt)}
+              </Tag>
+            )}
             <Tag
               icon={<SafetyCertificateOutlined />}
               color="success"

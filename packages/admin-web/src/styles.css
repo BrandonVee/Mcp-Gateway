@@ -258,6 +258,14 @@ code,
   letter-spacing: 0.08em;
 }
 
+.updated-tag {
+  margin: 0;
+  color: #758195;
+  background: #f5f7fa;
+  border-color: #e1e6ed;
+  font: 500 9px var(--mono);
+}
+
 .app-content {
   padding: 24px 30px 36px;
 }
@@ -294,6 +302,21 @@ code,
 .metric-card {
   position: relative;
   overflow: hidden;
+}
+
+.skeleton-card {
+  min-height: 155px;
+}
+
+.skeleton-panel {
+  min-height: 380px;
+}
+
+.data-load-error {
+  min-height: calc(100vh - 160px);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line) !important;
 }
 
 .metric-card::before {

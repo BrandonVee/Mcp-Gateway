@@ -1,5 +1,15 @@
 import type { AdminUser, GatewayHealth, McpServer } from "./types";
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     credentials: "include",
@@ -16,7 +26,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       body?.error ??
       body?.error_description ??
       `请求失败（${response.status}）`;
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
   return body as T;
 }
