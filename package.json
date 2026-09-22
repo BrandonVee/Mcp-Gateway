@@ -6,6 +6,8 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev:admin": "pnpm --filter @mcp/admin-web dev",
+    "build:admin": "pnpm --filter @mcp/admin-web build",
     "dev:auth": "pnpm --filter @mcp/auth-server dev",
     "dev:gateway": "pnpm --filter @mcp/gateway dev",
     "dev:mcp": "pnpm --filter @mcp/mcp-server dev",
