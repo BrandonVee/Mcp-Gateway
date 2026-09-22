@@ -1,0 +1,23 @@
+{
+  "name": "mcp-platform",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:auth": "pnpm --filter @mcp/auth-server dev",
+    "dev:gateway": "pnpm --filter @mcp/gateway dev",
+    "dev:mcp": "pnpm --filter @mcp/mcp-server dev",
+    "typecheck": "pnpm -r typecheck",
+    "smoke": "tsx scripts/smoke.ts",
+    "client": "tsx scripts/client-demo.ts",
+    "token": "tsx scripts/get-token.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  }
+}
