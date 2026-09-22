@@ -1,4 +1,18 @@
 services:
+  admin-web:
+    build: .
+    command: pnpm --filter @mcp/admin-web dev --host 0.0.0.0
+    environment:
+      ADMIN_API_TARGET: "http://auth:9001"
+      GATEWAY_TARGET: "http://gateway:8000"
+    ports:
+      - "5173:5173"
+    depends_on:
+      auth:
+        condition: service_started
+      gateway:
+        condition: service_started
+
   redis:
     image: redis:7-alpine
     healthcheck:
@@ -17,6 +31,7 @@ services:
       DB_PATH: "/data/auth.db"
       ADMIN_PASSWORD: "admin123"
       SEED_DEMO_USER: "1"
+      ADMIN_WEB_URL: "http://localhost:5173"
     ports:
       - "9001:9001"
     volumes:

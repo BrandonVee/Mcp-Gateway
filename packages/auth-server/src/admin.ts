@@ -6,6 +6,8 @@ import { scryptHash } from './users.js';
 import type { SigningKeys } from './keys.js';
 import type { Context as HonoContext } from 'hono';
 
+const ADMIN_WEB_URL = process.env.ADMIN_WEB_URL ?? 'http://localhost:5173';
+
 export interface AdminDeps {
   keys: SigningKeys;
   issuer: string;
@@ -51,6 +53,10 @@ export function createAdminRouter(deps: AdminDeps): Hono {
 
   // Guard everything under /admin.
   router.use('/admin/*', async (c, next) => {
+    if (c.req.path === '/admin') {
+      await next();
+      return;
+    }
     if (!(await isAdminRequest(c, deps))) return jsonError(c, 'admin privileges required', 403);
     await next();
   });
@@ -109,77 +115,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     return c.json({ ok: true });
   });
 
-  // Minimal admin UI (browser, session-cookie auth).
-  router.get('/admin', async (c) => {
-    if (!(await isAdminRequest(c, deps))) {
-      return c.html('<html><body><p>Admin privileges required. <a href="/authorize">Sign in</a> as an admin first.</p></body></html>');
-    }
-    return c.html(adminPage());
-  });
+  // Keep a single entry point; the React application owns login and UI rendering.
+  router.get('/admin', (c) => c.redirect(ADMIN_WEB_URL, 302));
 
   return router;
-}
-
-function adminPage(): string {
-  return `<!doctype html>
-<html><head><meta charset="utf-8"><title>MCP Auth - Admin</title>
-<style>
-body{font-family:system-ui;max-width:46rem;margin:3rem auto;color:#222}
-table{border-collapse:collapse;width:100%;margin:1rem 0}
-td,th{border:1px solid #ddd;padding:.4rem .6rem;text-align:left;font-size:.9rem}
-input,select{padding:.35rem;margin:.15rem}
-button{padding:.35rem .8rem;cursor:pointer}
-.row-actions button{margin-right:.3rem}
-.small{color:#777;font-size:.85rem}
-</style></head><body>
-<h2>User management</h2>
-<p class="small">Create users, reset passwords, disable accounts. Changes apply immediately.</p>
-
-<h3>Create user</h3>
-<form id="create">
-  <input id="username" placeholder="username" required>
-  <input id="password" placeholder="password (min 6)" type="password" required>
-  <select id="role"><option value="user">user</option><option value="admin">admin</option></select>
-  <button type="submit">Create</button>
-</form>
-
-<h3>Users</h3>
-<table id="users"><thead><tr><th>ID</th><th>Username</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead><tbody></tbody></table>
-<div class="small" id="msg"></div>
-
-<script>
-const msg = (t) => document.getElementById('msg').textContent = t;
-async function load() {
-  const res = await fetch('/admin/users');
-  if (res.status === 403) { document.body.innerHTML = '<p>Admin privileges required.</p>'; return; }
-  const { users } = await res.json();
-  const tbody = document.querySelector('#users tbody');
-  tbody.innerHTML = '';
-  for (const u of users) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + u.id + '</td><td>' + u.username + '</td><td>' + u.role + '</td><td>' + (u.disabled ? 'disabled' : 'active') + '</td>' +
-      '<td class="row-actions">' +
-      '<button onclick="resetPwd(' + u.id + ')">reset password</button>' +
-      '<button onclick="toggle(' + u.id + ',' + u.disabled + ')">' + (u.disabled ? 'enable' : 'disable') + '</button>' +
-      (u.username !== 'admin' ? '<button onclick="del(' + u.id + ')">delete</button>' : '') +
-      '</td>';
-    tbody.appendChild(tr);
-  }
-}
-async function api(method, url, body) {
-  const res = await fetch(url, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-  if (!res.ok) msg((await res.json()).error ?? 'request failed');
-  else msg('OK');
-  load();
-}
-function resetPwd(id) { const p = prompt('new password (min 6)'); if (p) api('PATCH', '/admin/users/' + id, { password: p }); }
-function toggle(id, disabled) { api('PATCH', '/admin/users/' + id, { disabled: !disabled }); }
-function del(id) { if (confirm('delete user?')) api('DELETE', '/admin/users/' + id); }
-document.getElementById('create').addEventListener('submit', (e) => {
-  e.preventDefault();
-  api('POST', '/admin/users', { username: username.value, password: password.value, role: role.value });
-});
-load();
-</script>
-</body></html>`;
 }
