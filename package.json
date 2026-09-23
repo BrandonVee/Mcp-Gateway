@@ -6,6 +6,10 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "docker compose up --build",
+    "dev:detached": "docker compose up -d --build",
+    "dev:down": "docker compose down",
+    "dev:logs": "docker compose logs -f",
     "dev:admin": "pnpm --filter @mcp/admin-web dev",
     "build:admin": "pnpm --filter @mcp/admin-web build",
     "dev:auth": "pnpm --filter @mcp/auth-server dev",

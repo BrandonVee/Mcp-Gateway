@@ -7,6 +7,10 @@ services:
       GATEWAY_TARGET: "http://gateway:8000"
     ports:
       - "5173:5173"
+    volumes:
+      - ./packages/admin-web/src:/app/packages/admin-web/src
+      - ./packages/admin-web/index.html:/app/packages/admin-web/index.html
+      - ./packages/admin-web/vite.config.ts:/app/packages/admin-web/vite.config.ts
     depends_on:
       auth:
         condition: service_started
@@ -35,6 +39,8 @@ services:
     ports:
       - "9001:9001"
     volumes:
+      - ./packages/auth-server/src:/app/packages/auth-server/src
+      - ./packages/shared/src:/app/packages/shared/src
       - ./data/auth:/data
 
   gateway:
@@ -50,6 +56,9 @@ services:
       GATEWAY_SERVERS: "demo|http://mcp-a:3001,http://mcp-b:3002"
     ports:
       - "8000:8000"
+    volumes:
+      - ./packages/gateway/src:/app/packages/gateway/src
+      - ./packages/shared/src:/app/packages/shared/src
     depends_on:
       redis:
         condition: service_healthy
@@ -69,6 +78,9 @@ services:
       INSTANCE_ID: "demo-a"
     ports:
       - "3001:3001"
+    volumes:
+      - ./packages/mcp-server/src:/app/packages/mcp-server/src
+      - ./packages/shared/src:/app/packages/shared/src
 
   mcp-b:
     build: .
@@ -79,3 +91,6 @@ services:
       INSTANCE_ID: "demo-b"
     ports:
       - "3002:3002"
+    volumes:
+      - ./packages/mcp-server/src:/app/packages/mcp-server/src
+      - ./packages/shared/src:/app/packages/shared/src
