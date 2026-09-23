@@ -24,6 +24,7 @@ import {
 import { useState } from "react";
 import type { View } from "../types";
 import { formatTime } from "../utils/format";
+import { CommandPalette } from "./CommandPalette";
 
 const { Header, Sider, Content } = Layout;
 
@@ -168,7 +169,8 @@ export function AppShell({
             </div>
           </Flex>
 
-          <Space size={12}>
+          <Space size={10}>
+            <CommandPalette onNavigate={onNavigate} />
             {lastUpdatedAt && (
               <Tag icon={<ClockCircleOutlined />} className="updated-tag">
                 {formatTime(lastUpdatedAt)}

@@ -1,43 +1,74 @@
-import type { ThemeConfig } from "antd";
+import { theme, type ThemeConfig } from "antd";
 
 export const appTheme: ThemeConfig = {
+  algorithm: theme.darkAlgorithm,
   token: {
-    colorPrimary: "#0b6bcb",
-    colorInfo: "#0b6bcb",
-    colorSuccess: "#13a06f",
-    colorWarning: "#d97706",
-    colorError: "#d14343",
-    colorText: "#162033",
-    colorTextSecondary: "#687386",
-    colorBgBase: "#f4f7fb",
-    colorBorder: "#dce3ed",
+    colorPrimary: "#2f8cff",
+    colorInfo: "#22d3ee",
+    colorSuccess: "#20d99a",
+    colorWarning: "#ffb547",
+    colorError: "#ff5d73",
+    colorText: "#edf5ff",
+    colorTextSecondary: "#8292aa",
+    colorBgBase: "#070b13",
+    colorBgContainer: "#0d1422",
+    colorBgElevated: "#111a2a",
+    colorBorder: "#1c2b42",
+    colorBorderSecondary: "#16243a",
     borderRadius: 8,
     borderRadiusLG: 12,
     controlHeight: 38,
+    wireframe: false,
     fontFamily:
       '"IBM Plex Sans", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    boxShadowSecondary: "0 18px 50px rgba(22, 32, 51, 0.14)",
+    boxShadowSecondary: "0 24px 70px rgba(0, 0, 0, 0.5)",
   },
   components: {
     Button: {
       fontWeight: 600,
-      primaryShadow: "0 5px 14px rgba(11, 107, 203, 0.2)",
+      primaryShadow:
+        "0 0 0 1px rgba(80, 170, 255, 0.18), 0 8px 24px rgba(47, 140, 255, 0.22)",
+      defaultBg: "#101a2a",
+      defaultBorderColor: "#263953",
+      defaultHoverBg: "#16243a",
     },
     Card: {
+      colorBgContainer: "rgba(13, 20, 34, 0.92)",
+      headerBg: "transparent",
       headerFontSize: 16,
+    },
+    Input: {
+      colorBgContainer: "#0a111e",
+      activeBg: "#0d1625",
+      hoverBg: "#0d1625",
     },
     Menu: {
       darkItemBg: "transparent",
-      darkItemColor: "#aebbd0",
-      darkItemHoverBg: "rgba(255, 255, 255, 0.06)",
-      darkItemSelectedBg: "#0b6bcb",
-      darkItemSelectedColor: "#ffffff",
+      darkItemColor: "#8090aa",
+      darkItemHoverBg: "rgba(47, 140, 255, 0.08)",
+      darkItemHoverColor: "#dceaff",
+      darkItemSelectedBg: "rgba(47, 140, 255, 0.14)",
+      darkItemSelectedColor: "#67c7ff",
       itemBorderRadius: 8,
     },
+    Modal: {
+      contentBg: "#0c1422",
+      headerBg: "transparent",
+    },
+    Segmented: {
+      itemSelectedBg: "#1a2a41",
+      trackBg: "#09111d",
+    },
     Table: {
-      headerBg: "#f6f8fb",
-      headerColor: "#536074",
-      rowHoverBg: "#f8fbff",
+      colorBgContainer: "transparent",
+      headerBg: "#101a2a",
+      headerColor: "#8fa0b8",
+      rowHoverBg: "rgba(47, 140, 255, 0.06)",
+      borderColor: "#18283f",
+    },
+    Tag: {
+      defaultBg: "#121e30",
+      defaultColor: "#9fb0c8",
     },
   },
 };
