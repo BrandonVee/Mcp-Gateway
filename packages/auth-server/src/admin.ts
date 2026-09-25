@@ -137,8 +137,9 @@ async function getAdminActor(c: HonoContext, deps: AdminDeps): Promise<string | 
       const { payload } = await jwtVerify(header.slice(7).trim(), deps.keys.publicJwk, { issuer: deps.issuer });
       if (payload.role === 'admin' && typeof payload.sub === 'string' && (await isActiveAdmin(payload.sub))) return payload.sub;
     } catch {
-      /* fall through to cookie */
+      /* An invalid explicit credential must not fall back to a browser cookie. */
     }
+    return null;
   }
   // 2) browser session cookie of an admin user
   const cookie = getCookie(c, 'auth_session');
@@ -175,6 +176,11 @@ export function createAdminRouter(deps: AdminDeps): Hono {
 
   // Guard everything under /admin.
   router.use('/admin/*', async (c, next) => {
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+      const origin = c.req.header('origin');
+      const allowedOrigins = [new URL(deps.issuer).origin, new URL(ADMIN_WEB_URL).origin];
+      if (origin && !allowedOrigins.includes(origin)) return jsonError(c, 'invalid_origin', 403);
+    }
     if (c.req.path === '/admin' || c.req.path === '/admin/session') {
       await next();
       return;

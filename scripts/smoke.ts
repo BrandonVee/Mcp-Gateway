@@ -304,6 +304,16 @@ async function main(): Promise<void> {
     (await exchangeCode(new URL(adminFlow.submit.headers.get('location') ?? '').searchParams.get('code') ?? '', adminFlow.verifier)).access_token ?? '';
   const adminClaims = JSON.parse(Buffer.from(adminToken.split('.')[1], 'base64url').toString());
   check('admin JWT carries role=admin', adminClaims.role === 'admin', `role=${adminClaims.role}`);
+  const crossOriginAdminWrite = await fetch(`${AUTH}/admin/users`, {
+    method: 'POST',
+    headers: { origin: 'https://untrusted.example', authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ username: 'blocked', password: 'blocked-password', role: 'user' }),
+  });
+  check('admin API rejects cross-origin browser writes', crossOriginAdminWrite.status === 403);
+  const explicitBadBearer = await fetch(`${AUTH}/admin/session`, {
+    headers: { authorization: 'Bearer invalid', cookie: adminFlow.submit.headers.get('set-cookie')?.split(';')[0] ?? '' },
+  });
+  check('invalid bearer does not fall back to admin cookie', explicitBadBearer.status === 401);
   const stolenSession = await fetch(`${GW}/mcp/demo`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}`, 'mcp-session-id': sessionId! },

@@ -204,6 +204,7 @@ Vite 开发服务器会把 `/api/*` 转发至 Auth Server，把 `/gateway/*` 转
 ## 日志与监控
 
 - Auth Server 以 JSON 行输出请求日志，包含请求 ID、方法、路径、状态码和耗时；Gateway 使用 Fastify 结构化日志。两者都不记录 URL 查询字符串，避免 OAuth 回调码进入日志。MCP 实例继续向标准输出记录启动、会话和错误。命令行开发时在 `pnpm dev:local` 的终端查看；容器模式使用 `docker compose logs -f auth gateway mcp-a`。
+- 管理 API 和个人连接中心对带 `Origin` 的浏览器写请求进行来源校验；显式提供无效 Bearer Token 时不会回退到 Cookie 会话。Gateway 转发上游时移除客户端 Cookie、平台授权头和可伪造的身份头，也不把上游 `Set-Cookie` 写回平台域名。
 - 管理操作和管理员登录会写入 PostgreSQL 的 `audit_events` 表。默认保留 90 天，由 Auth Server 定期清理；可用 `AUDIT_RETENTION_DAYS` 调整。审计写入失败会在服务日志中报错，不会把已完成的管理操作伪装成失败。
 - 管理后台的“日志监控”页每 10 秒检查服务健康状态，并提供审计事件筛选、手动刷新和按 ID 翻页。审计页不是原始服务日志采集器；运行日志仍需从标准输出或容器日志采集。
 - Auth Server 与 Gateway 的 `/live` 用于进程存活探测；`/health` 用于就绪探测，依赖不可用时返回 HTTP 503。Gateway 会同时检查 Redis 与动态注册表是否及时同步。
