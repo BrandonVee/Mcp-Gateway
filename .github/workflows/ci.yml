@@ -25,6 +25,8 @@ jobs:
     timeout-minutes: 25
     env:
       COMPOSE_FILE: docker-compose.yml:.github/compose.ci.yml
+      # The runner registers this URL; the gateway resolves it inside Compose.
+      REPORTS_UPSTREAM_URL: http://mcp-reports:3003
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,9 +46,18 @@ jobs:
         run: docker compose up -d --wait gateway admin-web
       - name: Run end-to-end smoke test against built images
         run: |
-          curl --fail --silent --show-error --retry 12 --retry-connrefused --retry-delay 2 http://127.0.0.1:5173/ > /dev/null
-          curl --fail --silent --show-error http://127.0.0.1:5173/api/health > /dev/null
-          curl --fail --silent --show-error http://127.0.0.1:5173/gateway/health > /dev/null
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null \
+              && curl --fail --silent http://127.0.0.1:5173/api/health > /dev/null \
+              && curl --fail --silent http://127.0.0.1:5173/gateway/health > /dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "Admin web or its API proxies did not become ready" >&2
+              exit 1
+            fi
+            sleep 2
+          done
           pnpm smoke
       - name: Show service logs on failure
         if: failure()
