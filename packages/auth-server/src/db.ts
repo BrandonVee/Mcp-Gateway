@@ -46,14 +46,20 @@ export function startExpirySweep(): void {
   setInterval(() => void sweepExpired().catch((error) => console.error('[postgres] expiry sweep failed', error)), 10 * 60 * 1000).unref();
 }
 
-/** Create the initial administrator if the user table is empty. */
+/** Create the initial administrator if no administrator exists yet. */
 export async function bootstrapAdmin(): Promise<void> {
-  const [{ value }] = await db.select({ value: count() }).from(users);
+  const [{ value }] = await db.select({ value: count() }).from(users).where(eq(users.role, 'admin'));
   if (value > 0) return;
 
   const bootstrap = platformConfig.auth.bootstrap;
   const username = process.env.ADMIN_USERNAME ?? bootstrap.adminUsername;
+  if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
+    throw new Error('Production bootstrap requires ADMIN_PASSWORD when the user table is empty');
+  }
   const configuredPassword = process.env.ADMIN_PASSWORD ?? bootstrap.adminPassword;
+  if (process.env.NODE_ENV === 'production' && configuredPassword && configuredPassword.length < 16) {
+    throw new Error('Production ADMIN_PASSWORD must contain at least 16 characters');
+  }
   const password = configuredPassword ?? randomToken(12);
   await createUserRow(username, password, 'admin');
   if (!configuredPassword) {

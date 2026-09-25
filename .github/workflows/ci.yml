@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test:unit
+      - run: pnpm build:admin
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp
+      REDIS_URL: redis://127.0.0.1:6380
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose up -d --wait postgres redis
+      - run: pnpm db:seed:dev
+      - name: Run end-to-end smoke test
+        run: |
+          pnpm dev:local > /tmp/mcp-dev-local.log 2>&1 &
+          app_pid=$!
+          trap 'kill -TERM "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:5173/ >/dev/null && curl --fail --silent http://127.0.0.1:8000/health >/dev/null; then
+              pnpm smoke
+              exit $?
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              cat /tmp/mcp-dev-local.log
+              exit 1
+            fi
+            sleep 2
+          done
+          cat /tmp/mcp-dev-local.log
+          exit 1
+      - run: pnpm smoke
+      - name: Show service logs on failure
+        if: failure()
+        run: cat /tmp/mcp-dev-local.log 2>/dev/null || true
+      - name: Stop local services
+        if: always()
+        run: docker compose down -v

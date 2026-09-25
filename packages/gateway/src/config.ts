@@ -1,6 +1,7 @@
-import { loadPlatformConfig, type McpServerConfig } from '@mcp/shared';
+import { loadPlatformConfig, validateProductionRuntime, type McpServerConfig } from '@mcp/shared';
 
 const config = loadPlatformConfig();
+validateProductionRuntime(config, 'gateway');
 
 export const env = {
   port: config.gateway.port,

@@ -50,9 +50,53 @@ function validatePlatformConfig(config: PlatformConfig, path: string): void {
   const fail = (message: string): never => {
     throw new Error(`Invalid platform config ${path}: ${message}`);
   };
-  if (!config.auth || !Number.isInteger(config.auth.port)) fail('auth.port must be an integer');
-  if (!config.auth.postgres?.url || !Number.isInteger(config.auth.postgres.poolMax)) fail('auth.postgres is required');
+  const validPort = (value: number) => Number.isInteger(value) && value >= 1 && value <= 65535;
+  if (!config.auth || !validPort(config.auth.port)) fail('auth.port must be a valid TCP port');
+  if (!config.auth.postgres?.url || !Number.isInteger(config.auth.postgres.poolMax) || config.auth.postgres.poolMax < 1) fail('auth.postgres is required');
   if (!config.auth.internalApiToken) fail('auth.internalApiToken is required');
-  if (!config.gateway || !Number.isInteger(config.gateway.port) || !config.gateway.redisUrl) fail('gateway settings are required');
-  if (!config.gateway.registryUrl || !Number.isInteger(config.gateway.registryRefreshSeconds)) fail('gateway registry settings are required');
+  if (!config.gateway || !validPort(config.gateway.port) || !config.gateway.redisUrl) fail('gateway settings are required');
+  if (!config.gateway.registryUrl || !Number.isInteger(config.gateway.registryRefreshSeconds) || config.gateway.registryRefreshSeconds < 1) fail('gateway registry settings are required');
+}
+
+/** Fail closed before opening a listener when production still carries local-development defaults. */
+export function validateProductionRuntime(
+  config: PlatformConfig,
+  service: 'auth' | 'gateway',
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  if (env.NODE_ENV !== 'production') return;
+  const developmentBrokerToken = 'ef23e6d931a69ad96a57d9ba38a39c810d6adb8a61f4e38990a9b14e0bc6a36d';
+  const developmentEncryptionKey = '9f52ebfcbdfb3f52cfcf214b6196952c486efe7ec2c1d7f7a2144d72428c01fc';
+  const fail = (message: string): never => { throw new Error(`Production configuration: ${message}`); };
+  const requireSecret = (name: string): string => {
+    const value = env[name];
+    if (!value || value.length < 32 || value === 'local-registry-token' || value === developmentBrokerToken) {
+      fail(`${name} must be an independent secret of at least 32 characters, not a development default`);
+    }
+    return value as string;
+  };
+  const requireHttps = (name: string, value: string | undefined): void => {
+    try {
+      const url = new URL(value ?? '');
+      if (url.protocol === 'https:' && url.hostname && !url.username && !url.password) return;
+    } catch { /* Invalid URL is reported below. */ }
+    fail(`${name} must be a public HTTPS URL without embedded credentials`);
+  };
+
+  if (!env.CONFIG_FILE) fail('CONFIG_FILE must select a deployment-specific configuration file');
+  requireHttps('auth.issuer', config.auth.issuer);
+  requireHttps('gateway.resourceBaseUrl', config.gateway.resourceBaseUrl);
+  const internalToken = requireSecret('INTERNAL_API_TOKEN');
+  const brokerToken = requireSecret('CREDENTIAL_BROKER_TOKEN');
+  if (internalToken === brokerToken) fail('INTERNAL_API_TOKEN and CREDENTIAL_BROKER_TOKEN must differ');
+  if (service === 'auth') {
+    if (!env.DATABASE_URL) fail('DATABASE_URL must be supplied via the environment');
+    if (env.DATABASE_URL?.includes('mcp-dev-password')) fail('DATABASE_URL still contains the development password');
+    if (!/^[0-9a-fA-F]{64}$/.test(env.CREDENTIAL_ENCRYPT_KEY ?? '')) fail('CREDENTIAL_ENCRYPT_KEY must be a 32-byte hex key');
+    if (env.CREDENTIAL_ENCRYPT_KEY === developmentEncryptionKey) fail('CREDENTIAL_ENCRYPT_KEY must not use the development default');
+    requireHttps('ADMIN_WEB_URL', env.ADMIN_WEB_URL);
+  } else {
+    if (!env.REDIS_URL) fail('REDIS_URL must be supplied via the environment');
+    requireHttps('CONNECTIONS_WEB_URL', env.CONNECTIONS_WEB_URL);
+  }
 }

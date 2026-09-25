@@ -8,12 +8,13 @@ import { authorizeRouter } from './authorize.js';
 import { createTokenRouter } from './token.js';
 import { createMetadataRouter } from './metadata.js';
 import { createAdminRouter } from './admin.js';
-import { loadPlatformConfig } from '@mcp/shared';
+import { loadPlatformConfig, validateProductionRuntime } from '@mcp/shared';
 import { users } from './schema.js';
 import { createRegistryRouter } from './registry.js';
 import { createConnectionsRouter } from './connections.js';
 
 const config = loadPlatformConfig();
+validateProductionRuntime(config, 'auth');
 const PORT = config.auth.port;
 const ISSUER = config.auth.issuer;
 const ACCESS_TOKEN_TTL = config.auth.accessTokenTtlSeconds;
@@ -43,7 +44,7 @@ app.use('*', async (c, next) => {
     throw error;
   } finally {
     // Do not log query strings, headers or bodies: OAuth URLs can contain codes.
-    if (c.req.path !== '/health') {
+    if (c.req.path !== '/health' && c.req.path !== '/live') {
       console.log(JSON.stringify({
         level: failed ? 'error' : 'info',
         service: 'auth',
@@ -57,6 +58,8 @@ app.use('*', async (c, next) => {
   }
 });
 app.use('*', cors({ allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowHeaders: ['content-type', 'authorization'], credentials: true }));
+
+app.get('/live', (c) => c.json({ ok: true, service: 'auth-server' }));
 
 app.get('/health', async (c) => {
   try {

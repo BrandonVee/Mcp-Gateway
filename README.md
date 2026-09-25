@@ -139,6 +139,8 @@ export CREDENTIAL_BROKER_TOKEN="$(openssl rand -hex 32)"
 
 配置文件只管理 Auth Server、PostgreSQL、Gateway、Redis 等服务参数；逻辑 Server、实例地址和用户授权以 PostgreSQL 为准。密钥、数据库密码等生产机密仍可通过环境变量或 Secret 注入覆盖。
 
+生产部署需设置 `NODE_ENV=production` 和独立的 `CONFIG_FILE`。服务会在监听端口前校验公网 HTTPS 地址、独立的内部令牌、凭据加密密钥及数据库/Redis 环境变量，并拒绝仓库内的开发默认凭据。首次创建管理员还需通过 `ADMIN_PASSWORD` 提供至少 16 位密码；已有用户的数据库启动时不依赖此变量。当前 Compose 文件与 Vite 开发服务仅用于本地开发，不是生产部署清单。详见 [生产部署与上线检查](docs/production.md)。
+
 ## 管理 API
 
 管理接口需要 `role=admin` 的 Bearer token：
@@ -189,6 +191,7 @@ curl -X PUT http://localhost:9001/admin/users/USER_ID/servers \
 - 上游实例添加、启停、删除；
 - Gateway、Redis、动态注册表运行状态总览。
 - 日志监控：Auth、PostgreSQL、Gateway、Redis、注册表状态，以及可筛选的管理操作审计。
+- 中文/英文界面切换：基于语义键的 `zh-CN` / `en-US` 资源文件，语言选择保存在浏览器本地存储；变量通过 `t("key", { name })` 传递。
 
 本地单独启动：
 
@@ -203,6 +206,7 @@ Vite 开发服务器会把 `/api/*` 转发至 Auth Server，把 `/gateway/*` 转
 - Auth Server 以 JSON 行输出请求日志，包含请求 ID、方法、路径、状态码和耗时；Gateway 使用 Fastify 结构化日志。两者都不记录 URL 查询字符串，避免 OAuth 回调码进入日志。MCP 实例继续向标准输出记录启动、会话和错误。命令行开发时在 `pnpm dev:local` 的终端查看；容器模式使用 `docker compose logs -f auth gateway mcp-a`。
 - 管理操作和管理员登录会写入 PostgreSQL 的 `audit_events` 表。默认保留 90 天，由 Auth Server 定期清理；可用 `AUDIT_RETENTION_DAYS` 调整。审计写入失败会在服务日志中报错，不会把已完成的管理操作伪装成失败。
 - 管理后台的“日志监控”页每 10 秒检查服务健康状态，并提供审计事件筛选、手动刷新和按 ID 翻页。审计页不是原始服务日志采集器；运行日志仍需从标准输出或容器日志采集。
+- Auth Server 与 Gateway 的 `/live` 用于进程存活探测；`/health` 用于就绪探测，依赖不可用时返回 HTTP 503。Gateway 会同时检查 Redis 与动态注册表是否及时同步。
 
 ## 本地运行与验证
 

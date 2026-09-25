@@ -1,5 +1,5 @@
 /**
- * End-to-end smoke test against a running stack (docker compose up):
+ * End-to-end smoke test against a running stack (Compose or pnpm dev:local):
  *
  *   1. discovery: RFC 9728 protected-resource metadata + RFC 8414 auth-server metadata
  *   2. OAuth: use pre-registered "demo-client", do authorization-code + PKCE
@@ -56,6 +56,12 @@ function check(name: string, ok: boolean, detail = ''): void {
 
 async function main(): Promise<void> {
   // --- 1. discovery ---------------------------------------------------------
+  const [authLive, authReady, gatewayLive, gatewayReady] = await Promise.all([
+    fetch(`${AUTH}/live`), fetch(`${AUTH}/health`), fetch(`${GW}/live`), fetch(`${GW}/health`),
+  ]);
+  check('auth liveness and readiness', authLive.status === 200 && authReady.status === 200);
+  check('gateway liveness and readiness', gatewayLive.status === 200 && gatewayReady.status === 200);
+
   const prMeta = await fetch(`${GW}/.well-known/oauth-protected-resource`).then((r) => r.json());
   check('protected-resource metadata', prMeta.authorization_servers?.[0] === AUTH, `auth server: ${prMeta.authorization_servers?.[0]}`);
   const demoMeta = await fetch(`${GW}/.well-known/oauth-protected-resource/mcp/demo`).then((r) => r.json());

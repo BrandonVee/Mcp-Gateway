@@ -21,9 +21,14 @@ const app = Fastify({
 app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
 app.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
 
-app.get('/health', async () => {
+app.get('/live', async () => ({ ok: true, service: 'mcp-gateway' }));
+
+app.get('/health', async (_req, reply) => {
   const redis = await redisHealthy();
-  return { ok: true, service: 'mcp-gateway', redis, registry: registryStatus };
+  const registryReady = Boolean(registryStatus.lastSuccessAt && !registryStatus.lastError
+    && Date.now() - registryStatus.lastSuccessAt <= Math.max(60, env.registryRefreshSeconds * 3) * 1000);
+  const ok = redis && registryReady;
+  return reply.code(ok ? 200 : 503).send({ ok, service: 'mcp-gateway', redis, registry: registryStatus });
 });
 
 await app.register(async (instance) => {

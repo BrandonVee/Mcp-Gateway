@@ -5,27 +5,7 @@ import { pipeline } from 'node:stream/promises';
 import { env, getServerConfig, refreshServerConfigs } from '../config.js';
 import { pickInstance, bindSession, sessionOwnedBy } from '../lb.js';
 import { forbidden, hasServerAccess } from '../auth.js';
-
-const HOP_BY_HOP = new Set([
-  'connection',
-  'keep-alive',
-  'transfer-encoding',
-  'upgrade',
-  'te',
-  'trailer',
-  'proxy-authenticate',
-  'proxy-authorization',
-]);
-
-function filterHeaders(headers: Record<string, unknown>, extra: string[] = []): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(headers)) {
-    const lower = k.toLowerCase();
-    if (HOP_BY_HOP.has(lower) || extra.includes(lower)) continue;
-    out[lower] = Array.isArray(v) ? v.join(', ') : String(v);
-  }
-  return out;
-}
+import { filterRequestHeaders, filterResponseHeaders } from './headers.js';
 
 export function registerMcpRoutes(app: FastifyInstance): void {
   app.all('/mcp/:serverName', proxyHandler);
@@ -123,7 +103,7 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
   const target = await pickInstance(cfg, incomingSessionId, hashSeed);
 
   // Build upstream headers: drop hop-by-hop + client-spoofable internal headers.
-  const headers = filterHeaders(req.headers, ['host', 'content-length', 'authorization', 'x-mcp-user', 'x-mcp-client-id', 'x-mcp-scope']);
+  const headers = filterRequestHeaders(req.headers);
   if (upstreamCredential) headers[upstreamCredential.header] = upstreamCredential.value;
   const upstreamUrl = new URL(target.url);
   const upstreamPort = upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? '443' : '80');
@@ -151,7 +131,16 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
     method: req.method as 'POST', // fastify gives the uppercase verb; widened by undici at runtime
     headers,
     body: hasBody ? (req.body as Buffer | undefined) : undefined,
+    headersTimeout: 15_000,
+    bodyTimeout: 0, // Streamable HTTP and SSE may keep the body open indefinitely.
+  }).catch((error: unknown) => {
+    req.log.warn({ error: error instanceof Error ? error.name : 'UnknownError', server: serverName }, 'upstream request failed');
+    return null;
   });
+  if (!upstream) {
+    await reply.code(502).send({ error: 'upstream_unavailable', server: serverName });
+    return;
+  }
 
   if (cfg.authMode !== 'none' && (upstream.statusCode === 401 || upstream.statusCode === 403)) {
     await upstream.body.dump();
@@ -166,7 +155,7 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
     await bindSession(cfg.name, sessionId, target.url, sessionOwner);
   }
 
-  const resHeaders = filterHeaders(upstream.headers);
+  const resHeaders = filterResponseHeaders(upstream.headers);
 
   // Hand the raw response over so we can stream (SSE-safe).
   reply.hijack();
