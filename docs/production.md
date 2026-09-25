@@ -28,7 +28,7 @@
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 在每次推送和拉取请求中运行类型检查、单元测试、前端构建，以及 PostgreSQL/Redis 支撑的端到端 smoke 测试。Docker 镜像使用锁文件和 `pnpm install --frozen-lockfile`，避免构建时依赖漂移。
+`.github/workflows/ci.yml` 在每次推送和拉取请求中先运行类型检查、单元测试和前端构建；通过后构建 Docker 镜像，检查镜像内的前端产物，并使用 `.github/compose.ci.yml` 从镜像文件启动服务（不挂载源码、不使用 watch 进程）运行端到端 smoke 测试。Docker 镜像使用锁文件和 `pnpm install --frozen-lockfile`，避免构建时依赖漂移。此流程验证容器构建和运行，不包含生产发布或部署审批。
 
 ## 尚需在生产环境验收的事项
 
