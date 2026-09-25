@@ -1,3 +1,4 @@
+import { useI18n } from "../../i18n";
 import {
   ApiOutlined,
   CopyOutlined,
@@ -44,6 +45,7 @@ interface ServersPageProps {
 }
 
 export function ServersPage(props: ServersPageProps) {
+  const { t } = useI18n();
   const { message } = App.useApp();
   const [keyword, setKeyword] = useState("");
   const [status, setStatus] = useState<"all" | "enabled" | "paused">("all");
@@ -68,22 +70,22 @@ export function ServersPage(props: ServersPageProps) {
 
   const copyUrl = async (url: string) => {
     await navigator.clipboard.writeText(url);
-    message.success("Endpoint URL 已复制");
+    message.success(t("servers.endpointUrlCopied"));
   };
 
   return (
     <div className="page-stack page-enter">
       <PageToolbar
         eyebrow="ROUTE REGISTRY"
-        title="内部与外部 Server，一处接入"
-        description="注册 Streamable HTTP Endpoint，Gateway 自动发现并热更新。"
+        title="servers.oneRegistryInternalExternalServers"
+        description="servers.registerStreamableHttpEndpointsGateway"
         primaryAction={
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={props.onCreate}
           >
-            注册 Server
+            {t("servers.registerServer")}
           </Button>
         }
         filters={
@@ -91,7 +93,7 @@ export function ServersPage(props: ServersPageProps) {
             <Input.Search
               allowClear
               className="toolbar-search"
-              placeholder="搜索名称、标识或 Endpoint"
+              placeholder={t("servers.searchNameIdEndpoint")}
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
             />
@@ -99,13 +101,13 @@ export function ServersPage(props: ServersPageProps) {
               value={status}
               onChange={(value) => setStatus(value as typeof status)}
               options={[
-                { value: "all", label: "全部" },
-                { value: "enabled", label: "运行中" },
-                { value: "paused", label: "已暂停" },
+                { value: "all", label: t("common.all") },
+                { value: "enabled", label: t("servers.running") },
+                { value: "paused", label: t("servers.paused") },
               ]}
             />
             <Typography.Text type="secondary" className="filter-result-count">
-              {filteredServers.length} 条结果
+              {t("common.resultCount", { count: filteredServers.length })}
             </Typography.Text>
           </>
         }
@@ -135,15 +137,15 @@ export function ServersPage(props: ServersPageProps) {
 
                 <div className="server-policy">
                   <div>
-                    <small>用户认证</small>
-                    <strong>{server.auth_mode === "none" ? "平台登录" : server.auth_mode === "api_key" ? "平台登录 + API Key" : "平台登录 + OAuth"}</strong>
+                    <small>{t("users.userSign")}</small>
+                    <strong>{server.auth_mode === "none" ? t("servers.platformSign") : server.auth_mode === "api_key" ? t("servers.platformSignApiKey") : t("servers.platformSignOauth")}</strong>
                   </div>
-                  <Button icon={<SafetyCertificateOutlined />} onClick={() => props.onConfigureAuth(server)}>设置认证</Button>
+                  <Button icon={<SafetyCertificateOutlined />} onClick={() => props.onConfigureAuth(server)}>{t("servers.configureAuth")}</Button>
                   <div>
-                    <small>访问授权</small>
-                    <strong>{server.user_count} 位普通用户</strong>
+                    <small>{t("servers.accessGrants")}</small>
+                    <strong>{t("servers.countUsers", { count: server.user_count })}</strong>
                   </div>
-                  <Button icon={<TeamOutlined />} onClick={() => props.onConfigureUsers(server)}>分配权限</Button>
+                  <Button icon={<TeamOutlined />} onClick={() => props.onConfigureUsers(server)}>{t("servers.assignAccess")}</Button>
                 </div>
 
                 <div className="instance-list">
@@ -157,7 +159,7 @@ export function ServersPage(props: ServersPageProps) {
                             />
                             <strong title={instance.id}>{instance.id}</strong>
                             <Tag bordered={false}>
-                              {instance.enabled ? "在线" : "已停用"}
+                              {instance.enabled ? t("servers.online") : t("servers.disabled")}
                             </Tag>
                           </Flex>
                           <Typography.Text ellipsis={{ tooltip: instance.url }}>
@@ -165,14 +167,14 @@ export function ServersPage(props: ServersPageProps) {
                           </Typography.Text>
                         </div>
                         <Space size={2}>
-                          <Tooltip title="复制 URL">
+                          <Tooltip title={t("servers.copyUrl")}>
                             <Button
                               type="text"
                               icon={<CopyOutlined />}
                               onClick={() => copyUrl(instance.url)}
                             />
                           </Tooltip>
-                          <Tooltip title="在新窗口打开">
+                          <Tooltip title={t("servers.openNewTab")}>
                             <Button
                               type="text"
                               icon={<ExportOutlined />}
@@ -186,7 +188,7 @@ export function ServersPage(props: ServersPageProps) {
                             />
                           </Tooltip>
                           <Tooltip
-                            title={instance.enabled ? "停用实例" : "启用实例"}
+                            title={instance.enabled ? t("servers.disableInstance") : t("servers.enableInstance")}
                           >
                             <Button
                               type="text"
@@ -196,7 +198,7 @@ export function ServersPage(props: ServersPageProps) {
                               }
                             />
                           </Tooltip>
-                          <Tooltip title="删除实例">
+                          <Tooltip title={t("servers.deleteInstance")}>
                             <Button
                               type="text"
                               danger
@@ -212,20 +214,20 @@ export function ServersPage(props: ServersPageProps) {
                   ) : (
                     <Empty
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description="暂无上游实例"
+                      description={t("servers.noUpstreamInstances")}
                     />
                   )}
                 </div>
 
                 <footer className="server-card-footer">
-                  <span><TeamOutlined /> 管理员默认可访问 · {props.users.length} 个身份</span>
+                  <span><TeamOutlined /> {t("servers.adminsAccessDefaultCountIdentities", { count: props.users.length })}</span>
                   <Space size={4}>
                     <Button
                       type="link"
                       icon={<PlusOutlined />}
                       onClick={() => props.onAddInstance(server)}
                     >
-                      添加实例
+                      {t("servers.addInstance")}
                     </Button>
                     <Button
                       type="link"
@@ -233,7 +235,7 @@ export function ServersPage(props: ServersPageProps) {
                       icon={<DeleteOutlined />}
                       onClick={() => props.onDelete(server)}
                     >
-                      删除
+                      {t("common.delete")}
                     </Button>
                   </Space>
                 </footer>
@@ -247,8 +249,8 @@ export function ServersPage(props: ServersPageProps) {
             image={<ApiOutlined className="empty-server-icon" />}
             description={
               props.servers.length
-                ? "未找到匹配的 Server"
-                : "尚未注册 MCP Server"
+                ? t("servers.noMatchingServers")
+                : t("servers.noMcpServersRegistered")
             }
           >
             {props.servers.length ? (
@@ -258,7 +260,7 @@ export function ServersPage(props: ServersPageProps) {
                   setStatus("all");
                 }}
               >
-                清除筛选
+                {t("servers.clearFilters")}
               </Button>
             ) : (
               <Button
@@ -266,7 +268,7 @@ export function ServersPage(props: ServersPageProps) {
                 icon={<DeploymentUnitOutlined />}
                 onClick={props.onCreate}
               >
-                注册第一个 Server
+                {t("servers.registerFirstServer")}
               </Button>
             )}
           </Empty>

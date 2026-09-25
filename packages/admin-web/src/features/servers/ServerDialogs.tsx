@@ -1,3 +1,4 @@
+import { useI18n } from "../../i18n";
 import {
   ApiOutlined,
   CloudServerOutlined,
@@ -64,6 +65,7 @@ function CreateServerDialog({
   onClose,
   onCreate,
 }: Pick<ServerDialogsProps, "busy" | "onClose" | "onCreate">) {
+  const { t } = useI18n();
   const [form] = Form.useForm<ServerFormValues>();
 
   const submit = async () => {
@@ -84,11 +86,11 @@ function CreateServerDialog({
         <ModalTitle
           icon={<CloudServerOutlined />}
           eyebrow="ROUTE ONBOARDING"
-          title="注册 MCP Server"
+          title={t("serverDialog.registerMcpServer")}
         />
       }
-      okText="注册并同步"
-      cancelText="取消"
+      okText={t("serverDialog.registerSync")}
+      cancelText={t("common.cancel")}
       confirmLoading={busy}
       onCancel={onClose}
       onOk={submit}
@@ -97,18 +99,18 @@ function CreateServerDialog({
         type="info"
         showIcon
         icon={<ApiOutlined />}
-        message="支持 Gateway 网络可访问的 HTTP/HTTPS Streamable MCP Endpoint。"
+        message={t("serverDialog.useHttpHttpsStreamableMcp")}
         className="dialog-alert"
       />
       <Form form={form} layout="vertical" requiredMark={false} initialValues={{ auth_mode: "none", api_key_header: "authorization", api_key_prefix: "Bearer " }}>
         <Form.Item
           name="name"
-          label="Server 标识"
+          label={t("serverDialog.serverId")}
           rules={[
-            { required: true, message: "请输入 Server 标识" },
+            { required: true, message: t("serverDialog.enterServerId") },
             {
               pattern: /^[a-zA-Z0-9._-]+$/,
-              message: "仅支持字母、数字、点、下划线和连字符",
+              message: t("serverDialog.useLettersNumbersPeriodsUnderscores"),
             },
           ]}
         >
@@ -118,18 +120,18 @@ function CreateServerDialog({
             autoFocus
           />
         </Form.Item>
-        <Form.Item name="displayName" label="显示名称">
+        <Form.Item name="displayName" label={t("serverDialog.displayName")}>
           <Input placeholder="External Search" />
         </Form.Item>
-        <Form.Item name="instanceId" label="实例 ID（可选）">
-          <Input placeholder="留空自动生成 UUID" />
+        <Form.Item name="instanceId" label={t("serverDialog.instanceIdOptional")}>
+          <Input placeholder={t("serverDialog.leaveBlankGenerateUuid")} />
         </Form.Item>
         <Form.Item
           name="url"
           label="MCP Endpoint URL"
           rules={[
-            { required: true, message: "请输入 Endpoint URL" },
-            { type: "url", message: "请输入有效的 HTTP/HTTPS URL" },
+            { required: true, message: t("serverDialog.enterEndpointUrl") },
+            { type: "url", message: t("serverDialog.enterValidHttpHttpsUrl") },
           ]}
         >
           <Input
@@ -161,36 +163,38 @@ function authFields(values: ServerFormValues): ServerAuthInput {
 }
 
 function AuthFormFields() {
+  const { t } = useI18n();
   return <>
-    <Form.Item name="auth_mode" label="用户连接方式"><Select options={[
-      { value: "none", label: "无额外认证" }, { value: "api_key", label: "用户 API Key" }, { value: "oauth", label: "用户 OAuth" },
+    <Form.Item name="auth_mode" label={t("serverDialog.userConnectionMethod")}><Select options={[
+      { value: "none", label: t("serverDialog.noAdditionalAuth") }, { value: "api_key", label: t("serverDialog.userApiKey") }, { value: "oauth", label: t("serverDialog.userOauth") },
     ]} /></Form.Item>
     <Form.Item noStyle shouldUpdate={(prev, next) => prev.auth_mode !== next.auth_mode}>
       {({ getFieldValue }) => getFieldValue("auth_mode") === "api_key" ? <>
-        <Form.Item name="api_key_header" label="上游请求头" rules={[{ required: true, message: "请输入上游请求头" }]}><Input placeholder="authorization 或 x-api-key" /></Form.Item>
-        <Form.Item name="api_key_prefix" label="值前缀"><Input placeholder="Bearer （可留空）" /></Form.Item>
-        <Alert type="info" showIcon message="用户在连接中心填写自己的 Key，平台按用户注入该请求头。" />
+        <Form.Item name="api_key_header" label={t("serverDialog.upstreamHeader")} rules={[{ required: true, message: t("serverDialog.enterUpstreamHeader") }]}><Input placeholder={t("serverDialog.authorizationXApiKey")} /></Form.Item>
+        <Form.Item name="api_key_prefix" label={t("serverDialog.valuePrefix")}><Input placeholder={t("serverDialog.bearerOptional")} /></Form.Item>
+        <Alert type="info" showIcon message={t("serverDialog.usersEnterOwnKeyConnections")} />
       </> : getFieldValue("auth_mode") === "oauth" ? <>
-        <Form.Item name="oauth_authorize_url" label="授权端点" rules={[{ required: true }, { type: "url" }]}><Input placeholder="https://provider.example/authorize" /></Form.Item>
-        <Form.Item name="oauth_token_url" label="Token 端点" rules={[{ required: true }, { type: "url" }]}><Input placeholder="https://provider.example/token" /></Form.Item>
+        <Form.Item name="oauth_authorize_url" label={t("serverDialog.authorizationEndpoint")} rules={[{ required: true }, { type: "url" }]}><Input placeholder="https://provider.example/authorize" /></Form.Item>
+        <Form.Item name="oauth_token_url" label={t("serverDialog.tokenEndpoint")} rules={[{ required: true }, { type: "url" }]}><Input placeholder="https://provider.example/token" /></Form.Item>
         <Form.Item name="oauth_client_id" label="Client ID" rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name="oauth_client_secret" label="Client Secret（公有客户端可留空；更新时留空保持原值）"><Input.Password autoComplete="off" /></Form.Item>
-        <Form.Item name="oauth_client_auth_method" label="Token 端点客户端认证" initialValue="none"><Select options={[
-          { value: "none", label: "无（公有客户端）" }, { value: "client_secret_basic", label: "Client Secret Basic" },
+        <Form.Item name="oauth_client_secret" label={t("serverDialog.clientSecretOptionalPublicClients")}><Input.Password autoComplete="off" /></Form.Item>
+        <Form.Item name="oauth_client_auth_method" label={t("serverDialog.tokenEndpointClientAuth")} initialValue="none"><Select options={[
+          { value: "none", label: t("serverDialog.nonePublicClient") }, { value: "client_secret_basic", label: "Client Secret Basic" },
           { value: "client_secret_post", label: "Client Secret Post" },
         ]} /></Form.Item>
         <Form.Item name="oauth_scopes" label="Scopes"><Input placeholder="read write" /></Form.Item>
-        <Form.Item name="oauth_resource" label="Resource URL（可选）"><Input placeholder="https://mcp.example.com/mcp" /></Form.Item>
-        <Form.Item name="oauth_issuer" label="响应 Issuer（可选；提供方返回 iss 时填写）"><Input placeholder="https://provider.example" /></Form.Item>
-        <Alert type="info" showIcon message="在提供方注册回调地址：https://你的 Auth 域名/oauth/callback/Server标识" />
+        <Form.Item name="oauth_resource" label={t("serverDialog.resourceUrlOptional")}><Input placeholder="https://mcp.example.com/mcp" /></Form.Item>
+        <Form.Item name="oauth_issuer" label={t("serverDialog.responseIssuerOptionalUseWhen")}><Input placeholder="https://provider.example" /></Form.Item>
+        <Alert type="info" showIcon message={t("serverDialog.registerCallbackProviderHttpsAuth")} />
       </> : null}
     </Form.Item>
   </>;
 }
 
 function ConfigureAuthDialog({ server, busy, onClose, onConfigureAuth }: Pick<ServerDialogsProps, "busy" | "onClose" | "onConfigureAuth"> & { server: McpServer }) {
+  const { t } = useI18n();
   const [form] = Form.useForm<ServerFormValues>();
-  return <Modal open width={600} title={`配置用户连接 / ${server.display_name}`} okText="保存配置" cancelText="取消" confirmLoading={busy}
+  return <Modal open width={600} title={t("serverDialog.configureUserConnectionServer", { server: server.display_name })} okText={t("serverDialog.saveSettings")} cancelText={t("common.cancel")} confirmLoading={busy}
     onCancel={onClose} onOk={() => form.validateFields().then((values) => onConfigureAuth(server, authFields(values)))}>
     <Form form={form} layout="vertical" requiredMark={false} initialValues={{
       auth_mode: server.auth_mode, api_key_header: server.api_key_header, api_key_prefix: server.api_key_prefix,
@@ -203,17 +207,18 @@ function ConfigureAuthDialog({ server, busy, onClose, onConfigureAuth }: Pick<Se
 }
 
 function ConfigureUsersDialog({ server, users, busy, onClose, onConfigureUsers }: Pick<ServerDialogsProps, "users" | "busy" | "onClose" | "onConfigureUsers"> & { server: McpServer }) {
+  const { t } = useI18n();
   const [form] = Form.useForm<{ user_ids: number[] }>();
   const wildcardUsers = users.filter((user) => user.role === "user" && user.servers.includes("*"));
   const ordinaryUsers = users.filter((user) => user.role === "user" && !user.servers.includes("*"));
-  return <Modal open width={560} title={`分配 Server 权限 / ${server.display_name}`} okText="保存授权" cancelText="取消" confirmLoading={busy}
+  return <Modal open width={560} title={t("serverDialog.assignServerAccessServer", { server: server.display_name })} okText={t("serverDialog.saveGrants")} cancelText={t("common.cancel")} confirmLoading={busy}
     onCancel={onClose} onOk={() => form.validateFields().then(({ user_ids }) => onConfigureUsers(server, user_ids))}>
     <Alert type="info" showIcon className="dialog-alert"
-      message={`选中的普通用户可访问此 Server；管理员和 ${wildcardUsers.length} 位通配符用户默认可访问。移除授权将立即阻止已有令牌继续访问。`} />
+      message={t("serverDialog.selectedUsersAccessServerAdmins", { count: wildcardUsers.length })} />
     <Form form={form} layout="vertical" initialValues={{ user_ids: ordinaryUsers.filter((user) => user.servers.includes(server.name)).map((user) => user.id) }}>
-      <Form.Item name="user_ids" label="允许访问的用户">
-        <Select mode="multiple" allowClear placeholder="选择用户" options={ordinaryUsers.map((user) => ({
-          label: `${user.username}${user.disabled ? "（认证已关闭）" : ""}`, value: user.id,
+      <Form.Item name="user_ids" label={t("serverDialog.usersAccess")}>
+        <Select mode="multiple" allowClear placeholder={t("serverDialog.selectUsers")} options={ordinaryUsers.map((user) => ({
+          label: `${user.username}${user.disabled ? t("serverDialog.signDisabled") : ""}`, value: user.id,
         }))} />
       </Form.Item>
     </Form>
@@ -228,6 +233,7 @@ function AddInstanceDialog({
 }: Pick<ServerDialogsProps, "busy" | "onClose" | "onAddInstance"> & {
   server: McpServer;
 }) {
+  const { t } = useI18n();
   const [form] = Form.useForm<AddInstanceInput>();
 
   return (
@@ -237,11 +243,11 @@ function AddInstanceDialog({
         <ModalTitle
           icon={<DeploymentUnitOutlined />}
           eyebrow="UPSTREAM CAPACITY"
-          title={`添加实例 / ${server.name}`}
+          title={t("serverDialog.addInstanceServer", { server: server.name })}
         />
       }
-      okText="添加到实例池"
-      cancelText="取消"
+      okText={t("serverDialog.addPool")}
+      cancelText={t("common.cancel")}
       confirmLoading={busy}
       onCancel={onClose}
       onOk={() =>
@@ -254,15 +260,15 @@ function AddInstanceDialog({
       }
     >
       <Form form={form} layout="vertical" requiredMark={false}>
-        <Form.Item name="id" label="实例 ID（可选）">
-          <Input placeholder="留空自动生成 UUID" autoFocus />
+        <Form.Item name="id" label={t("serverDialog.instanceIdOptional")}>
+          <Input placeholder={t("serverDialog.leaveBlankGenerateUuid")} autoFocus />
         </Form.Item>
         <Form.Item
           name="url"
           label="Endpoint URL"
           rules={[
-            { required: true, message: "请输入 Endpoint URL" },
-            { type: "url", message: "请输入有效的 HTTP/HTTPS URL" },
+            { required: true, message: t("serverDialog.enterEndpointUrl") },
+            { type: "url", message: t("serverDialog.enterValidHttpHttpsUrl") },
           ]}
         >
           <Input

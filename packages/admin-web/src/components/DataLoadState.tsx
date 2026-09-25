@@ -1,9 +1,11 @@
 import { ReloadOutlined } from "@ant-design/icons";
 import { Button, Card, Col, Result, Row, Skeleton } from "antd";
+import { useI18n } from "../i18n";
 
 export function PageSkeleton() {
+  const { t } = useI18n();
   return (
-    <div className="page-stack page-enter" aria-label="正在加载控制平面数据">
+    <div className="page-stack page-enter" aria-label={t("app.loading.label")}>
       <Row gutter={[16, 16]}>
         {Array.from({ length: 4 }, (_, index) => (
           <Col xs={24} sm={12} xl={6} key={index}>
@@ -42,11 +44,12 @@ export function DataLoadError({
   loading: boolean;
   onRetry: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card className="data-load-error" bordered={false}>
       <Result
         status="warning"
-        title="控制平面数据加载失败"
+        title={t("app.loading.errorTitle")}
         subTitle={message}
         extra={
           <Button
@@ -55,7 +58,7 @@ export function DataLoadError({
             loading={loading}
             onClick={onRetry}
           >
-            重新加载
+            {t("app.loading.retry")}
           </Button>
         }
       />

@@ -129,6 +129,29 @@ body {
   background: #070b13;
 }
 
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px 2px 9px;
+  color: #88acd1;
+  background: #0c1625;
+  border: 1px solid #223752;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+.language-switcher .ant-select { min-width: 82px; }
+.language-switcher .ant-select-selector { border: 0 !important; background: transparent !important; box-shadow: none !important; }
+.language-switcher.compact { align-self: flex-end; }
+.login-form-area { position: relative; }
+.login-form-area > .language-switcher { position: absolute; top: 24px; right: 24px; z-index: 2; }
+.connections-header > .language-switcher { margin-left: auto; }
+.connections-header .connections-user { margin-left: 0; }
+@media (max-width: 640px) {
+  .connections-header { flex-wrap: wrap; }
+  .connections-header .connections-user { margin-left: auto; }
+}
+
 .connection-admin-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -1,3 +1,4 @@
+import { useI18n, type Language, type MessageKey } from "../../i18n";
 import { DisconnectOutlined, LinkOutlined, SafetyCertificateOutlined } from "@ant-design/icons";
 import { Button, Card, Flex, Input, Select, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -22,20 +23,21 @@ interface ConnectionsAdminPageProps {
   onRevoke: (user: AdminUser, server: McpServer) => void;
 }
 
-const statusMeta: Record<ConnectionStatus, { label: string; color: string }> = {
-  connected: { label: "已连接", color: "success" },
-  pending: { label: "待用户连接", color: "warning" },
-  expired: { label: "已过期", color: "error" },
-  disabled: { label: "用户已禁用", color: "default" },
-  stale: { label: "需重新连接", color: "processing" },
+const statusMeta: Record<ConnectionStatus, { label: MessageKey; color: string }> = {
+  connected: { label: "status.connected", color: "success" },
+  pending: { label: "connectionsAdmin.waitingUser", color: "warning" },
+  expired: { label: "status.expired", color: "error" },
+  disabled: { label: "connectionsAdmin.userDisabled", color: "default" },
+  stale: { label: "connectionsAdmin.reconnectRequired", color: "processing" },
 };
 
-function formatDate(value: number | null | undefined) {
+function formatDate(value: number | null | undefined, language: Language) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("zh-CN", { dateStyle: "short", timeStyle: "short" }).format(value);
+  return new Intl.DateTimeFormat(language, { dateStyle: "short", timeStyle: "short" }).format(value);
 }
 
 export function ConnectionsAdminPage({ users, servers, connections, onRevoke }: ConnectionsAdminPageProps) {
+  const { t, language } = useI18n();
   const [keyword, setKeyword] = useState("");
   const [filter, setFilter] = useState<"all" | ConnectionStatus>("all");
 
@@ -69,12 +71,12 @@ export function ConnectionsAdminPage({ users, servers, connections, onRevoke }: 
   }, [rows, keyword, filter]);
 
   const columns: ColumnsType<ConnectionRow> = [
-    { title: "用户", dataIndex: ["user", "username"], key: "user", render: (_, row) => <span className="identity-copy"><strong>{row.user.username}</strong><small>ID / {row.user.id}</small></span> },
+    { title: t("common.user"), dataIndex: ["user", "username"], key: "user", render: (_, row) => <span className="identity-copy"><strong>{row.user.username}</strong><small>ID / {row.user.id}</small></span> },
     { title: "MCP Server", key: "server", render: (_, row) => <span className="identity-copy"><strong>{row.server.display_name}</strong><small>{row.server.name}</small></span> },
-    { title: "上游认证", key: "mode", width: 126, render: (_, row) => <Tag bordered={false} color={row.server.auth_mode === "oauth" ? "blue" : row.server.auth_mode === "api_key" ? "cyan" : "default"}>{row.server.auth_mode === "oauth" ? "OAuth" : row.server.auth_mode === "api_key" ? "API Key" : "无需认证"}</Tag> },
-    { title: "连接状态", key: "status", width: 150, render: (_, row) => <Tag color={statusMeta[row.status].color}>{statusMeta[row.status].label}</Tag> },
-    { title: "更新时间", key: "updated", width: 190, render: (_, row) => <Typography.Text type="secondary">{formatDate(row.credential?.updated_at)}</Typography.Text> },
-    { title: "操作", key: "actions", width: 130, align: "right", render: (_, row) => row.credential ? <Button type="link" danger icon={<DisconnectOutlined />} onClick={() => onRevoke(row.user, row.server)}>撤销连接</Button> : <Typography.Text type="secondary">由用户连接</Typography.Text> },
+    { title: t("connectionsAdmin.upstreamAuth"), key: "mode", width: 126, render: (_, row) => <Tag bordered={false} color={row.server.auth_mode === "oauth" ? "blue" : row.server.auth_mode === "api_key" ? "cyan" : "default"}>{row.server.auth_mode === "oauth" ? "OAuth" : row.server.auth_mode === "api_key" ? "API Key" : t("connectionsAdmin.noAuthRequired")}</Tag> },
+    { title: t("connectionsAdmin.connectionStatus"), key: "status", width: 150, render: (_, row) => <Tag color={statusMeta[row.status].color}>{t(statusMeta[row.status].label)}</Tag> },
+    { title: t("connectionsAdmin.updated"), key: "updated", width: 190, render: (_, row) => <Typography.Text type="secondary">{formatDate(row.credential?.updated_at, language)}</Typography.Text> },
+    { title: t("common.actions"), key: "actions", width: 130, align: "right", render: (_, row) => row.credential ? <Button type="link" danger icon={<DisconnectOutlined />} onClick={() => onRevoke(row.user, row.server)}>{t("app.revokeConnection")}</Button> : <Typography.Text type="secondary">{t("connectionsAdmin.connectedUser")}</Typography.Text> },
   ];
 
   const connected = rows.filter((row) => row.status === "connected").length;
@@ -84,27 +86,27 @@ export function ConnectionsAdminPage({ users, servers, connections, onRevoke }: 
   return <div className="page-stack page-enter">
     <PageToolbar
       eyebrow="USER CREDENTIALS"
-      title="外部服务二次认证"
-      description="管理员查看用户与外部 MCP Server 的连接状态、撤销失效凭据；API Key 和 OAuth Token 不在管理后台显示。"
-      primaryAction={<Button href="/connections" icon={<LinkOutlined />}>打开个人连接中心</Button>}
+      title="connectionsAdmin.externalServiceConnections"
+      description="connectionsAdmin.reviewUserConnectionsExternalMcp"
+      primaryAction={<Button href="/connections" icon={<LinkOutlined />}>{t("connectionsAdmin.openPersonalConnections")}</Button>}
       filters={<>
-        <Input.Search allowClear className="toolbar-search" placeholder="搜索用户或 Server" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+        <Input.Search allowClear className="toolbar-search" placeholder={t("connectionsAdmin.searchUsersServers")} value={keyword} onChange={(event) => setKeyword(event.target.value)} />
         <Select className="toolbar-select" value={filter} onChange={setFilter} options={[
-          { value: "all", label: "全部状态" },
-          ...Object.entries(statusMeta).map(([value, item]) => ({ value, label: item.label })),
+          { value: "all", label: t("connectionsAdmin.statuses") },
+          ...Object.entries(statusMeta).map(([value, item]) => ({ value, label: t(item.label) })),
         ]} />
-        <Typography.Text type="secondary" className="filter-result-count">{filtered.length} 条结果</Typography.Text>
+        <Typography.Text type="secondary" className="filter-result-count">{t("common.resultCount", { count: filtered.length })}</Typography.Text>
       </>}
     />
-    <div className="connection-admin-summary" aria-label="二次认证概览">
-      <div><span>需认证的授权关系</span><strong>{rows.length}</strong></div>
-      <div><span>已连接</span><strong>{connected}</strong></div>
-      <div><span>待用户连接</span><strong>{pending}</strong></div>
-      <div><span>需要处理</span><strong>{attention}</strong></div>
+    <div className="connection-admin-summary" aria-label={t("connectionsAdmin.connectionOverview")}>
+      <div><span>{t("connectionsAdmin.grantsRequiringAuth")}</span><strong>{rows.length}</strong></div>
+      <div><span>{t("status.connected")}</span><strong>{connected}</strong></div>
+      <div><span>{t("connectionsAdmin.waitingUser")}</span><strong>{pending}</strong></div>
+      <div><span>{t("connectionsAdmin.needsAttention")}</span><strong>{attention}</strong></div>
     </div>
     <Card className="data-card" bordered={false}>
-      <Table<ConnectionRow> rowKey="key" columns={columns} dataSource={filtered} pagination={{ pageSize: 10, hideOnSinglePage: true }} scroll={{ x: 860 }} locale={{ emptyText: "暂无需要二次认证的用户连接" }} />
-      <div className="table-summary"><Flex gap={8} align="center"><SafetyCertificateOutlined /> 用户自行在连接中心配置 API Key 或完成 OAuth 授权；管理员只管理状态与撤销。</Flex></div>
+      <Table<ConnectionRow> rowKey="key" columns={columns} dataSource={filtered} pagination={{ pageSize: 10, hideOnSinglePage: true }} scroll={{ x: 860 }} locale={{ emptyText: t("connectionsAdmin.noUserConnectionsRequireAdditional") }} />
+      <div className="table-summary"><Flex gap={8} align="center"><SafetyCertificateOutlined /> {t("connectionsAdmin.usersConfigureOwnApiKeys")}</Flex></div>
     </Card>
   </div>;
 }

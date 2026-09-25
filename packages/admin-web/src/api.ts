@@ -1,4 +1,5 @@
 import type { AdminConnection, AdminUser, AuditEventPage, AuthHealth, ConnectionServer, CreateServerInput, GatewayHealth, McpServer, ServerAuthInput } from "./types";
+import { getCurrentLanguage, getTranslation } from "./i18n";
 
 export class ApiError extends Error {
   constructor(
@@ -25,7 +26,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       body?.error?.message ??
       body?.error ??
       body?.error_description ??
-      `请求失败（${response.status}）`;
+      getTranslation("common.requestFailed", getCurrentLanguage(), { status: response.status });
     throw new ApiError(message, response.status);
   }
   return body as T;

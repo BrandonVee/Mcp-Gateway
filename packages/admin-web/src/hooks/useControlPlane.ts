@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api";
+import { getCurrentLanguage, getTranslation } from "../i18n";
 import type { AdminConnection, AdminUser, GatewayHealth, McpServer } from "../types";
 
 export function useControlPlane() {
@@ -26,7 +27,7 @@ export function useControlPlane() {
             redis: false,
             registry: {
               lastError:
-                error instanceof Error ? error.message : "Gateway 状态读取失败",
+                error instanceof Error ? error.message : getTranslation("errors.couldNotReadGatewayStatus", getCurrentLanguage()),
             },
           }),
         ),
@@ -38,7 +39,7 @@ export function useControlPlane() {
       setLastUpdatedAt(Date.now());
     } catch (error) {
       setLoadError(
-        error instanceof Error ? error.message : "控制平面数据加载失败",
+        error instanceof Error ? error.message : getTranslation("errors.controlPlaneDataLoadFailed", getCurrentLanguage()),
       );
       throw error;
     }

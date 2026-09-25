@@ -19,6 +19,8 @@ import {
 } from "antd";
 import { useState } from "react";
 import { api } from "../../api";
+import { useI18n } from "../../i18n";
+import { LanguageSwitcher } from "../../components/LanguageSwitcher";
 
 interface LoginForm {
   username: string;
@@ -26,6 +28,7 @@ interface LoginForm {
 }
 
 export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
+  const { t } = useI18n();
   const [error, setError] = useState("");
 
   const submit = async (values: LoginForm) => {
@@ -34,7 +37,7 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
       await api.login(values.username, values.password);
       onSuccess();
     } catch {
-      setError("凭据无效，或该账号没有管理员权限。");
+      setError(t("auth.login.invalidCredentials"));
     }
   };
 
@@ -57,23 +60,22 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
             01 / CONTROL SURFACE
           </Typography.Text>
           <Typography.Title>
-            一处接入，掌控每一条
-            <em>能力链路</em>
+            {t("auth.oneEntryPointControlEvery")}
+            <em>{t("auth.capabilityPath")}</em>
           </Typography.Title>
           <Typography.Paragraph>
-            统一编排身份、Server 路由与实例健康，让每一条 MCP
-            连接都有清晰的归属与边界。
+            {t("auth.unifyIdentityServerRoutingInstance")}
           </Typography.Paragraph>
           <div className="story-steps">
-            {[
-              ["AUTH", "统一身份签发"],
-              ["ROUTE", "动态路由发现"],
-              ["OBSERVE", "实时状态观测"],
-            ].map(([label, description], index) => (
+            {([
+              ["AUTH", "auth.unifiedIdentity"],
+              ["ROUTE", "auth.dynamicRouting"],
+              ["OBSERVE", "auth.liveObservability"],
+            ] as const).map(([label, description], index) => (
               <div key={label}>
                 <span>{String(index + 1).padStart(2, "0")}</span>
                 <strong>{label}</strong>
-                <small>{description}</small>
+                <small>{t(description)}</small>
               </div>
             ))}
           </div>
@@ -85,14 +87,15 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
       </section>
 
       <section className="login-form-area">
+        <LanguageSwitcher compact />
         <Card className="login-card" bordered={false}>
           <Space direction="vertical" size={4} className="login-card-heading">
             <div className="secure-icon">
               <SafetyCertificateOutlined />
             </div>
-            <Typography.Title level={2}>欢迎回来</Typography.Title>
+            <Typography.Title level={2}>{t("auth.login.title")}</Typography.Title>
             <Typography.Text type="secondary">
-              使用管理员凭据进入控制平面
+              {t("auth.login.subtitle")}
             </Typography.Text>
           </Space>
 
@@ -106,23 +109,23 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           >
             <Form.Item
               name="username"
-              label="管理员账号"
-              rules={[{ required: true, message: "请输入管理员账号" }]}
+              label={t("auth.login.usernameLabel")}
+              rules={[{ required: true, message: t("auth.login.usernameRequired") }]}
             >
               <Input
                 prefix={<UserOutlined />}
-                placeholder="输入账号"
+                placeholder={t("auth.login.usernamePlaceholder")}
                 autoComplete="username"
               />
             </Form.Item>
             <Form.Item
               name="password"
-              label="访问密码"
-              rules={[{ required: true, message: "请输入访问密码" }]}
+              label={t("auth.login.passwordLabel")}
+              rules={[{ required: true, message: t("auth.login.passwordRequired") }]}
             >
               <Input.Password
                 prefix={<LockOutlined />}
-                placeholder="输入密码"
+                placeholder={t("auth.login.passwordPlaceholder")}
                 autoComplete="current-password"
               />
             </Form.Item>
@@ -138,16 +141,16 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
 
             <Form.Item className="login-submit">
               <Button type="primary" htmlType="submit" block size="large">
-                验证并进入 <ArrowRightOutlined />
+                {t("auth.login.submit")} <ArrowRightOutlined />
               </Button>
             </Form.Item>
           </Form>
 
           <div className="login-hint">
-            <LockOutlined /> 管理会话通过 HttpOnly Cookie 安全传输
+            <LockOutlined /> {t("auth.adminSessionsUseSecureHttponly")}
           </div>
           <Button className="login-connections-link" type="link" href="/connections" icon={<LinkOutlined />} block>
-            普通用户？进入 MCP 连接中心
+            {t("auth.notAdminOpenMcpConnections")}
           </Button>
         </Card>
       </section>

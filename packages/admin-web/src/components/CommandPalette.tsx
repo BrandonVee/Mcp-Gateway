@@ -11,51 +11,52 @@ import {
 import { Empty, Input, Modal, Tag } from "antd";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { View } from "../types";
+import { useI18n, type MessageKey } from "../i18n";
 
 const commands: Array<{
   view: View;
-  title: string;
-  description: string;
+  title: MessageKey;
+  description: MessageKey;
   keywords: string;
   icon: ReactNode;
   shortcut: string;
 }> = [
   {
     view: "overview",
-    title: "运行态势",
-    description: "查看系统指标、实时路由拓扑和基础设施状态",
+    title: "nav.overview.title",
+    description: "nav.overview.description",
     keywords: "overview dashboard status 总览 运行",
     icon: <DashboardOutlined />,
     shortcut: "G O",
   },
   {
     view: "users",
-    title: "身份与访问",
-    description: "管理用户、角色和 MCP Server 授权边界",
+    title: "nav.users.title",
+    description: "nav.users.description",
     keywords: "users identity access 用户 身份 权限",
     icon: <TeamOutlined />,
     shortcut: "G U",
   },
   {
     view: "servers",
-    title: "Server 注册表",
-    description: "管理逻辑路由与上游服务实例",
+    title: "nav.servers.title",
+    description: "nav.servers.description",
     keywords: "servers registry routes 服务 实例 路由",
     icon: <CloudServerOutlined />,
     shortcut: "G S",
   },
   {
     view: "credentials",
-    title: "二次认证",
-    description: "查看用户的 API Key 与 OAuth 连接状态",
+    title: "nav.connections.title",
+    description: "nav.connections.description",
     keywords: "credentials connections api key oauth 二次认证 连接",
     icon: <KeyOutlined />,
     shortcut: "G C",
   },
   {
     view: "monitoring",
-    title: "日志监控",
-    description: "查看服务健康状态与管理操作审计",
+    title: "nav.monitoring.title",
+    description: "nav.monitoring.description",
     keywords: "monitoring audit logs observability 日志 监控 审计",
     icon: <MonitorOutlined />,
     shortcut: "G M",
@@ -67,6 +68,7 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ onNavigate }: CommandPaletteProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
 
@@ -85,11 +87,11 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
     const query = keyword.trim().toLowerCase();
     if (!query) return commands;
     return commands.filter((command) =>
-      `${command.title} ${command.description} ${command.keywords}`
+      `${t(command.title)} ${t(command.description)} ${command.keywords}`
         .toLowerCase()
         .includes(query),
     );
-  }, [keyword]);
+  }, [keyword, t]);
 
   const close = () => {
     setOpen(false);
@@ -109,7 +111,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
         onClick={() => setOpen(true)}
       >
         <SearchOutlined />
-        <span>快速导航</span>
+        <span>{t("nav.quickSearch")}</span>
         <kbd>⌘ K</kbd>
       </button>
 
@@ -128,7 +130,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
             autoFocus
             variant="borderless"
             value={keyword}
-            placeholder="搜索页面或输入命令…"
+            placeholder={t("nav.searchPlaceholder")}
             onChange={(event) => setKeyword(event.target.value)}
             onPressEnter={() =>
               filteredCommands[0] && navigate(filteredCommands[0].view)
@@ -136,7 +138,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
           />
           <kbd>ESC</kbd>
         </div>
-        <div className="command-caption">NAVIGATION / 导航</div>
+        <div className="command-caption">NAVIGATION / {t("nav.navigation")}</div>
         <div className="command-list">
           {filteredCommands.length ? (
             filteredCommands.map((command) => (
@@ -147,8 +149,8 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
               >
                 <span className="command-icon">{command.icon}</span>
                 <span className="command-copy">
-                  <strong>{command.title}</strong>
-                  <small>{command.description}</small>
+                  <strong>{t(command.title)}</strong>
+                  <small>{t(command.description)}</small>
                 </span>
                 <Tag bordered={false}>{command.shortcut}</Tag>
                 <RightOutlined className="command-arrow" />
@@ -157,16 +159,16 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
           ) : (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="未找到匹配命令"
+              description={t("nav.noMatches")}
             />
           )}
         </div>
         <div className="command-footer">
           <span>
-            <kbd>↵</kbd> 打开
+            <kbd>↵</kbd> {t("common.open")}
           </span>
           <span>
-            <kbd>ESC</kbd> 关闭
+            <kbd>ESC</kbd> {t("common.close")}
           </span>
           <i /> MCP CONTROL PLANE
         </div>

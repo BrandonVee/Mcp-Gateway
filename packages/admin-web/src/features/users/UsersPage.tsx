@@ -1,3 +1,4 @@
+import { useI18n } from "../../i18n";
 import {
   DeleteOutlined,
   KeyOutlined,
@@ -45,6 +46,7 @@ export function UsersPage({
   onToggle,
   onDelete,
 }: UsersPageProps) {
+  const { t } = useI18n();
   const [keyword, setKeyword] = useState("");
   const [role, setRole] = useState<"all" | AdminUser["role"]>("all");
   const [status, setStatus] = useState<"all" | "active" | "disabled">("all");
@@ -69,7 +71,7 @@ export function UsersPage({
 
   const columns: ColumnsType<AdminUser> = [
     {
-      title: "用户",
+      title: t("common.user"),
       dataIndex: "username",
       key: "username",
       render: (_, user) => (
@@ -89,7 +91,7 @@ export function UsersPage({
       ),
     },
     {
-      title: "角色",
+      title: t("common.role"),
       dataIndex: "role",
       key: "role",
       width: 120,
@@ -100,12 +102,12 @@ export function UsersPage({
           }
           color={role === "admin" ? "blue" : "default"}
         >
-          {role === "admin" ? "管理员" : "普通用户"}
+          {role === "admin" ? t("common.administrator") : t("common.standardUser")}
         </Tag>
       ),
     },
     {
-      title: "Server 访问范围",
+      title: t("users.serverAccess"),
       dataIndex: "servers",
       key: "servers",
       render: (servers: string[], user) => (
@@ -118,45 +120,45 @@ export function UsersPage({
                 color={name === "*" ? "success" : "processing"}
                 className="scope-tag"
               >
-                {name === "*" ? user.role === "admin" ? "管理员 · 全部 Server" : "全部 Server（*）" : name}
+                {name === "*" ? user.role === "admin" ? t("users.adminServers") : t("users.servers") : name}
               </Tag>
             ))
           ) : (
-            <Typography.Text type="secondary">尚未授权</Typography.Text>
+            <Typography.Text type="secondary">{t("users.noGrants")}</Typography.Text>
           )}
         </Flex>
       ),
     },
     {
-      title: "用户认证",
+      title: t("users.userSign"),
       dataIndex: "disabled",
       key: "disabled",
       width: 150,
       render: (disabled: boolean, user) => (
         <Switch
           checked={!disabled}
-          checkedChildren="允许登录"
-          unCheckedChildren="禁止登录"
+          checkedChildren={t("users.signEnabled")}
+          unCheckedChildren={t("users.signDisabled")}
           disabled={user.username === "admin"}
           onChange={() => onToggle(user)}
         />
       ),
     },
     {
-      title: "操作",
+      title: t("common.actions"),
       key: "actions",
       width: 156,
       align: "right",
       render: (_, user) => (
         <Space size={4}>
-          {user.role === "user" && <Tooltip title="分配权限">
+          {user.role === "user" && <Tooltip title={t("servers.assignAccess")}>
             <Button
               type="text"
               icon={<LinkOutlined />}
               onClick={() => onAssign(user)}
             />
           </Tooltip>}
-          <Tooltip title="重置密码">
+          <Tooltip title={t("users.resetPassword")}>
             <Button
               type="text"
               icon={<KeyOutlined />}
@@ -164,7 +166,7 @@ export function UsersPage({
             />
           </Tooltip>
           {user.username !== "admin" && (
-            <Tooltip title="删除用户">
+            <Tooltip title={t("users.deleteUser")}>
               <Button
                 type="text"
                 danger
@@ -182,11 +184,11 @@ export function UsersPage({
     <div className="page-stack page-enter">
       <PageToolbar
         eyebrow="IDENTITY DIRECTORY"
-        title="谁可以访问哪些能力"
-        description="开关用户登录与 MCP 访问，并维护每个 Server 的授权范围。"
+        title="users.whoAccessCapability"
+        description="users.controlSignMcpAccessMaintain"
         primaryAction={
           <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>
-            创建用户
+            {t("userDialog.createUser")}
           </Button>
         }
         filters={
@@ -194,7 +196,7 @@ export function UsersPage({
             <Input.Search
               allowClear
               className="toolbar-search"
-              placeholder="搜索用户或 Server"
+              placeholder={t("connectionsAdmin.searchUsersServers")}
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
             />
@@ -203,22 +205,22 @@ export function UsersPage({
               className="toolbar-select"
               onChange={setRole}
               options={[
-                { value: "all", label: "全部角色" },
-                { value: "admin", label: "管理员" },
-                { value: "user", label: "普通用户" },
+                { value: "all", label: t("users.roles") },
+                { value: "admin", label: t("common.administrator") },
+                { value: "user", label: t("common.standardUser") },
               ]}
             />
             <Segmented
               value={status}
               onChange={(value) => setStatus(value as typeof status)}
               options={[
-                { value: "all", label: "全部" },
-                { value: "active", label: "可用" },
-                { value: "disabled", label: "已禁用" },
+                { value: "all", label: t("common.all") },
+                { value: "active", label: t("status.active") },
+                { value: "disabled", label: t("status.disabled") },
               ]}
             />
             <Typography.Text type="secondary" className="filter-result-count">
-              {filteredUsers.length} 条结果
+              {t("common.resultCount", { count: filteredUsers.length })}
             </Typography.Text>
           </>
         }
@@ -231,11 +233,10 @@ export function UsersPage({
           dataSource={filteredUsers}
           pagination={{ pageSize: 10, hideOnSinglePage: true }}
           scroll={{ x: 820 }}
-          locale={{ emptyText: "暂无用户" }}
+          locale={{ emptyText: t("overview.noUsers") }}
         />
         <div className="table-summary">
-          <TeamOutlined /> 共 {users.length} 个身份，其中{" "}
-          {users.filter((user) => !user.disabled).length} 个可用
+          <TeamOutlined /> {t("users.identitySummary", { total: users.length, active: users.filter((user) => !user.disabled).length })}
         </div>
       </Card>
     </div>

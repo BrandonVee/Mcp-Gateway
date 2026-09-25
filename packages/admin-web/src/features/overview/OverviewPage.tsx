@@ -1,3 +1,4 @@
+import { useI18n } from "../../i18n";
 import {
   ApiOutlined,
   CheckCircleFilled,
@@ -33,6 +34,7 @@ interface OverviewPageProps {
 }
 
 export function OverviewPage({ users, servers, health }: OverviewPageProps) {
+  const { t, language } = useI18n();
   const activeUsers = users.filter((user) => !user.disabled).length;
   const routableServers = servers.filter((server) => server.enabled).length;
   const enabledInstances = servers.reduce(
@@ -48,29 +50,29 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
     <div className="page-stack page-enter">
       <Row gutter={[16, 16]}>
         <MetricCard
-          title="身份总数"
+          title={t("overview.totalIdentities")}
           value={users.length}
           icon={<TeamOutlined />}
-          detail={`${activeUsers} 个可用身份`}
+          detail={t("overview.countActiveIdentities", { count: activeUsers })}
           tone="blue"
         />
         <MetricCard
-          title="逻辑 Server"
+          title={t("overview.logicalServers")}
           value={servers.length}
           icon={<CloudServerOutlined />}
-          detail={`${routableServers} 个正在路由`}
+          detail={t("overview.countRoutable", { count: routableServers })}
           tone="cyan"
         />
         <MetricCard
-          title="在线实例"
+          title={t("overview.onlineInstances")}
           value={enabledInstances}
           icon={<DeploymentUnitOutlined />}
-          detail="动态上游实例池"
+          detail={t("overview.dynamicUpstreamPool")}
           tone="amber"
         />
         <MetricCard
-          title="状态存储"
-          value={health?.redis ? "正常" : "异常"}
+          title={t("overview.stateStores")}
+          value={health?.redis ? t("status.healthy") : t("status.degraded")}
           icon={<DatabaseOutlined />}
           detail="PostgreSQL + Redis"
           tone={health?.redis ? "green" : "red"}
@@ -84,17 +86,17 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
             title={
               <CardTitle
                 icon={<DeploymentUnitOutlined />}
-                title="实时路由拓扑"
+                title={t("overview.liveRouteTopology")}
                 subtitle="LIVE ROUTING FABRIC"
               />
             }
-            extra={<Badge status="processing" text="实时同步" />}
+            extra={<Badge status="processing" text={t("overview.liveSync")} />}
           >
             <div className="route-map">
               <div className="route-origin">
                 <SafetyCertificateOutlined />
                 <strong>AUTH</strong>
-                <small>统一身份签发</small>
+                <small>{t("auth.unifiedIdentity")}</small>
               </div>
               <div className="route-line" />
               <div className="route-nodes">
@@ -105,8 +107,7 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
                       <span>
                         <strong>/mcp/{server.name}</strong>
                         <small>
-                          {server.instances.length} 个实例 · {server.user_count}{" "}
-                          个授权
+                          {t("overview.instancesInstancesUsersGrants", { instances: server.instances.length, users: server.user_count })}
                         </small>
                       </span>
                       <Tag
@@ -120,7 +121,7 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
                 ) : (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="暂无 Server"
+                    description={t("overview.noServers")}
                   />
                 )}
               </div>
@@ -134,14 +135,14 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
             title={
               <CardTitle
                 icon={<TeamOutlined />}
-                title="最近用户"
+                title={t("overview.recentUsers")}
                 subtitle="IDENTITY LEDGER"
               />
             }
           >
             <List
               dataSource={recentUsers}
-              locale={{ emptyText: "暂无用户" }}
+              locale={{ emptyText: t("overview.noUsers") }}
               renderItem={(user) => (
                 <List.Item>
                   <List.Item.Meta
@@ -161,7 +162,7 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
                         </Tag>
                       </Flex>
                     }
-                    description={user.servers.join(" · ") || "尚未授权 Server"}
+                    description={user.servers.join(" · ") || t("overview.noServerGrants")}
                   />
                   <Badge status={user.disabled ? "default" : "success"} />
                 </List.Item>
@@ -176,21 +177,21 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
           <div className="infra-heading">
             <SyncOutlined spin={Boolean(health?.ok)} />
             <span>
-              <strong>基础设施状态</strong>
+              <strong>{t("overview.infrastructureStatus")}</strong>
               <small>INFRASTRUCTURE STATUS</small>
             </span>
           </div>
           <InfraStatus
             label="Registry Sync"
-            value={formatTime(health?.registry?.lastSuccessAt)}
+            value={formatTime(health?.registry?.lastSuccessAt, language)}
             healthy={!health?.registry?.lastError}
           />
           <InfraStatus
             label="Redis"
-            value={health?.redis ? "已连接" : "离线"}
+            value={health?.redis ? t("status.connected") : t("status.offline")}
             healthy={health?.redis}
           />
-          <InfraStatus label="PostgreSQL" value="Drizzle 托管" healthy />
+          <InfraStatus label="PostgreSQL" value={t("overview.managedDrizzle")} healthy />
           <Progress
             className="health-progress"
             percent={health?.ok ? 100 : 68}

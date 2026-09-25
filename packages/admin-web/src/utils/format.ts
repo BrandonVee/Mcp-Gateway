@@ -1,7 +1,9 @@
-export function formatTime(timestamp?: number) {
-  if (!timestamp) return "等待同步";
+import { getTranslation, type Language } from "../i18n";
 
-  return new Intl.DateTimeFormat("zh-CN", {
+export function formatTime(timestamp?: number, language: Language = "zh-CN") {
+  if (!timestamp) return getTranslation("errors.waitingSync", language);
+
+  return new Intl.DateTimeFormat(language, {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",

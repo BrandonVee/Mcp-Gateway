@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
 import { Flex, Space, Typography } from "antd";
+import { useI18n } from "../i18n";
+import type { MessageKey } from "../i18n";
 
 interface PageToolbarProps {
   eyebrow: string;
-  title: string;
-  description: string;
+  title: MessageKey;
+  description: MessageKey;
   primaryAction?: ReactNode;
   filters?: ReactNode;
 }
@@ -16,6 +18,7 @@ export function PageToolbar({
   primaryAction,
   filters,
 }: PageToolbarProps) {
+  const { t } = useI18n();
   return (
     <section className="page-toolbar">
       <Flex
@@ -29,9 +32,9 @@ export function PageToolbar({
           <Typography.Text className="section-eyebrow">
             {eyebrow}
           </Typography.Text>
-          <Typography.Title level={3}>{title}</Typography.Title>
+          <Typography.Title level={3}>{t(title)}</Typography.Title>
           <Typography.Paragraph type="secondary">
-            {description}
+            {t(description)}
           </Typography.Paragraph>
         </div>
         {primaryAction}

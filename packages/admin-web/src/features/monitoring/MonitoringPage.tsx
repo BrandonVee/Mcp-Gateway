@@ -1,3 +1,4 @@
+import { useI18n, type Language } from "../../i18n";
 import { Alert, Badge, Button, Empty, Input, Select, Spin, Tag } from "antd";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { useEffect, useState } from "react";
@@ -5,21 +6,23 @@ import { api } from "../../api";
 import type { AuditEvent, AuthHealth, GatewayHealth } from "../../types";
 
 const PAGE_SIZE = 50;
-const timestamp = (value: number) => new Intl.DateTimeFormat("zh-CN", {
+const timestamp = (value: number, language: Language) => new Intl.DateTimeFormat(language, {
   year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
 }).format(new Date(value));
 
 function StatusCell({ label, good, detail }: { label: string; good: boolean; detail: string }) {
+  const { t } = useI18n();
   return (
     <div className={`monitor-status-cell ${good ? "is-good" : "is-bad"}`}>
       <div className="monitor-status-top"><span>{label}</span><Badge status={good ? "success" : "error"} /></div>
-      <strong>{good ? "运行正常" : "需要检查"}</strong>
+      <strong>{good ? t("monitoring.healthy") : t("monitoring.needsAttention")}</strong>
       <small>{detail}</small>
     </div>
   );
 }
 
 export function MonitoringPage() {
+  const { t, language } = useI18n();
   const [auth, setAuth] = useState<AuthHealth | null>(null);
   const [gateway, setGateway] = useState<GatewayHealth | null>(null);
   const [draftActor, setDraftActor] = useState("");
@@ -58,11 +61,11 @@ export function MonitoringPage() {
         setNextBefore(page.next_before);
       })
       .catch((cause) => {
-        if (active) setError(cause instanceof Error ? cause.message : "审计日志读取失败");
+        if (active) setError(cause instanceof Error ? cause.message : t("monitoring.couldNotLoadAuditEvents"));
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [actor, method, revision]);
+  }, [actor, method, revision, t]);
 
   const loadMore = async () => {
     if (!nextBefore || loadingMore) return;
@@ -72,7 +75,7 @@ export function MonitoringPage() {
       setEvents((current) => [...current, ...page.events]);
       setNextBefore(page.next_before);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "加载更多日志失败");
+      setError(cause instanceof Error ? cause.message : t("monitoring.couldNotLoadOlderEvents"));
     } finally {
       setLoadingMore(false);
     }
@@ -82,22 +85,22 @@ export function MonitoringPage() {
     <div className="page-stack page-enter monitor-page">
       <section className="monitor-overview">
         <div className="monitor-section-heading">
-          <div><span className="section-eyebrow">LIVE SERVICE PULSE</span><h3>服务脉搏</h3></div>
-          <span className="monitor-checked">每 10 秒检测 · {healthCheckedAt ? timestamp(healthCheckedAt) : "检测中"}</span>
+          <div><span className="section-eyebrow">LIVE SERVICE PULSE</span><h3>{t("monitoring.servicePulse")}</h3></div>
+          <span className="monitor-checked">{t("monitoring.checksEvery10SecondsTime", { time: healthCheckedAt ? timestamp(healthCheckedAt, language) : t("monitoring.checking") })}</span>
         </div>
         <div className="monitor-status-grid">
-          <StatusCell label="AUTH API" good={Boolean(auth?.ok)} detail="认证服务" />
-          <StatusCell label="POSTGRES" good={Boolean(auth?.postgres)} detail="主数据存储" />
-          <StatusCell label="GATEWAY" good={Boolean(gateway?.ok)} detail="MCP 统一入口" />
-          <StatusCell label="REDIS" good={Boolean(gateway?.redis)} detail="会话粘性路由" />
-          <StatusCell label="REGISTRY" good={Boolean(gateway?.registry?.lastSuccessAt && !gateway?.registry?.lastError)} detail={gateway?.registry?.lastError ?? "数据库路由同步"} />
+          <StatusCell label="AUTH API" good={Boolean(auth?.ok)} detail={t("monitoring.authenticationService")} />
+          <StatusCell label="POSTGRES" good={Boolean(auth?.postgres)} detail={t("monitoring.primaryDataStore")} />
+          <StatusCell label="GATEWAY" good={Boolean(gateway?.ok)} detail={t("monitoring.mcpGateway")} />
+          <StatusCell label="REDIS" good={Boolean(gateway?.redis)} detail={t("monitoring.stickySessions")} />
+          <StatusCell label="REGISTRY" good={Boolean(gateway?.registry?.lastSuccessAt && !gateway?.registry?.lastError)} detail={gateway?.registry?.lastError ?? t("monitoring.databaseRouteSync")} />
         </div>
       </section>
 
       <section className="monitor-audit-panel">
         <div className="monitor-section-heading">
-          <div><span className="section-eyebrow">ADMINISTRATIVE AUDIT TRAIL</span><h3>操作审计</h3></div>
-          <Tag color="cyan" bordered={false}>仅记录元数据 · 默认保留 90 天</Tag>
+          <div><span className="section-eyebrow">ADMINISTRATIVE AUDIT TRAIL</span><h3>{t("monitoring.auditTrail")}</h3></div>
+          <Tag color="cyan" bordered={false}>{t("monitoring.metadata90DayDefaultRetention")}</Tag>
         </div>
         <div className="monitor-toolbar">
           <Input
@@ -105,41 +108,41 @@ export function MonitoringPage() {
             prefix={<SearchOutlined />}
             value={draftActor}
             maxLength={64}
-            placeholder="筛选操作人"
+            placeholder={t("monitoring.filterActor")}
             onChange={(event) => setDraftActor(event.target.value)}
             onPressEnter={() => setActor(draftActor.trim())}
             allowClear
           />
-          <Button onClick={() => setActor(draftActor.trim())}>查询</Button>
+          <Button onClick={() => setActor(draftActor.trim())}>{t("monitoring.search")}</Button>
           <Select
             value={method}
             onChange={setMethod}
             options={[
-              { value: "", label: "全部操作" },
-              { value: "POST", label: "新增 / 登录" },
-              { value: "PUT", label: "替换" },
-              { value: "PATCH", label: "修改" },
-              { value: "DELETE", label: "删除 / 退出" },
+              { value: "", label: t("monitoring.methods") },
+              { value: "POST", label: t("monitoring.createSign") },
+              { value: "PUT", label: t("monitoring.replace") },
+              { value: "PATCH", label: t("monitoring.update") },
+              { value: "DELETE", label: t("monitoring.deleteSignOut") },
             ]}
             className="monitor-method-select"
           />
-          <Button icon={<ReloadOutlined />} onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新日志</Button>
+          <Button icon={<ReloadOutlined />} onClick={() => setRevision((value) => value + 1)} loading={loading}>{t("monitoring.refreshEvents")}</Button>
         </div>
 
         {error && <Alert type="error" showIcon message={error} className="monitor-error" />}
-        <div className="monitor-log-head"><span>时间</span><span>操作人</span><span>请求</span><span>结果</span><span>请求 ID</span></div>
+        <div className="monitor-log-head"><span>{t("monitoring.time")}</span><span>{t("monitoring.actor")}</span><span>{t("monitoring.request")}</span><span>{t("monitoring.result")}</span><span>{t("monitoring.requestId")}</span></div>
         <div className="monitor-log-body">
           {loading ? <div className="monitor-empty"><Spin /></div> : events.length ? events.map((event) => (
             <div className="monitor-log-row" key={event.id}>
-              <time>{timestamp(event.created_at)}</time>
+              <time>{timestamp(event.created_at, language)}</time>
               <strong>{event.actor}</strong>
               <div className="monitor-operation"><Tag color={event.method === "DELETE" ? "red" : event.method === "POST" ? "blue" : "gold"} bordered={false}>{event.method}</Tag><code title={event.path}>{event.path}</code></div>
               <Tag color={event.status_code < 400 ? "success" : "error"} bordered={false}>{event.status_code}</Tag>
               <code className="monitor-request-id" title={event.request_id}>{event.request_id.slice(0, 8)}</code>
             </div>
-          )) : <div className="monitor-empty"><Empty description="暂无符合条件的审计事件" /></div>}
+          )) : <div className="monitor-empty"><Empty description={t("monitoring.noMatchingAuditEvents")} /></div>}
         </div>
-        {nextBefore !== null && <div className="monitor-footer"><Button onClick={() => void loadMore()} loading={loadingMore}>加载更早记录</Button></div>}
+        {nextBefore !== null && <div className="monitor-footer"><Button onClick={() => void loadMore()} loading={loadingMore}>{t("monitoring.loadOlderEvents")}</Button></div>}
       </section>
     </div>
   );

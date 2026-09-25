@@ -28,37 +28,39 @@ import { useState } from "react";
 import type { View } from "../types";
 import { formatTime } from "../utils/format";
 import { CommandPalette } from "./CommandPalette";
+import { LanguageSwitcher } from "./LanguageSwitcher";
+import { useI18n, type MessageKey } from "../i18n";
 
 const { Header, Sider, Content } = Layout;
 
 const titles: Record<
   View,
-  { eyebrow: string; title: string; description: string }
+  { eyebrow: string; title: MessageKey; description: MessageKey }
 > = {
   overview: {
     eyebrow: "CONTROL PLANE / OVERVIEW",
-    title: "运行态势",
-    description: "统一观察身份、路由与基础设施状态",
+    title: "nav.overview.title",
+    description: "nav.overview.description",
   },
   users: {
     eyebrow: "CONTROL PLANE / ACCESS",
-    title: "身份与访问",
-    description: "管理用户及其 MCP Server 授权边界",
+    title: "nav.users.title",
+    description: "nav.users.description",
   },
   servers: {
     eyebrow: "CONTROL PLANE / REGISTRY",
-    title: "Server 注册表",
-    description: "编排逻辑路由、上游实例与服务状态",
+    title: "nav.servers.title",
+    description: "nav.servers.description",
   },
   credentials: {
     eyebrow: "CONTROL PLANE / CONNECTIONS",
-    title: "二次认证",
-    description: "查看用户与外部 MCP Server 的连接状态",
+    title: "nav.connections.title",
+    description: "nav.connections.description",
   },
   monitoring: {
     eyebrow: "CONTROL PLANE / OBSERVABILITY",
-    title: "日志监控",
-    description: "查看服务健康状态与管理员操作审计",
+    title: "nav.monitoring.title",
+    description: "nav.monitoring.description",
   },
 };
 
@@ -86,24 +88,25 @@ export function AppShell({
   onLogout,
 }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const { t, language } = useI18n();
   const current = titles[currentView];
 
   const menuItems = [
-    { key: "overview", icon: <DashboardOutlined />, label: "运行总览" },
+    { key: "overview", icon: <DashboardOutlined />, label: t("nav.overview.label") },
     {
       key: "users",
       icon: <TeamOutlined />,
-      label: "用户与授权",
+      label: t("nav.users.label"),
       extra: <span className="menu-count">{userCount}</span>,
     },
     {
       key: "servers",
       icon: <CloudServerOutlined />,
-      label: "Server 注册",
+      label: t("nav.servers.label"),
       extra: <span className="menu-count">{serverCount}</span>,
     },
-    { key: "credentials", icon: <KeyOutlined />, label: "二次认证" },
-    { key: "monitoring", icon: <MonitorOutlined />, label: "日志监控" },
+    { key: "credentials", icon: <KeyOutlined />, label: t("nav.connections.title") },
+    { key: "monitoring", icon: <MonitorOutlined />, label: t("nav.monitoring.title") },
   ];
 
   return (
@@ -130,7 +133,7 @@ export function AppShell({
           )}
         </div>
 
-        {!collapsed && <div className="sider-section-label">工作台</div>}
+        {!collapsed && <div className="sider-section-label">{t("nav.workspace")}</div>}
         <Menu
           theme="dark"
           mode="inline"
@@ -147,13 +150,13 @@ export function AppShell({
             icon={<LinkOutlined />}
             className="connections-nav-button"
           >
-            {!collapsed && "个人连接中心"}
+            {!collapsed && t("nav.personalConnections")}
           </Button>
           {!collapsed && (
             <div className="system-state">
               <Badge status="success" />
               <span>
-                <strong>服务运行中</strong>
+                <strong>{t("nav.servicesOnline")}</strong>
                 <small>CONTROL PLANE ONLINE</small>
               </span>
             </div>
@@ -165,7 +168,7 @@ export function AppShell({
             className="logout-button"
             onClick={onLogout}
           >
-            {!collapsed && "退出管理台"}
+            {!collapsed && t("nav.signOut")}
           </Button>
         </div>
       </Sider>
@@ -178,26 +181,27 @@ export function AppShell({
               className="collapse-button"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed((value) => !value)}
-              aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+              aria-label={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")}
             />
             <div className="page-heading">
               <Typography.Text className="page-eyebrow">
                 {current.eyebrow}
               </Typography.Text>
               <Flex align="baseline" gap={12} wrap>
-                <Typography.Title level={2}>{current.title}</Typography.Title>
+                <Typography.Title level={2}>{t(current.title)}</Typography.Title>
                 <Typography.Text type="secondary">
-                  {current.description}
+                  {t(current.description)}
                 </Typography.Text>
               </Flex>
             </div>
           </Flex>
 
           <Space size={10}>
+            <LanguageSwitcher />
             <CommandPalette onNavigate={onNavigate} />
             {lastUpdatedAt && (
               <Tag icon={<ClockCircleOutlined />} className="updated-tag">
-                {formatTime(lastUpdatedAt)}
+                {formatTime(lastUpdatedAt, language)}
               </Tag>
             )}
             <Tag
@@ -212,7 +216,7 @@ export function AppShell({
               loading={refreshing}
               onClick={onRefresh}
             >
-              刷新
+              {t("common.refresh")}
             </Button>
           </Space>
         </Header>

@@ -1,12 +1,14 @@
 import { lazy, Suspense, useState } from "react";
 import { App as AntApp, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
+import enUS from "antd/locale/en_US";
 import { AppShell } from "./components/AppShell";
 import { BootScreen } from "./components/BootScreen";
 import { DataLoadError, PageSkeleton } from "./components/DataLoadState";
 import { useControlPlane } from "./hooks/useControlPlane";
 import { appTheme } from "./theme";
 import type { DialogState, View } from "./types";
+import { I18nProvider, useI18n } from "./i18n";
 
 const LoginPage = lazy(() =>
   import("./features/auth/LoginPage").then((module) => ({
@@ -43,8 +45,13 @@ const ConnectionsAdminPage = lazy(() => import("./features/connections/Connectio
 const MonitoringPage = lazy(() => import("./features/monitoring/MonitoringPage").then((module) => ({ default: module.MonitoringPage })));
 
 export function App() {
+  return <I18nProvider><LocalizedApp /></I18nProvider>;
+}
+
+function LocalizedApp() {
+  const { language } = useI18n();
   return (
-    <ConfigProvider locale={zhCN} theme={appTheme}>
+    <ConfigProvider locale={language === "zh-CN" ? zhCN : enUS} theme={appTheme}>
       <AntApp>
         <Suspense fallback={<BootScreen />}>
           {window.location.pathname === "/connections" ? <ConnectionsPage /> : <ControlPlane />}
@@ -56,6 +63,7 @@ export function App() {
 
 function ControlPlane() {
   const { message, modal } = AntApp.useApp();
+  const { t } = useI18n();
   const controlPlane = useControlPlane();
   const [view, setView] = useState<View>("overview");
   const [dialog, setDialog] = useState<DialogState>({ type: null });
@@ -69,16 +77,16 @@ function ControlPlane() {
       message.success(success);
       setDialog({ type: null });
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "操作失败");
+      message.error(error instanceof Error ? error.message : t("common.operationFailed"));
     }
   };
 
   const refresh = async () => {
     try {
       await controlPlane.refresh();
-      message.success("数据已刷新");
+      message.success(t("common.dataRefreshed"));
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "刷新失败");
+      message.error(error instanceof Error ? error.message : t("common.refreshFailed"));
     }
   };
 
@@ -110,7 +118,7 @@ function ControlPlane() {
         <PageSkeleton />
       ) : dataUnavailable ? (
         <DataLoadError
-          message={controlPlane.loadError ?? "未知错误"}
+          message={controlPlane.loadError ?? t("common.unknownError")}
           loading={controlPlane.busy}
           onRetry={refresh}
         />
@@ -133,29 +141,29 @@ function ControlPlane() {
               onToggle={(user) => {
                 const update = () => execute(
                   () => controlPlane.api.updateUser(user.id, { disabled: !user.disabled }),
-                  user.disabled ? "用户认证已开启" : "用户认证已关闭",
+                  user.disabled ? t("app.userSignEnabled") : t("app.userSignDisabled"),
                 );
                 if (user.disabled) void update();
                 else modal.confirm({
-                  title: `关闭 ${user.username} 的用户认证？`,
-                  content: "该用户将不能登录或使用 MCP Server，现有登录会话和刷新令牌会被撤销。",
-                  okText: "关闭认证",
+                  title: t("app.disableSignName", { name: user.username }),
+                  content: t("app.userLoseSignMcpAccess"),
+                  okText: t("app.disableSign"),
                   okButtonProps: { danger: true },
-                  cancelText: "取消",
+                  cancelText: t("common.cancel"),
                   onOk: update,
                 });
               }}
               onDelete={(user) =>
                 modal.confirm({
-                  title: `删除用户 ${user.username}？`,
-                  content: "用户的 Server 授权关系也会被移除，此操作不可撤销。",
-                  okText: "确认删除",
+                  title: t("app.deleteUserName", { name: user.username }),
+                  content: t("app.deleteUserRemovesServerGrants"),
+                  okText: t("app.delete"),
                   okButtonProps: { danger: true },
-                  cancelText: "取消",
+                  cancelText: t("common.cancel"),
                   onOk: () =>
                     execute(
                       () => controlPlane.api.deleteUser(user.id),
-                      "用户已删除",
+                      t("app.userDeleted"),
                     ),
                 })
               }
@@ -178,7 +186,7 @@ function ControlPlane() {
                     controlPlane.api.updateServer(server.name, {
                       enabled: !server.enabled,
                     }),
-                  server.enabled ? "Server 已停用" : "Server 已启用",
+                  server.enabled ? t("app.serverPaused") : t("app.serverEnabled"),
                 )
               }
               onToggleInstance={(server, instance) =>
@@ -187,16 +195,16 @@ function ControlPlane() {
                     controlPlane.api.updateInstance(server.name, instance.id, {
                       enabled: !instance.enabled,
                     }),
-                  "实例状态已更新",
+                  t("app.instanceStatusUpdated"),
                 )
               }
               onDeleteInstance={(server, instance) =>
                 modal.confirm({
-                  title: `删除实例 ${instance.id}？`,
-                  content: "Gateway 将立即停止向该实例转发请求。",
-                  okText: "确认删除",
+                  title: t("app.deleteInstanceId", { id: instance.id }),
+                  content: t("app.gatewayStopForwardingRequestsInstance"),
+                  okText: t("app.delete"),
                   okButtonProps: { danger: true },
-                  cancelText: "取消",
+                  cancelText: t("common.cancel"),
                   onOk: () =>
                     execute(
                       () =>
@@ -204,21 +212,21 @@ function ControlPlane() {
                           server.name,
                           instance.id,
                         ),
-                      "实例已删除",
+                      t("app.instanceDeleted"),
                     ),
                 })
               }
               onDelete={(server) =>
                 modal.confirm({
-                  title: `删除 Server ${server.name}？`,
-                  content: "全部实例和用户授权都将被删除，此操作不可撤销。",
-                  okText: "确认删除",
+                  title: t("app.deleteServerName", { name: server.name }),
+                  content: t("app.instancesUserGrantsDeletedCannot"),
+                  okText: t("app.delete"),
                   okButtonProps: { danger: true },
-                  cancelText: "取消",
+                  cancelText: t("common.cancel"),
                   onOk: () =>
                     execute(
                       () => controlPlane.api.deleteServer(server.name),
-                      "Server 已删除",
+                      t("app.serverDeleted"),
                     ),
                 })
               }
@@ -231,12 +239,12 @@ function ControlPlane() {
               servers={controlPlane.servers}
               connections={controlPlane.connections}
               onRevoke={(user, server) => modal.confirm({
-                title: `撤销 ${user.username} 的 ${server.display_name} 连接？`,
-                content: "平台保存的 API Key 或 OAuth Token 将被删除，该用户需要重新连接后才能使用此服务。",
-                okText: "撤销连接",
+                title: t("app.revokeUserServerConnection", { user: user.username, server: server.display_name }),
+                content: t("app.storedApiKeyOauthToken"),
+                okText: t("app.revokeConnection"),
                 okButtonProps: { danger: true },
-                cancelText: "取消",
-                onOk: () => execute(() => controlPlane.api.revokeConnection(user.id, server.name), "连接已撤销"),
+                cancelText: t("common.cancel"),
+                onOk: () => execute(() => controlPlane.api.revokeConnection(user.id, server.name), t("app.connectionRevoked")),
               })}
             />
           )}
@@ -249,18 +257,18 @@ function ControlPlane() {
             busy={controlPlane.busy}
             onClose={() => setDialog({ type: null })}
             onCreate={(data) =>
-              execute(() => controlPlane.api.createUser(data), "用户已创建")
+              execute(() => controlPlane.api.createUser(data), t("app.userCreated"))
             }
             onAssign={(user, servers) =>
               execute(
                 () => controlPlane.api.setUserServers(user.id, servers),
-                "访问权限已更新",
+                t("app.accessGrantsUpdated"),
               )
             }
             onPassword={(user, password) =>
               execute(
                 () => controlPlane.api.updateUser(user.id, { password }),
-                "密码已重置",
+                t("app.passwordReset"),
               )
             }
           />
@@ -273,17 +281,17 @@ function ControlPlane() {
             onCreate={(data) =>
               execute(
                 () => controlPlane.api.createServer(data),
-                "MCP Server 已注册",
+                t("app.mcpServerRegistered"),
               )
             }
             onAddInstance={(server, data) =>
               execute(
                 () => controlPlane.api.addInstance(server.name, data),
-                "实例已添加",
+                t("app.instanceAdded"),
               )
             }
-            onConfigureAuth={(server, data) => execute(() => controlPlane.api.updateServer(server.name, data), "认证配置已更新")}
-            onConfigureUsers={(server, userIds) => execute(() => controlPlane.api.setServerUsers(server.name, userIds), "用户授权已更新")}
+            onConfigureAuth={(server, data) => execute(() => controlPlane.api.updateServer(server.name, data), t("app.authenticationSettingsUpdated"))}
+            onConfigureUsers={(server, userIds) => execute(() => controlPlane.api.setServerUsers(server.name, userIds), t("app.userGrantsUpdated"))}
           />
         </>
       )}

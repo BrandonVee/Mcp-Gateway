@@ -1,3 +1,4 @@
+import { useI18n } from "../../i18n";
 import {
   InfoCircleOutlined,
   LockOutlined,
@@ -43,6 +44,7 @@ function CreateUserDialog({
   onClose,
   onCreate,
 }: Pick<UserDialogsProps, "servers" | "busy" | "onClose" | "onCreate">) {
+  const { t } = useI18n();
   const [form] = Form.useForm<CreateUserInput & { all_servers?: boolean }>();
   const role = Form.useWatch("role", form) ?? "user";
   const allServers = Form.useWatch("all_servers", form) ?? false;
@@ -54,11 +56,11 @@ function CreateUserDialog({
         <ModalTitle
           icon={<UserAddOutlined />}
           eyebrow="IDENTITY PROVISIONING"
-          title="创建新身份"
+          title={t("userDialog.createIdentity")}
         />
       }
-      okText="创建用户"
-      cancelText="取消"
+      okText={t("userDialog.createUser")}
+      cancelText={t("common.cancel")}
       confirmLoading={busy}
       onCancel={onClose}
       onOk={() => form.validateFields().then((values) => onCreate({
@@ -76,36 +78,36 @@ function CreateUserDialog({
       >
         <Form.Item
           name="username"
-          label="用户名"
+          label={t("connections.username")}
           rules={[
-            { required: true, message: "请输入用户名" },
-            { min: 2, message: "用户名至少 2 位" },
+            { required: true, message: t("connections.enterUsername") },
+            { min: 2, message: t("userDialog.usernameMustLeast2Characters") },
           ]}
         >
-          <Input placeholder="例如 data-agent" autoFocus />
+          <Input placeholder={t("userDialog.exampleDataAgent")} autoFocus />
         </Form.Item>
         <Form.Item
           name="password"
-          label="初始密码"
+          label={t("userDialog.initialPassword")}
           rules={[
-            { required: true, message: "请输入初始密码" },
-            { min: 6, message: "密码至少 6 位" },
+            { required: true, message: t("userDialog.enterInitialPassword") },
+            { min: 6, message: t("userDialog.passwordMustLeast6Characters") },
           ]}
         >
-          <Input.Password prefix={<LockOutlined />} placeholder="至少 6 位" />
+          <Input.Password prefix={<LockOutlined />} placeholder={t("userDialog.least6Characters")} />
         </Form.Item>
-        <Form.Item name="role" label="角色">
+        <Form.Item name="role" label={t("common.role")}>
           <Radio.Group optionType="button" buttonStyle="solid">
-            <Radio.Button value="user">普通用户</Radio.Button>
-            <Radio.Button value="admin">管理员</Radio.Button>
+            <Radio.Button value="user">{t("common.standardUser")}</Radio.Button>
+            <Radio.Button value="admin">{t("common.administrator")}</Radio.Button>
           </Radio.Group>
         </Form.Item>
         {role === "user" && (
           <>
             <Form.Item name="all_servers" valuePropName="checked" className="wildcard-grant">
-              <Checkbox>全部 Server（*，包括以后新增的 Server）</Checkbox>
+              <Checkbox>{t("userDialog.serversIncludingFutureServers")}</Checkbox>
             </Form.Item>
-            {!allServers && <Form.Item name="servers" label="指定 Server 权限">
+            {!allServers && <Form.Item name="servers" label={t("userDialog.specificServerAccess")}>
               <Checkbox.Group className="permission-grid">
                 {servers.map((server) => (
                   <Checkbox key={server.name} value={server.name}>
@@ -131,6 +133,7 @@ function AssignUserDialog({
 }: Pick<UserDialogsProps, "servers" | "busy" | "onClose" | "onAssign"> & {
   user: AdminUser;
 }) {
+  const { t } = useI18n();
   const [form] = Form.useForm<{ servers: string[]; all_servers: boolean }>();
   const allServers = Form.useWatch("all_servers", form) ?? user.servers.includes("*");
 
@@ -141,11 +144,11 @@ function AssignUserDialog({
         <ModalTitle
           icon={<InfoCircleOutlined />}
           eyebrow="ACCESS MATRIX"
-          title={`分配权限 / ${user.username}`}
+          title={t("userDialog.assignAccessUser", { user: user.username })}
         />
       }
-      okText="保存访问范围"
-      cancelText="取消"
+      okText={t("userDialog.saveAccessScope")}
+      cancelText={t("common.cancel")}
       confirmLoading={busy}
       onCancel={onClose}
       onOk={() =>
@@ -155,7 +158,7 @@ function AssignUserDialog({
       <Alert
         type="info"
         showIcon
-        message="通配符允许访问当前和未来的全部 Server。新增授权需获取新 Token；收回授权立即生效。"
+        message={t("userDialog.wildcardAccessIncludesCurrentFuture")}
         className="dialog-alert"
       />
       <Form
@@ -164,13 +167,13 @@ function AssignUserDialog({
         initialValues={{ servers: user.servers.filter((name) => name !== "*"), all_servers: user.servers.includes("*") }}
       >
         <Form.Item name="all_servers" valuePropName="checked" className="wildcard-grant">
-          <Checkbox>全部 Server（*，包括以后新增的 Server）</Checkbox>
+          <Checkbox>{t("userDialog.serversIncludingFutureServers")}</Checkbox>
         </Form.Item>
-        {!allServers && <Form.Item name="servers" label="可连接的逻辑 MCP Server">
+        {!allServers && <Form.Item name="servers" label={t("userDialog.availableLogicalMcpServers")}>
           <Select
             mode="multiple"
             allowClear
-            placeholder="选择 Server"
+            placeholder={t("userDialog.selectServers")}
             options={servers
               .filter((server) => server.enabled)
               .map((server) => ({
@@ -192,6 +195,7 @@ function ResetPasswordDialog({
 }: Pick<UserDialogsProps, "busy" | "onClose" | "onPassword"> & {
   user: AdminUser;
 }) {
+  const { t } = useI18n();
   const [form] = Form.useForm<{ password: string }>();
 
   return (
@@ -201,11 +205,11 @@ function ResetPasswordDialog({
         <ModalTitle
           icon={<LockOutlined />}
           eyebrow="CREDENTIAL ROTATION"
-          title={`重置密码 / ${user.username}`}
+          title={t("userDialog.resetPasswordUser", { user: user.username })}
         />
       }
-      okText="确认重置"
-      cancelText="取消"
+      okText={t("userDialog.resetPassword")}
+      cancelText={t("common.cancel")}
       confirmLoading={busy}
       onCancel={onClose}
       onOk={() =>
@@ -217,15 +221,15 @@ function ResetPasswordDialog({
       <Form form={form} layout="vertical" requiredMark={false}>
         <Form.Item
           name="password"
-          label="新密码"
+          label={t("userDialog.newPassword")}
           rules={[
-            { required: true, message: "请输入新密码" },
-            { min: 6, message: "密码至少 6 位" },
+            { required: true, message: t("userDialog.enterNewPassword") },
+            { min: 6, message: t("userDialog.passwordMustLeast6Characters") },
           ]}
         >
           <Input.Password
             prefix={<LockOutlined />}
-            placeholder="至少 6 位"
+            placeholder={t("userDialog.least6Characters")}
             autoFocus
           />
         </Form.Item>
