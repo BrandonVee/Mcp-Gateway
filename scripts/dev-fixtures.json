@@ -1,0 +1,26 @@
+{
+  "servers": [
+    {
+      "name": "demo",
+      "displayName": "Demo MCP",
+      "instances": [
+        { "id": "demo-a", "port": 3001, "dockerHost": "mcp-a" },
+        { "id": "demo-b", "port": 3002, "dockerHost": "mcp-b" }
+      ]
+    },
+    {
+      "name": "reports",
+      "displayName": "Reports MCP",
+      "instances": [
+        { "id": "reports-a", "port": 3003, "dockerHost": "mcp-reports" }
+      ]
+    },
+    {
+      "name": "knowledge",
+      "displayName": "Knowledge MCP",
+      "instances": [
+        { "id": "knowledge-a", "port": 3004, "dockerHost": "mcp-knowledge" }
+      ]
+    }
+  ]
+}

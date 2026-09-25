@@ -28,7 +28,7 @@ export function createMetadataRouter(keys: SigningKeys, issuer: string): Hono {
 
   router.post('/register', async (c) => {
     const body = await c.req.json().catch(() => undefined);
-    const result = registerClient(body);
+    const result = await registerClient(body);
     if (!result.ok) return c.json({ error: result.error }, 400);
     return c.json(result.client, 201);
   });

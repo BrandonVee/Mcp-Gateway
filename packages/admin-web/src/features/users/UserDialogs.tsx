@@ -43,8 +43,9 @@ function CreateUserDialog({
   onClose,
   onCreate,
 }: Pick<UserDialogsProps, "servers" | "busy" | "onClose" | "onCreate">) {
-  const [form] = Form.useForm<CreateUserInput>();
+  const [form] = Form.useForm<CreateUserInput & { all_servers?: boolean }>();
   const role = Form.useWatch("role", form) ?? "user";
+  const allServers = Form.useWatch("all_servers", form) ?? false;
 
   return (
     <Modal
@@ -60,13 +61,18 @@ function CreateUserDialog({
       cancelText="取消"
       confirmLoading={busy}
       onCancel={onClose}
-      onOk={() => form.validateFields().then(onCreate)}
+      onOk={() => form.validateFields().then((values) => onCreate({
+        username: values.username,
+        password: values.password,
+        role: values.role,
+        servers: values.all_servers ? ["*"] : values.servers ?? [],
+      }))}
     >
-      <Form<CreateUserInput>
+      <Form<CreateUserInput & { all_servers?: boolean }>
         form={form}
         layout="vertical"
         requiredMark={false}
-        initialValues={{ role: "user", servers: [] }}
+        initialValues={{ role: "user", servers: [], all_servers: false }}
       >
         <Form.Item
           name="username"
@@ -95,16 +101,21 @@ function CreateUserDialog({
           </Radio.Group>
         </Form.Item>
         {role === "user" && (
-          <Form.Item name="servers" label="初始 Server 权限">
-            <Checkbox.Group className="permission-grid">
-              {servers.map((server) => (
-                <Checkbox key={server.name} value={server.name}>
-                  {server.display_name}
-                  <code>{server.name}</code>
-                </Checkbox>
-              ))}
-            </Checkbox.Group>
-          </Form.Item>
+          <>
+            <Form.Item name="all_servers" valuePropName="checked" className="wildcard-grant">
+              <Checkbox>全部 Server（*，包括以后新增的 Server）</Checkbox>
+            </Form.Item>
+            {!allServers && <Form.Item name="servers" label="指定 Server 权限">
+              <Checkbox.Group className="permission-grid">
+                {servers.map((server) => (
+                  <Checkbox key={server.name} value={server.name}>
+                    {server.display_name}
+                    <code>{server.name}</code>
+                  </Checkbox>
+                ))}
+              </Checkbox.Group>
+            </Form.Item>}
+          </>
         )}
       </Form>
     </Modal>
@@ -120,7 +131,8 @@ function AssignUserDialog({
 }: Pick<UserDialogsProps, "servers" | "busy" | "onClose" | "onAssign"> & {
   user: AdminUser;
 }) {
-  const [form] = Form.useForm<{ servers: string[] }>();
+  const [form] = Form.useForm<{ servers: string[]; all_servers: boolean }>();
+  const allServers = Form.useWatch("all_servers", form) ?? user.servers.includes("*");
 
   return (
     <Modal
@@ -137,21 +149,24 @@ function AssignUserDialog({
       confirmLoading={busy}
       onCancel={onClose}
       onOk={() =>
-        form.validateFields().then((values) => onAssign(user, values.servers))
+        form.validateFields().then((values) => onAssign(user, values.all_servers ? ["*"] : values.servers ?? []))
       }
     >
       <Alert
         type="info"
         showIcon
-        message="权限将在下一次签发的 Access Token 中生效。"
+        message="通配符允许访问当前和未来的全部 Server。新增授权需获取新 Token；收回授权立即生效。"
         className="dialog-alert"
       />
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ servers: user.servers.filter((name) => name !== "*") }}
+        initialValues={{ servers: user.servers.filter((name) => name !== "*"), all_servers: user.servers.includes("*") }}
       >
-        <Form.Item name="servers" label="可连接的逻辑 MCP Server">
+        <Form.Item name="all_servers" valuePropName="checked" className="wildcard-grant">
+          <Checkbox>全部 Server（*，包括以后新增的 Server）</Checkbox>
+        </Form.Item>
+        {!allServers && <Form.Item name="servers" label="可连接的逻辑 MCP Server">
           <Select
             mode="multiple"
             allowClear
@@ -163,7 +178,7 @@ function AssignUserDialog({
                 value: server.name,
               }))}
           />
-        </Form.Item>
+        </Form.Item>}
       </Form>
     </Modal>
   );

@@ -3,6 +3,7 @@ import { getCookie, setCookie } from 'hono/cookie';
 import { getClient, isRedirectUriAllowed } from './clients.js';
 import { verifyUser, createLoginSession, getSessionUser } from './db.js';
 import { saveAuthCode } from './stores.js';
+import { loadPlatformConfig } from '@mcp/shared';
 
 /**
  * Authorization Code + PKCE (S256) with real user authentication.
@@ -14,13 +15,14 @@ export const authorizeRouter = new Hono();
 
 const SCOPE_RE = /^[\x21\x23-\x5B\x5D-\x7E\s]*$/;
 const SESSION_COOKIE = 'auth_session';
+const SECURE_COOKIE = loadPlatformConfig().auth.issuer.startsWith('https://');
 
-authorizeRouter.get('/authorize', (c) => {
+authorizeRouter.get('/authorize', async (c) => {
   const q = c.req.query();
-  const error = validateAuthorizeParams(q);
+  const error = await validateAuthorizeParams(q);
   if (error) return c.json(error, 400);
 
-  const session = getSessionFromCookie(c);
+  const session = await getSessionFromCookie(c);
   if (session) {
     return c.html(consentPage(q, session.sub));
   }
@@ -41,30 +43,31 @@ authorizeRouter.post('/authorize/submit', async (c: Context) => {
     state: str('state'),
     resource: str('resource'),
   };
-  const invalid = validateAuthorizeParams(q);
+  const invalid = await validateAuthorizeParams(q);
   if (invalid) return c.json(invalid, 400);
 
   // Prefer an existing session; otherwise require username + password.
-  let sub: string | undefined = getSessionFromCookie(c)?.sub;
+  let sub: string | undefined = (await getSessionFromCookie(c))?.sub;
   if (!sub) {
     const username = str('username').trim();
     const password = str('password');
     if (!username || !password) return c.json({ error: 'invalid_request', error_description: 'username and password are required' }, 400);
-    const user = verifyUser(username, password);
+    const user = await verifyUser(username, password);
     if (!user) {
       return c.json({ error: 'access_denied', error_description: 'invalid username or password, or account disabled' }, 401);
     }
     sub = user.username;
     // Keep the browser signed in for subsequent authorizations.
-    setCookie(c, SESSION_COOKIE, createLoginSession(sub), {
+    setCookie(c, SESSION_COOKIE, await createLoginSession(sub), {
       httpOnly: true,
       sameSite: 'Lax',
+      secure: SECURE_COOKIE,
       path: '/',
       maxAge: 7 * 24 * 3600,
     });
   }
 
-  const code = saveAuthCode({
+  const code = await saveAuthCode({
     client_id: q.client_id,
     redirect_uri: q.redirect_uri,
     scope: q.scope,
@@ -80,14 +83,14 @@ authorizeRouter.post('/authorize/submit', async (c: Context) => {
   return c.redirect(target.toString(), 302);
 });
 
-function getSessionFromCookie(c: Context): { sub: string } | null {
+async function getSessionFromCookie(c: Context): Promise<{ sub: string } | null> {
   const token = getCookie(c, SESSION_COOKIE);
-  return token ? getSessionUser(token) : null;
+  return token ? await getSessionUser(token) : null;
 }
 
-function validateAuthorizeParams(q: Record<string, string>): { error: string; error_description?: string } | null {
+async function validateAuthorizeParams(q: Record<string, string>): Promise<{ error: string; error_description?: string } | null> {
   if (q.response_type !== 'code') return { error: 'unsupported_response_type' };
-  const client = q.client_id ? getClient(q.client_id) : undefined;
+  const client = q.client_id ? await getClient(q.client_id) : undefined;
   if (!client) return { error: 'invalid_client', error_description: 'unknown client_id' };
   if (!q.redirect_uri || !isRedirectUriAllowed(client, q.redirect_uri)) {
     return { error: 'invalid_request', error_description: 'redirect_uri not registered' };
@@ -111,7 +114,7 @@ function esc(v: string): string {
 }
 
 function hidden(name: string, value: string | undefined): string {
-  return `<input type="hidden" name="${name}" value="${value ?? ''}">`;
+  return `<input type="hidden" name="${esc(name)}" value="${esc(value ?? '')}">`;
 }
 
 const BASE_STYLE = `<style>

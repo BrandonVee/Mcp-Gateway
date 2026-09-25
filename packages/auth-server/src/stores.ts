@@ -1,8 +1,10 @@
 /**
- * Authorization codes and refresh tokens, persisted in SQLite.
+ * Authorization codes and refresh tokens, persisted in PostgreSQL.
  */
 import { randomBytes } from 'node:crypto';
 import { db } from './db.js';
+import { authCodes, refreshTokens } from './schema.js';
+import { and, eq, gte } from 'drizzle-orm';
 
 export interface AuthCodeEntry {
   client_id: string;
@@ -21,43 +23,60 @@ export interface RefreshTokenEntry {
   sub: string;
 }
 
-const CODE_TTL_MS = 10 * 60 * 1000;
 export const REFRESH_TTL_MS = 30 * 24 * 3600 * 1000;
 
-export function saveAuthCode(entry: AuthCodeEntry): string {
+export async function saveAuthCode(entry: AuthCodeEntry): Promise<string> {
   const code = randomBytes(32).toString('hex');
-  db.prepare(
-    'INSERT INTO auth_codes (code, client_id, redirect_uri, scope, code_challenge, resource, sub, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-  ).run(code, entry.client_id, entry.redirect_uri, entry.scope, entry.code_challenge, entry.resource ?? null, entry.sub, entry.expiresAt);
+  await db.insert(authCodes).values({
+    code,
+    clientId: entry.client_id,
+    redirectUri: entry.redirect_uri,
+    scope: entry.scope,
+    codeChallenge: entry.code_challenge,
+    resource: entry.resource ?? null,
+    sub: entry.sub,
+    expiresAt: entry.expiresAt,
+  });
   return code;
 }
 
-export function consumeAuthCode(code: string): AuthCodeEntry | undefined {
-  const row = db
-    .prepare('SELECT code, client_id, redirect_uri, scope, code_challenge, resource, sub, expires_at FROM auth_codes WHERE code = ?')
-    .get(code) as AuthCodeEntry | undefined;
+export async function consumeAuthCode(code: string): Promise<AuthCodeEntry | undefined> {
+  const [row] = await db.delete(authCodes).where(eq(authCodes.code, code)).returning();
   if (!row) return undefined;
-  db.prepare('DELETE FROM auth_codes WHERE code = ?').run(code); // one-time use
   if (row.expiresAt < Date.now()) return undefined;
-  return row;
+  return {
+    client_id: row.clientId,
+    redirect_uri: row.redirectUri,
+    scope: row.scope,
+    code_challenge: row.codeChallenge,
+    resource: row.resource ?? undefined,
+    sub: row.sub,
+    expiresAt: row.expiresAt,
+  };
 }
 
-export function saveRefreshToken(entry: RefreshTokenEntry): string {
+export async function saveRefreshToken(entry: RefreshTokenEntry): Promise<string> {
   const token = randomBytes(32).toString('hex');
-  db.prepare(
-    'INSERT INTO refresh_tokens (token, client_id, sub, scope, resource, expires_at, revoked, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)',
-  ).run(token, entry.client_id, entry.sub, entry.scope, entry.resource ?? null, Date.now() + REFRESH_TTL_MS, Date.now());
+  await db.insert(refreshTokens).values({
+    token,
+    clientId: entry.client_id,
+    sub: entry.sub,
+    scope: entry.scope,
+    resource: entry.resource ?? null,
+    expiresAt: Date.now() + REFRESH_TTL_MS,
+    revoked: false,
+    createdAt: Date.now(),
+  });
   return token;
 }
 
-export function consumeRefreshToken(token: string): RefreshTokenEntry | undefined {
-  const row = db
-    .prepare('SELECT token, client_id, sub, scope, resource, expires_at, revoked FROM refresh_tokens WHERE token = ?')
-    .get(token) as { token: string; client_id: string; sub: string; scope: string; resource: string | null; expires_at: number; revoked: number } | undefined;
-  if (!row || row.revoked || row.expires_at < Date.now()) return undefined;
-  return { client_id: row.client_id, scope: row.scope, resource: row.resource ?? undefined, sub: row.sub };
-}
-
-export function deleteRefreshToken(token: string): void {
-  db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE token = ?').run(token);
+/** Atomically revoke and return a refresh token so concurrent reuse fails. */
+export async function consumeRefreshToken(token: string): Promise<RefreshTokenEntry | undefined> {
+  const [row] = await db
+    .update(refreshTokens)
+    .set({ revoked: true })
+    .where(and(eq(refreshTokens.token, token), eq(refreshTokens.revoked, false), gte(refreshTokens.expiresAt, Date.now())))
+    .returning();
+  if (!row) return undefined;
+  return { client_id: row.clientId, scope: row.scope, resource: row.resource ?? undefined, sub: row.sub };
 }

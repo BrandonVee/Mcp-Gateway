@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api";
-import type { AdminUser, GatewayHealth, McpServer } from "../types";
+import type { AdminConnection, AdminUser, GatewayHealth, McpServer } from "../types";
 
 export function useControlPlane() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [servers, setServers] = useState<McpServer[]>([]);
+  const [connections, setConnections] = useState<AdminConnection[]>([]);
   const [health, setHealth] = useState<GatewayHealth | null>(null);
   const [busy, setBusy] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -15,9 +16,10 @@ export function useControlPlane() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [userData, serverData, gatewayHealth] = await Promise.all([
+      const [userData, serverData, connectionData, gatewayHealth] = await Promise.all([
         api.users(),
         api.servers(),
+        api.adminConnections(),
         api.gatewayHealth().catch(
           (error): GatewayHealth => ({
             ok: false,
@@ -31,6 +33,7 @@ export function useControlPlane() {
       ]);
       setUsers(userData.users);
       setServers(serverData.servers);
+      setConnections(connectionData.connections);
       setHealth(gatewayHealth);
       setLastUpdatedAt(Date.now());
     } catch (error) {
@@ -109,6 +112,7 @@ export function useControlPlane() {
       setAuthenticated(false);
       setUsers([]);
       setServers([]);
+      setConnections([]);
       setHealth(null);
       setLoadError(null);
       setLastUpdatedAt(null);
@@ -120,6 +124,7 @@ export function useControlPlane() {
     authenticated,
     users,
     servers,
+    connections,
     health,
     busy,
     initializing,

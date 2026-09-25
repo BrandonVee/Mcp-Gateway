@@ -1,155 +1,123 @@
-import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { scryptHash, scryptVerify, randomToken } from './users.js';
+import { randomToken, scryptHash, scryptVerify } from './users.js';
+import { loadPlatformConfig } from '@mcp/shared';
+import { and, count, eq, lt } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { Pool } from 'pg';
+import { fileURLToPath } from 'node:url';
+import { auditEvents, authCodes, loginSessions, mcpServers, oauthConnectionStates, refreshTokens, userServerAccess, users } from './schema.js';
+import * as schema from './schema.js';
 
-export const DB_PATH = process.env.DB_PATH ?? './data/auth.db';
-mkdirSync(dirname(DB_PATH), { recursive: true });
+const platformConfig = loadPlatformConfig();
+const postgresConfig = platformConfig.auth.postgres;
 
-export const db = new DatabaseSync(DB_PATH);
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL ?? postgresConfig.url,
+  max: Number(process.env.PG_POOL_MAX ?? postgresConfig.poolMax),
+  connectionTimeoutMillis: 5_000,
+  idleTimeoutMillis: 30_000,
+});
 
-db.exec(`
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
+pool.on('error', (error) => console.error('[postgres] idle client error', error));
 
-CREATE TABLE IF NOT EXISTS users (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  username      TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  role          TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin','user')),
-  disabled      INTEGER NOT NULL DEFAULT 0,
-  created_at    INTEGER NOT NULL,
-  updated_at    INTEGER NOT NULL
-);
+export const db = drizzle(pool, { schema });
 
-CREATE TABLE IF NOT EXISTS clients (
-  client_id     TEXT PRIMARY KEY,
-  client_name   TEXT,
-  redirect_uris TEXT NOT NULL,
-  created_at    INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS auth_codes (
-  code           TEXT PRIMARY KEY,
-  client_id      TEXT NOT NULL,
-  redirect_uri   TEXT NOT NULL,
-  scope          TEXT NOT NULL,
-  code_challenge TEXT NOT NULL,
-  resource       TEXT,
-  sub            TEXT NOT NULL,
-  expires_at     INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS refresh_tokens (
-  token      TEXT PRIMARY KEY,
-  client_id  TEXT NOT NULL,
-  sub        TEXT NOT NULL,
-  scope      TEXT NOT NULL,
-  resource   TEXT,
-  expires_at INTEGER NOT NULL,
-  revoked    INTEGER NOT NULL DEFAULT 0,
-  created_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS login_sessions (
-  token      TEXT PRIMARY KEY,
-  sub        TEXT NOT NULL,
-  expires_at INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS meta (
-  key   TEXT PRIMARY KEY,
-  value TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_codes_expiry ON auth_codes (expires_at);
-CREATE INDEX IF NOT EXISTS idx_refresh_expiry ON refresh_tokens (expires_at);
-`);
-
-/** Periodically purge expired rows. */
-export function sweepExpired(): void {
-  const now = Date.now();
-  db.prepare('DELETE FROM auth_codes WHERE expires_at < ?').run(now);
-  db.prepare('DELETE FROM refresh_tokens WHERE expires_at < ?').run(now);
-  db.prepare('DELETE FROM login_sessions WHERE expires_at < ?').run(now);
+/** Apply checked-in Drizzle migrations before serving traffic. */
+export async function initializeDatabase(): Promise<void> {
+  const migrationsFolder = fileURLToPath(new URL('../drizzle', import.meta.url));
+  await migrate(db, { migrationsFolder });
 }
-setInterval(sweepExpired, 10 * 60 * 1000).unref();
 
-/**
- * Admin bootstrap: if no user exists, create the initial admin.
- * Password comes from ADMIN_PASSWORD; if unset, a random one is generated
- * and printed once (it cannot be recovered later).
- */
-export function bootstrapAdmin(): void {
-  const count = (db.prepare('SELECT COUNT(*) AS c FROM users').get() as { c: number }).c;
-  if (count > 0) return;
+/** Periodically purge expired OAuth state through Drizzle ORM. */
+export async function sweepExpired(): Promise<void> {
+  const now = Date.now();
+  const configuredRetention = Number(process.env.AUDIT_RETENTION_DAYS ?? 90);
+  const auditRetentionDays = Number.isFinite(configuredRetention) && configuredRetention > 0 ? configuredRetention : 90;
+  await Promise.all([
+    db.delete(authCodes).where(lt(authCodes.expiresAt, now)),
+    db.delete(refreshTokens).where(lt(refreshTokens.expiresAt, now)),
+    db.delete(loginSessions).where(lt(loginSessions.expiresAt, now)),
+    db.delete(oauthConnectionStates).where(lt(oauthConnectionStates.expiresAt, now)),
+    db.delete(auditEvents).where(lt(auditEvents.createdAt, now - auditRetentionDays * 24 * 3600 * 1000)),
+  ]);
+}
 
-  const username = process.env.ADMIN_USERNAME ?? 'admin';
-  const password = process.env.ADMIN_PASSWORD ?? randomToken(12);
-  createUserRow(username, password, 'admin');
-  if (!process.env.ADMIN_PASSWORD) {
+export function startExpirySweep(): void {
+  setInterval(() => void sweepExpired().catch((error) => console.error('[postgres] expiry sweep failed', error)), 10 * 60 * 1000).unref();
+}
+
+/** Create the initial administrator if the user table is empty. */
+export async function bootstrapAdmin(): Promise<void> {
+  const [{ value }] = await db.select({ value: count() }).from(users);
+  if (value > 0) return;
+
+  const bootstrap = platformConfig.auth.bootstrap;
+  const username = process.env.ADMIN_USERNAME ?? bootstrap.adminUsername;
+  const configuredPassword = process.env.ADMIN_PASSWORD ?? bootstrap.adminPassword;
+  const password = configuredPassword ?? randomToken(12);
+  await createUserRow(username, password, 'admin');
+  if (!configuredPassword) {
     console.log('='.repeat(60));
-    console.log(`[bootstrap] initial admin account created`);
+    console.log('[bootstrap] initial admin account created');
     console.log(`[bootstrap]   username: ${username}`);
     console.log(`[bootstrap]   password: ${password}   <-- shown ONCE, store it now`);
     console.log('='.repeat(60));
   } else {
-    console.log(`[bootstrap] initial admin "${username}" created from ADMIN_PASSWORD`);
+    console.log(`[bootstrap] initial admin "${username}" created from configuration`);
   }
 }
 
-/** Optional demo account for local testing (SEED_DEMO_USER=0 disables). */
-export function seedDemoUser(): void {
-  if (process.env.SEED_DEMO_USER === '0') return;
-  const exists = db.prepare('SELECT 1 FROM users WHERE username = ?').get('demo-user');
-  if (exists) return;
-  createUserRow('demo-user', process.env.DEMO_PASSWORD ?? 'demo123', 'user');
-  console.log('[bootstrap] demo account seeded: demo-user (change/remove for production)');
-}
-
-
-function createUserRow(username: string, password: string, role: 'admin' | 'user'): number {
+export async function createUserRow(username: string, password: string, role: 'admin' | 'user'): Promise<number> {
   const now = Date.now();
-  const result = db
-    .prepare('INSERT INTO users (username, password_hash, role, disabled, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)')
-    .run(username, scryptHash(password), role, now, now);
-  return Number(result.lastInsertRowid);
+  const [created] = await db
+    .insert(users)
+    .values({ username, passwordHash: scryptHash(password), role, disabled: false, createdAt: now, updatedAt: now })
+    .returning({ id: users.id });
+  return created.id;
 }
-
-export { createUserRow };
 
 /** Validate credentials; returns the user row or null. */
-export function verifyUser(username: string, password: string): { id: number; username: string; role: string } | null {
-  const row = db
-    .prepare('SELECT id, username, password_hash, role, disabled FROM users WHERE username = ?')
-    .get(username) as { id: number; username: string; password_hash: string; role: string; disabled: number } | undefined;
-  if (!row || row.disabled) return null;
-  if (!scryptVerify(password, row.password_hash)) return null;
+export async function verifyUser(username: string, password: string): Promise<{ id: number; username: string; role: string } | null> {
+  const [row] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  if (!row || row.disabled || !scryptVerify(password, row.passwordHash)) return null;
   return { id: row.id, username: row.username, role: row.role };
 }
 
-export function getUserRole(username: string): string {
-  const row = db.prepare('SELECT role FROM users WHERE username = ?').get(username) as { role: string } | undefined;
-  return row?.role ?? 'user';
+export async function getUserAuthorization(
+  username: string,
+): Promise<{ id: number; role: string; disabled: boolean; servers: string[] } | null> {
+  const [user] = await db
+    .select({ id: users.id, role: users.role, disabled: users.disabled, allServers: users.allServers })
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
+  if (!user) return null;
+  if (user.role === 'admin' || user.allServers) {
+    return { id: user.id, role: user.role, disabled: user.disabled, servers: ['*'] };
+  }
+  const rows = await db
+    .select({ name: mcpServers.name })
+    .from(userServerAccess)
+    .innerJoin(mcpServers, eq(mcpServers.name, userServerAccess.serverName))
+    .where(and(eq(userServerAccess.userId, user.id), eq(mcpServers.enabled, true)))
+    .orderBy(mcpServers.name);
+  return { id: user.id, role: user.role, disabled: user.disabled, servers: rows.map((row) => row.name) };
 }
-
 
 export const SESSION_TTL_MS = 7 * 24 * 3600 * 1000;
 
-export function createLoginSession(sub: string): string {
+export async function createLoginSession(sub: string): Promise<string> {
   const token = randomToken(32);
-  db.prepare('INSERT INTO login_sessions (token, sub, expires_at) VALUES (?, ?, ?)').run(
-    token,
-    sub,
-    Date.now() + SESSION_TTL_MS,
-  );
+  await db.insert(loginSessions).values({ token, sub, expiresAt: Date.now() + SESSION_TTL_MS });
   return token;
 }
 
-export function getSessionUser(token: string): { sub: string } | null {
-  const row = db
-    .prepare('SELECT sub, expires_at FROM login_sessions WHERE token = ?')
-    .get(token) as { sub: string; expires_at: number } | undefined;
-  if (!row || row.expires_at < Date.now()) return null;
+export async function getSessionUser(token: string): Promise<{ sub: string } | null> {
+  const [row] = await db.select().from(loginSessions).where(eq(loginSessions.token, token)).limit(1);
+  if (!row || row.expiresAt < Date.now()) return null;
   return { sub: row.sub };
+}
+
+export async function deleteLoginSession(token: string): Promise<void> {
+  await db.delete(loginSessions).where(eq(loginSessions.token, token));
 }

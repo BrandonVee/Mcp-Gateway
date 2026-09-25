@@ -4,9 +4,19 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { registerTools } from './tools.js';
 
-const PORT = Number(process.env.PORT ?? 3001);
-const SERVER_NAME = process.env.SERVER_NAME ?? 'demo';
-const INSTANCE_ID = process.env.INSTANCE_ID ?? 'instance-1';
+// Instance processes have local identity/listen settings; routing and
+// registration live exclusively in PostgreSQL, not in this process config.
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required`);
+  return value;
+}
+const SERVER_NAME = requiredEnv('MCP_SERVER_NAME');
+const INSTANCE_ID = requiredEnv('MCP_INSTANCE_ID');
+const PORT = Number(process.env.MCP_PORT);
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+  throw new Error('MCP_PORT must be a valid TCP port');
+}
 
 /**
  * Sessions are kept in-memory per instance (the transport owns its state).
@@ -27,7 +37,7 @@ async function createSession(): Promise<Session> {
     sessionIdGenerator: () => randomUUID(),
     onsessioninitialized: (sessionId) => {
       sessions.set(sessionId, session);
-      console.log(`[${INSTANCE_ID}] session initialized: ${sessionId} (total: ${sessions.size})`);
+      console.log(`[${INSTANCE_ID}] session initialized: ${sessionId.slice(0, 8)}… (total: ${sessions.size})`);
     },
   });
 
@@ -35,7 +45,7 @@ async function createSession(): Promise<Session> {
   transport.onclose = () => {
     const sid = transport.sessionId;
     if (sid) sessions.delete(sid);
-    console.log(`[${INSTANCE_ID}] session closed: ${sid ?? '?'}`);
+    console.log(`[${INSTANCE_ID}] session closed: ${sid ? `${sid.slice(0, 8)}…` : '?'}`);
   };
   await server.connect(transport);
   return session;
@@ -43,6 +53,18 @@ async function createSession(): Promise<Session> {
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
+
+// A local fixture for checking that the Gateway injects the user's key.
+app.use('/mcp-protected', (req, res, next) => {
+  const expected = process.env.MCP_DEMO_API_KEY;
+  if (!expected) return res.status(404).end();
+  if (req.headers['x-api-key'] !== expected) return res.status(401).json({ error: 'invalid_upstream_api_key' });
+  next();
+});
+app.use('/mcp-oauth', (req, res, next) => {
+  if (!req.headers.authorization?.startsWith('Bearer ')) return res.status(401).json({ error: 'missing_upstream_bearer' });
+  next();
+});
 
 // CORS so web-based MCP clients can connect directly.
 app.use('/mcp', (req, res, next) => {
@@ -60,7 +82,7 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true, server: SERVER_NAME, instance: INSTANCE_ID, sessions: sessions.size });
 });
 
-app.post('/mcp', async (req, res) => {
+app.post(['/mcp', '/mcp-protected', '/mcp-oauth'], async (req, res) => {
   try {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     let session = sessionId ? sessions.get(sessionId) : undefined;
@@ -96,13 +118,13 @@ const requireSession = async (req: express.Request, res: express.Response): Prom
   return session;
 };
 
-app.get('/mcp', async (req, res) => {
+app.get(['/mcp', '/mcp-protected', '/mcp-oauth'], async (req, res) => {
   // Standalone SSE stream for server->client messages of an existing session.
   const session = await requireSession(req, res);
   if (session) await session.transport.handleRequest(req, res);
 });
 
-app.delete('/mcp', async (req, res) => {
+app.delete(['/mcp', '/mcp-protected', '/mcp-oauth'], async (req, res) => {
   const session = await requireSession(req, res);
   if (session) await session.transport.handleRequest(req, res);
 });

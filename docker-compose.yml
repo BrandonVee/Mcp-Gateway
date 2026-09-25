@@ -17,8 +17,26 @@ services:
       gateway:
         condition: service_started
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: "mcp"
+      POSTGRES_USER: "mcp"
+      POSTGRES_PASSWORD: "mcp-dev-password"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
   redis:
     image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 3s
@@ -29,53 +47,60 @@ services:
     build: .
     command: pnpm --filter @mcp/auth-server dev
     environment:
-      PORT: "9001"
-      AUTH_ISSUER: "http://localhost:9001"
-      ACCESS_TOKEN_TTL: "604800"  # 7 days for static client config (demo)
-      DB_PATH: "/data/auth.db"
-      ADMIN_PASSWORD: "admin123"
-      SEED_DEMO_USER: "1"
+      CONFIG_FILE: "/app/config/docker.json"
       ADMIN_WEB_URL: "http://localhost:5173"
+      CREDENTIAL_ENCRYPT_KEY: "${CREDENTIAL_ENCRYPT_KEY:-9f52ebfcbdfb3f52cfcf214b6196952c486efe7ec2c1d7f7a2144d72428c01fc}"
+      CREDENTIAL_BROKER_TOKEN: "${CREDENTIAL_BROKER_TOKEN:-ef23e6d931a69ad96a57d9ba38a39c810d6adb8a61f4e38990a9b14e0bc6a36d}"
     ports:
       - "9001:9001"
     volumes:
       - ./packages/auth-server/src:/app/packages/auth-server/src
+      - ./packages/auth-server/drizzle:/app/packages/auth-server/drizzle
       - ./packages/shared/src:/app/packages/shared/src
-      - ./data/auth:/data
+      - ./config:/app/config:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   gateway:
     build: .
     command: pnpm --filter @mcp/gateway dev
     environment:
-      PORT: "8000"
-      REDIS_URL: "redis://redis:6379"
-      AUTH_ISSUER: "http://localhost:9001"
-      AUTH_JWKS_URL: "http://auth:9001/jwks.json"
-      JWT_AUDIENCE: "mcp-gateway"
-      RESOURCE_BASE_URL: "http://localhost:8000"
-      GATEWAY_SERVERS: "demo|http://mcp-a:3001,http://mcp-b:3002"
+      CONFIG_FILE: "/app/config/docker.json"
+      CONNECTIONS_WEB_URL: "http://localhost:5173/connections"
+      CREDENTIAL_BROKER_TOKEN: "${CREDENTIAL_BROKER_TOKEN:-ef23e6d931a69ad96a57d9ba38a39c810d6adb8a61f4e38990a9b14e0bc6a36d}"
     ports:
       - "8000:8000"
     volumes:
       - ./packages/gateway/src:/app/packages/gateway/src
       - ./packages/shared/src:/app/packages/shared/src
+      - ./config:/app/config:ro
     depends_on:
       redis:
         condition: service_healthy
       auth:
-        condition: service_started
+        condition: service_healthy
       mcp-a:
         condition: service_started
       mcp-b:
+        condition: service_started
+      mcp-reports:
+        condition: service_started
+      mcp-knowledge:
         condition: service_started
 
   mcp-a:
     build: .
     command: pnpm --filter @mcp/mcp-server dev
     environment:
-      PORT: "3001"
-      SERVER_NAME: "demo"
-      INSTANCE_ID: "demo-a"
+      MCP_SERVER_NAME: "demo"
+      MCP_INSTANCE_ID: "demo-a"
+      MCP_PORT: "3001"
     ports:
       - "3001:3001"
     volumes:
@@ -86,11 +111,41 @@ services:
     build: .
     command: pnpm --filter @mcp/mcp-server dev
     environment:
-      PORT: "3002"
-      SERVER_NAME: "demo"
-      INSTANCE_ID: "demo-b"
+      MCP_SERVER_NAME: "demo"
+      MCP_INSTANCE_ID: "demo-b"
+      MCP_PORT: "3002"
     ports:
       - "3002:3002"
     volumes:
       - ./packages/mcp-server/src:/app/packages/mcp-server/src
       - ./packages/shared/src:/app/packages/shared/src
+
+  mcp-reports:
+    build: .
+    command: pnpm --filter @mcp/mcp-server dev
+    environment:
+      MCP_SERVER_NAME: "reports"
+      MCP_INSTANCE_ID: "reports-a"
+      MCP_PORT: "3003"
+      MCP_DEMO_API_KEY: "smoke-user-key"
+    ports:
+      - "3003:3003"
+    volumes:
+      - ./packages/mcp-server/src:/app/packages/mcp-server/src
+      - ./packages/shared/src:/app/packages/shared/src
+
+  mcp-knowledge:
+    build: .
+    command: pnpm --filter @mcp/mcp-server dev
+    environment:
+      MCP_SERVER_NAME: "knowledge"
+      MCP_INSTANCE_ID: "knowledge-a"
+      MCP_PORT: "3004"
+    ports:
+      - "3004:3004"
+    volumes:
+      - ./packages/mcp-server/src:/app/packages/mcp-server/src
+      - ./packages/shared/src:/app/packages/shared/src
+
+volumes:
+  postgres_data:

@@ -2,6 +2,8 @@ import { generateKeyPairSync } from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { exportJWK, importPKCS8, importSPKI, type JWK, type KeyLike } from 'jose';
 import { db } from './db.js';
+import { meta } from './schema.js';
+import { eq } from 'drizzle-orm';
 
 export interface SigningKeys {
   kid: string;
@@ -18,9 +20,7 @@ export interface SigningKeys {
  */
 export async function loadSigningKeys(): Promise<SigningKeys> {
   // 1) keys persisted in the database survive restarts (tokens stay valid)
-  const stored = db
-    .prepare("SELECT value FROM meta WHERE key = 'signing_pem'")
-    .get() as { value: string } | undefined;
+  const [stored] = await db.select({ value: meta.value }).from(meta).where(eq(meta.key, 'signing_pem')).limit(1);
   if (stored) {
     const saved = JSON.parse(stored.value) as { privateKeyPem: string; publicKeyPem: string; kid: string };
     const privateKey = await importPKCS8(saved.privateKeyPem, 'RS256');
@@ -52,7 +52,7 @@ export async function loadSigningKeys(): Promise<SigningKeys> {
   const publicKey = await importSPKI(publicKeyPem, 'RS256');
   const publicJwk = await exportJWK(publicKey);
   const kid = randomUUID();
-  persistKeys(privateKeyPem, publicKeyPem, kid);
+  await persistKeys(privateKeyPem, publicKeyPem, kid);
   return {
     kid,
     privateKey,
@@ -60,9 +60,12 @@ export async function loadSigningKeys(): Promise<SigningKeys> {
   };
 }
 
-function persistKeys(privateKeyPem: string, publicKeyPem: string, kid: string): void {
-  db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(
-    'signing_pem',
-    JSON.stringify({ privateKeyPem, publicKeyPem, kid }),
-  );
+async function persistKeys(privateKeyPem: string, publicKeyPem: string, kid: string): Promise<void> {
+  await db
+    .insert(meta)
+    .values({ key: 'signing_pem', value: JSON.stringify({ privateKeyPem, publicKeyPem, kid }) })
+    .onConflictDoUpdate({
+      target: meta.key,
+      set: { value: JSON.stringify({ privateKeyPem, publicKeyPem, kid }) },
+    });
 }

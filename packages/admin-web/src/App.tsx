@@ -38,13 +38,16 @@ const ServerDialogs = lazy(() =>
     default: module.ServerDialogs,
   })),
 );
+const ConnectionsPage = lazy(() => import("./features/connections/ConnectionsPage").then((module) => ({ default: module.ConnectionsPage })));
+const ConnectionsAdminPage = lazy(() => import("./features/connections/ConnectionsAdminPage").then((module) => ({ default: module.ConnectionsAdminPage })));
+const MonitoringPage = lazy(() => import("./features/monitoring/MonitoringPage").then((module) => ({ default: module.MonitoringPage })));
 
 export function App() {
   return (
     <ConfigProvider locale={zhCN} theme={appTheme}>
       <AntApp>
         <Suspense fallback={<BootScreen />}>
-          <ControlPlane />
+          {window.location.pathname === "/connections" ? <ConnectionsPage /> : <ControlPlane />}
         </Suspense>
       </AntApp>
     </ConfigProvider>
@@ -127,15 +130,21 @@ function ControlPlane() {
               onCreate={() => setDialog({ type: "create-user" })}
               onAssign={(user) => setDialog({ type: "assign-user", user })}
               onPassword={(user) => setDialog({ type: "reset-password", user })}
-              onToggle={(user) =>
-                execute(
-                  () =>
-                    controlPlane.api.updateUser(user.id, {
-                      disabled: !user.disabled,
-                    }),
-                  user.disabled ? "用户已启用" : "用户已禁用",
-                )
-              }
+              onToggle={(user) => {
+                const update = () => execute(
+                  () => controlPlane.api.updateUser(user.id, { disabled: !user.disabled }),
+                  user.disabled ? "用户认证已开启" : "用户认证已关闭",
+                );
+                if (user.disabled) void update();
+                else modal.confirm({
+                  title: `关闭 ${user.username} 的用户认证？`,
+                  content: "该用户将不能登录或使用 MCP Server，现有登录会话和刷新令牌会被撤销。",
+                  okText: "关闭认证",
+                  okButtonProps: { danger: true },
+                  cancelText: "取消",
+                  onOk: update,
+                });
+              }}
               onDelete={(user) =>
                 modal.confirm({
                   title: `删除用户 ${user.username}？`,
@@ -156,10 +165,13 @@ function ControlPlane() {
           {view === "servers" && (
             <ServersPage
               servers={controlPlane.servers}
+              users={controlPlane.users}
               onCreate={() => setDialog({ type: "create-server" })}
               onAddInstance={(server) =>
                 setDialog({ type: "add-instance", server })
               }
+              onConfigureAuth={(server) => setDialog({ type: "configure-server-auth", server })}
+              onConfigureUsers={(server) => setDialog({ type: "configure-server-users", server })}
               onToggle={(server) =>
                 execute(
                   () =>
@@ -213,6 +225,24 @@ function ControlPlane() {
             />
           )}
 
+          {view === "credentials" && (
+            <ConnectionsAdminPage
+              users={controlPlane.users}
+              servers={controlPlane.servers}
+              connections={controlPlane.connections}
+              onRevoke={(user, server) => modal.confirm({
+                title: `撤销 ${user.username} 的 ${server.display_name} 连接？`,
+                content: "平台保存的 API Key 或 OAuth Token 将被删除，该用户需要重新连接后才能使用此服务。",
+                okText: "撤销连接",
+                okButtonProps: { danger: true },
+                cancelText: "取消",
+                onOk: () => execute(() => controlPlane.api.revokeConnection(user.id, server.name), "连接已撤销"),
+              })}
+            />
+          )}
+
+          {view === "monitoring" && <MonitoringPage />}
+
           <UserDialogs
             state={dialog}
             servers={controlPlane.servers}
@@ -237,6 +267,7 @@ function ControlPlane() {
 
           <ServerDialogs
             state={dialog}
+            users={controlPlane.users}
             busy={controlPlane.busy}
             onClose={() => setDialog({ type: null })}
             onCreate={(data) =>
@@ -251,6 +282,8 @@ function ControlPlane() {
                 "实例已添加",
               )
             }
+            onConfigureAuth={(server, data) => execute(() => controlPlane.api.updateServer(server.name, data), "认证配置已更新")}
+            onConfigureUsers={(server, userIds) => execute(() => controlPlane.api.setServerUsers(server.name, userIds), "用户授权已更新")}
           />
         </>
       )}

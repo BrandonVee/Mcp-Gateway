@@ -4,6 +4,8 @@ import {
   RightOutlined,
   SearchOutlined,
   TeamOutlined,
+  KeyOutlined,
+  MonitorOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
 import { Empty, Input, Modal, Tag } from "antd";
@@ -41,6 +43,22 @@ const commands: Array<{
     keywords: "servers registry routes 服务 实例 路由",
     icon: <CloudServerOutlined />,
     shortcut: "G S",
+  },
+  {
+    view: "credentials",
+    title: "二次认证",
+    description: "查看用户的 API Key 与 OAuth 连接状态",
+    keywords: "credentials connections api key oauth 二次认证 连接",
+    icon: <KeyOutlined />,
+    shortcut: "G C",
+  },
+  {
+    view: "monitoring",
+    title: "日志监控",
+    description: "查看服务健康状态与管理操作审计",
+    keywords: "monitoring audit logs observability 日志 监控 审计",
+    icon: <MonitorOutlined />,
+    shortcut: "G M",
   },
 ];
 

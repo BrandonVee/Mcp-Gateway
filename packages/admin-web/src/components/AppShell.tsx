@@ -5,6 +5,9 @@ import {
   CloudServerOutlined,
   DashboardOutlined,
   LogoutOutlined,
+  LinkOutlined,
+  KeyOutlined,
+  MonitorOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ReloadOutlined,
@@ -46,6 +49,16 @@ const titles: Record<
     eyebrow: "CONTROL PLANE / REGISTRY",
     title: "Server 注册表",
     description: "编排逻辑路由、上游实例与服务状态",
+  },
+  credentials: {
+    eyebrow: "CONTROL PLANE / CONNECTIONS",
+    title: "二次认证",
+    description: "查看用户与外部 MCP Server 的连接状态",
+  },
+  monitoring: {
+    eyebrow: "CONTROL PLANE / OBSERVABILITY",
+    title: "日志监控",
+    description: "查看服务健康状态与管理员操作审计",
   },
 };
 
@@ -89,6 +102,8 @@ export function AppShell({
       label: "Server 注册",
       extra: <span className="menu-count">{serverCount}</span>,
     },
+    { key: "credentials", icon: <KeyOutlined />, label: "二次认证" },
+    { key: "monitoring", icon: <MonitorOutlined />, label: "日志监控" },
   ];
 
   return (
@@ -125,6 +140,15 @@ export function AppShell({
         />
 
         <div className="sider-footer">
+          <Button
+            type="text"
+            block
+            href="/connections"
+            icon={<LinkOutlined />}
+            className="connections-nav-button"
+          >
+            {!collapsed && "个人连接中心"}
+          </Button>
           {!collapsed && (
             <div className="system-state">
               <Badge status="success" />

@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "all_servers" boolean DEFAULT false NOT NULL;

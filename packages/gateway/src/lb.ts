@@ -16,6 +16,11 @@ export async function redisHealthy(): Promise<boolean> {
 export { redis };
 
 const bindKey = (server: string, sessionId: string): string => `gw:bind:${server}:${sessionId}`;
+const ownerKey = (server: string, sessionId: string): string => `gw:owner:${server}:${sessionId}`;
+
+export async function sessionOwnedBy(serverName: string, sessionId: string, owner: string): Promise<boolean> {
+  return (await redis.get(ownerKey(serverName, sessionId))) === owner;
+}
 
 // (initial placement is a pure function of the request -> safe under concurrent replicas)
 
@@ -35,6 +40,9 @@ export interface PickedInstance {
 export async function pickInstance(cfg: McpServerConfig, sessionId?: string, hashSeed?: string): Promise<PickedInstance> {
   if (sessionId) {
     const bound = await redis.get(bindKey(cfg.name, sessionId));
+    const urlIndex = bound ? cfg.instances.indexOf(bound) : -1;
+    if (urlIndex >= 0) return { url: cfg.instances[urlIndex], index: urlIndex, sticky: true };
+    // Backward compatibility with bindings written by the old index format.
     const idx = Number(bound);
     if (Number.isInteger(idx) && idx >= 0 && idx < cfg.instances.length) {
       return { url: cfg.instances[idx], index: idx, sticky: true };
@@ -46,6 +54,11 @@ export async function pickInstance(cfg: McpServerConfig, sessionId?: string, has
 }
 
 /** Remember which instance owns an MCP session (with TTL refresh on every request). */
-export async function bindSession(serverName: string, sessionId: string, instanceIndex: number): Promise<void> {
-  await redis.set(bindKey(serverName, sessionId), String(instanceIndex), 'EX', env.sessionTtlSeconds);
+export async function bindSession(serverName: string, sessionId: string, instanceUrl: string, owner: string): Promise<void> {
+  const existingOwner = await redis.get(ownerKey(serverName, sessionId));
+  if (existingOwner && existingOwner !== owner) throw new Error('MCP session owner mismatch');
+  await redis.multi()
+    .set(bindKey(serverName, sessionId), instanceUrl, 'EX', env.sessionTtlSeconds)
+    .set(ownerKey(serverName, sessionId), owner, 'EX', env.sessionTtlSeconds)
+    .exec();
 }

@@ -108,17 +108,17 @@ export function UsersPage({
       title: "Server 访问范围",
       dataIndex: "servers",
       key: "servers",
-      render: (servers: string[]) => (
+      render: (servers: string[], user) => (
         <Flex gap={6} wrap>
           {servers.length ? (
             servers.map((name) => (
               <Tag
                 key={name}
                 bordered={false}
-                color="processing"
+                color={name === "*" ? "success" : "processing"}
                 className="scope-tag"
               >
-                {name}
+                {name === "*" ? user.role === "admin" ? "管理员 · 全部 Server" : "全部 Server（*）" : name}
               </Tag>
             ))
           ) : (
@@ -128,15 +128,16 @@ export function UsersPage({
       ),
     },
     {
-      title: "状态",
+      title: "用户认证",
       dataIndex: "disabled",
       key: "disabled",
-      width: 120,
+      width: 150,
       render: (disabled: boolean, user) => (
         <Switch
           checked={!disabled}
-          checkedChildren="可用"
-          unCheckedChildren="禁用"
+          checkedChildren="允许登录"
+          unCheckedChildren="禁止登录"
+          disabled={user.username === "admin"}
           onChange={() => onToggle(user)}
         />
       ),
@@ -148,13 +149,13 @@ export function UsersPage({
       align: "right",
       render: (_, user) => (
         <Space size={4}>
-          <Tooltip title="分配权限">
+          {user.role === "user" && <Tooltip title="分配权限">
             <Button
               type="text"
               icon={<LinkOutlined />}
               onClick={() => onAssign(user)}
             />
-          </Tooltip>
+          </Tooltip>}
           <Tooltip title="重置密码">
             <Button
               type="text"
@@ -182,7 +183,7 @@ export function UsersPage({
       <PageToolbar
         eyebrow="IDENTITY DIRECTORY"
         title="谁可以访问哪些能力"
-        description="维护用户与 MCP Server 之间的多对多授权关系。"
+        description="开关用户登录与 MCP 访问，并维护每个 Server 的授权范围。"
         primaryAction={
           <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>
             创建用户

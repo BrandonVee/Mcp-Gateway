@@ -16,8 +16,149 @@
   --surface: #0d1422;
 }
 
+/* Monitoring: dense operational readout, distinct from the editing screens. */
+.monitor-page { gap: 22px; }
+.monitor-overview,
+.monitor-audit-panel {
+  border: 1px solid #1b2d45;
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(15, 26, 43, 0.96), rgba(8, 15, 27, 0.96));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+.monitor-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+}
+.monitor-section-heading h3 {
+  margin: 5px 0 0;
+  color: #e9f4ff;
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+.monitor-checked {
+  color: #8195af;
+  font: 11px var(--mono);
+}
+.monitor-status-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  border-top: 1px solid #1b2d45;
+  background: #1b2d45;
+}
+.monitor-status-cell {
+  display: flex;
+  flex-direction: column;
+  min-height: 126px;
+  gap: 10px;
+  padding: 18px 20px;
+  background: #0b1422;
+  border-top: 2px solid transparent;
+}
+.monitor-status-cell.is-good { border-top-color: #20d99a; }
+.monitor-status-cell.is-bad { border-top-color: #ff5d73; }
+.monitor-status-top { display: flex; align-items: center; justify-content: space-between; }
+.monitor-status-top span { color: #81a1c6; font: 600 10px var(--mono); letter-spacing: 0.1em; }
+.monitor-status-cell strong { color: #e9f4ff; font-size: 18px; line-height: 1; }
+.monitor-status-cell small { color: #6f829d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.monitor-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 24px 20px;
+}
+.monitor-actor-input { width: min(260px, 100%); }
+.monitor-method-select { min-width: 160px; }
+.monitor-error { margin: 0 24px 16px; }
+.monitor-log-head,
+.monitor-log-row {
+  display: grid;
+  grid-template-columns: 180px 130px minmax(250px, 1fr) 76px 98px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 24px;
+}
+.monitor-log-head {
+  min-height: 38px;
+  color: #6683a5;
+  background: #0a1525;
+  border-top: 1px solid #1b2d45;
+  border-bottom: 1px solid #1b2d45;
+  font: 600 10px var(--mono);
+  letter-spacing: 0.1em;
+}
+.monitor-log-row {
+  min-height: 58px;
+  border-bottom: 1px solid rgba(31, 50, 74, 0.65);
+  transition: background 150ms ease;
+}
+.monitor-log-row:hover { background: rgba(41, 110, 191, 0.08); }
+.monitor-log-row time,
+.monitor-log-row code { color: #91a8c3; font: 11px var(--mono); }
+.monitor-log-row strong { color: #dbeafb; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.monitor-operation { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.monitor-operation code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.monitor-request-id { color: #5d7797 !important; }
+.monitor-empty { min-height: 180px; display: grid; place-items: center; }
+.monitor-footer { display: flex; justify-content: center; padding: 18px 24px; }
+@media (max-width: 1250px) {
+  .monitor-status-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .monitor-log-head,
+  .monitor-log-row { grid-template-columns: 150px 100px minmax(190px, 1fr) 62px; }
+  .monitor-log-head span:last-child,
+  .monitor-request-id { display: none; }
+}
+@media (max-width: 740px) {
+  .monitor-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .monitor-section-heading { align-items: flex-start; flex-direction: column; }
+  .monitor-log-head { display: none; }
+  .monitor-log-row { grid-template-columns: 1fr auto; gap: 7px 10px; padding: 12px 18px; }
+  .monitor-log-row time { grid-column: 1; }
+  .monitor-log-row strong { grid-column: 1; }
+  .monitor-operation { grid-column: 1 / -1; grid-row: 3; }
+  .monitor-log-row > .ant-tag { grid-column: 2; grid-row: 1; }
+}
+
 body {
   background: #070b13;
+}
+
+.connection-admin-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.connection-admin-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 106px;
+  padding: 18px 20px;
+  border: 1px solid #1b2a40;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #101c2e, #0a111e);
+}
+
+.connection-admin-summary span {
+  color: #9bacc3;
+  font-size: 14px;
+}
+
+.connection-admin-summary strong {
+  color: #f1f7ff;
+  font-size: 30px;
+  line-height: 1;
+}
+
+@media (max-width: 860px) {
+  .connection-admin-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .app-layout,
@@ -114,6 +255,26 @@ body {
 
 .system-state strong {
   color: #cce9e0;
+}
+
+.connections-nav-button {
+  margin-bottom: 12px;
+  color: #9fcef2 !important;
+  border: 1px solid #214164 !important;
+  background: rgba(47, 140, 255, 0.08) !important;
+}
+
+.connections-nav-button:hover {
+  color: #eaf6ff !important;
+  border-color: #408bc1 !important;
+  background: rgba(47, 140, 255, 0.18) !important;
+}
+
+.login-connections-link {
+  margin-top: 8px;
+  height: auto;
+  padding: 8px 0;
+  white-space: normal;
 }
 
 .app-header {
@@ -593,6 +754,19 @@ body {
   border-color: #315a82;
 }
 
+.wildcard-grant {
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  background: rgba(47, 140, 255, 0.08);
+  border: 1px solid rgba(79, 174, 255, 0.24);
+  border-radius: 8px;
+}
+
+.wildcard-grant .ant-checkbox-wrapper {
+  color: #d8e9fb;
+  font-weight: 600;
+}
+
 .modal-title > span:first-child,
 .secure-icon {
   color: #54c3ff;
@@ -714,5 +888,285 @@ body {
 
   .app-header::after {
     width: 90px;
+  }
+}
+
+/* Readability scale: small text is metadata, never essential information. */
+:root {
+  --muted: #a3b4c9;
+}
+
+.brand-copy small,
+.sider-section-label,
+.page-eyebrow,
+.section-eyebrow,
+.card-title-copy small,
+.infra-heading small,
+.server-heading small,
+.modal-title small,
+.login-brand small,
+.story-index,
+.story-steps > div > span,
+.story-status,
+.command-caption {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.brand-copy small,
+.sider-section-label,
+.system-state small,
+.card-title-copy small,
+.infra-heading small,
+.server-heading small,
+.modal-title small,
+.login-brand small,
+.story-steps small,
+.story-status,
+.command-caption {
+  color: #9aafc8;
+}
+
+.brand-copy small,
+.sider-section-label,
+.page-eyebrow,
+.section-eyebrow,
+.card-title-copy small,
+.infra-heading small,
+.server-heading small,
+.modal-title small,
+.login-brand small {
+  letter-spacing: 0.06em;
+}
+
+.menu-count,
+.system-state small,
+.secure-tag,
+.updated-tag,
+.route-origin small,
+.route-node .ant-tag,
+.scope-tag,
+.server-number,
+.server-card-header .ant-switch,
+.instance-copy .ant-tag,
+.command-trigger kbd,
+.command-search kbd,
+.command-footer kbd,
+.command-list .ant-tag {
+  font-size: 12px;
+}
+
+.system-state strong,
+.metric-card .ant-statistic-title,
+.metric-detail,
+.page-heading .ant-typography-secondary,
+.page-toolbar-heading .ant-typography,
+.section-intro .ant-typography,
+.filter-result-count,
+.table-summary,
+.server-card-footer,
+.server-card-footer .ant-btn,
+.login-card .ant-form-item-label label,
+.login-hint,
+.command-trigger,
+.command-copy small,
+.command-footer {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.route-node strong,
+.route-node small,
+.identity-card .ant-list-item-meta-description,
+.infra-status small,
+.infra-status strong,
+.data-card .ant-table-thead > tr > th,
+.identity-copy small,
+.server-heading code,
+.instance-copy strong,
+.instance-copy > .ant-typography,
+.permission-grid code,
+.story-steps small {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.identity-card .ant-list-item-meta-title,
+.infra-heading strong,
+.data-card .ant-table-tbody > tr > td,
+.identity-copy strong,
+.permission-grid .ant-checkbox-wrapper > span:last-child,
+.story-steps strong,
+.command-copy strong {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.identity-card .ant-list-item-meta-description {
+  max-width: none;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.data-card .ant-table-thead > tr > th {
+  height: 52px;
+}
+
+.data-card .ant-table-tbody > tr > td {
+  height: 76px;
+}
+
+.route-node {
+  min-height: 66px;
+}
+
+.route-node strong,
+.instance-copy strong,
+.instance-copy > .ant-typography,
+.server-heading code {
+  max-width: 100%;
+}
+
+.server-heading code {
+  overflow-wrap: anywhere;
+}
+
+.instance-copy > .ant-typography {
+  color: #9aafc8;
+}
+
+.metric-card .ant-statistic-title,
+.metric-detail,
+.route-node small,
+.identity-card .ant-list-item-meta-description {
+  color: #a3b4c9;
+}
+
+.instance-row {
+  min-height: 82px;
+}
+
+.instance-copy strong {
+  display: inline-block;
+}
+
+.server-card-footer {
+  min-height: 58px;
+}
+
+.server-card-header .ant-switch {
+  min-width: 80px;
+}
+
+.server-policy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 16px 20px;
+  background: rgba(17, 31, 51, 0.52);
+  border-bottom: 1px solid #1d3048;
+}
+
+.server-policy > div {
+  min-width: 0;
+}
+
+.server-policy small,
+.server-policy strong {
+  display: block;
+  line-height: 1.5;
+}
+
+.server-policy small {
+  color: #9aafc8;
+  font-size: 12px;
+}
+
+.server-policy strong {
+  margin-top: 2px;
+  color: #e3efff;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.server-policy .ant-btn {
+  min-width: 112px;
+}
+
+.command-list > button {
+  min-height: 70px;
+}
+
+.command-copy small {
+  color: #9aafc8;
+}
+
+.login-hint,
+.story-steps small,
+.story-status,
+.table-summary {
+  color: #a3b4c9;
+}
+
+.boot-screen .mono-label {
+  font-size: 13px;
+}
+
+/* The personal connection workspace shares the same readable type scale. */
+.connections-page {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.connections-eyebrow,
+.connection-index,
+.connection-bottom > span {
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: 0.08em;
+  color: #a7c4de;
+}
+
+.connections-login p,
+.connections-intro p,
+.connections-note {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #afc0d4 !important;
+}
+
+.connection-card code {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #9bc8e9;
+}
+
+.connection-bottom {
+  gap: 10px;
+}
+
+.connection-bottom > span {
+  margin-right: auto;
+}
+
+@media (max-width: 620px) {
+  .connection-bottom > span {
+    flex-basis: 100%;
+  }
+
+  .connections-header strong {
+    font-size: 16px;
+  }
+
+  .connections-eyebrow {
+    letter-spacing: 0.04em;
   }
 }

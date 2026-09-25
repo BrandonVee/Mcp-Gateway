@@ -1,4 +1,4 @@
-import type { AdminUser, GatewayHealth, McpServer } from "./types";
+import type { AdminConnection, AdminUser, AuditEventPage, AuthHealth, ConnectionServer, CreateServerInput, GatewayHealth, McpServer, ServerAuthInput } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -68,19 +68,20 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ servers }),
     }),
+  adminConnections: () => request<{ connections: AdminConnection[] }>("/api/admin/connections"),
+  revokeConnection: (userId: number, serverName: string) => request(
+    `/api/admin/connections/${userId}/${encodeURIComponent(serverName)}`,
+    { method: "DELETE" },
+  ),
   servers: () => request<{ servers: McpServer[] }>("/api/admin/servers"),
-  createServer: (body: {
-    name: string;
-    display_name: string;
-    instances: Array<{ id?: string; url: string }>;
-  }) =>
+  createServer: (body: CreateServerInput) =>
     request<McpServer>("/api/admin/servers", {
       method: "POST",
       body: JSON.stringify(body),
     }),
   updateServer: (
     name: string,
-    body: { display_name?: string; enabled?: boolean },
+    body: { display_name?: string; enabled?: boolean } | ServerAuthInput,
   ) =>
     request(`/api/admin/servers/${encodeURIComponent(name)}`, {
       method: "PATCH",
@@ -89,6 +90,11 @@ export const api = {
   deleteServer: (name: string) =>
     request(`/api/admin/servers/${encodeURIComponent(name)}`, {
       method: "DELETE",
+    }),
+  setServerUsers: (name: string, userIds: number[]) =>
+    request(`/api/admin/servers/${encodeURIComponent(name)}/users`, {
+      method: "PUT",
+      body: JSON.stringify({ user_ids: userIds }),
     }),
   addInstance: (name: string, body: { id?: string; url: string }) =>
     request(`/api/admin/servers/${encodeURIComponent(name)}/instances`, {
@@ -113,4 +119,24 @@ export const api = {
       { method: "DELETE" },
     ),
   gatewayHealth: () => request<GatewayHealth>("/gateway/health"),
+  authHealth: () => request<AuthHealth>("/api/health"),
+  auditEvents: (options: { limit?: number; before?: number; actor?: string; method?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (options.limit) params.set("limit", String(options.limit));
+    if (options.before) params.set("before", String(options.before));
+    if (options.actor) params.set("actor", options.actor);
+    if (options.method) params.set("method", options.method);
+    return request<AuditEventPage>(`/api/admin/audit-events?${params}`);
+  },
+  mySession: () => request<{ authenticated: boolean; username: string }>("/api/me/session"),
+  myLogin: (username: string, password: string) => request<{ authenticated: boolean; username: string }>("/api/me/session", {
+    method: "POST", body: JSON.stringify({ username, password }),
+  }),
+  myLogout: () => request("/api/me/session", { method: "DELETE" }),
+  myServers: () => request<{ servers: ConnectionServer[] }>("/api/me/servers"),
+  saveApiKey: (name: string, apiKey: string) => request(`/api/me/servers/${encodeURIComponent(name)}/credential`, {
+    method: "PUT", body: JSON.stringify({ api_key: apiKey }),
+  }),
+  removeCredential: (name: string) => request(`/api/me/servers/${encodeURIComponent(name)}/credential`, { method: "DELETE" }),
+  startOAuth: (name: string) => request<{ authorization_url: string }>(`/api/me/servers/${encodeURIComponent(name)}/oauth`, { method: "POST" }),
 };

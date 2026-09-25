@@ -3,6 +3,7 @@ import {
   CheckCircleFilled,
   CloudServerOutlined,
   LockOutlined,
+  LinkOutlined,
   SafetyCertificateOutlined,
   UserOutlined,
 } from "@ant-design/icons";
@@ -145,6 +146,9 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           <div className="login-hint">
             <LockOutlined /> 管理会话通过 HttpOnly Cookie 安全传输
           </div>
+          <Button className="login-connections-link" type="link" href="/connections" icon={<LinkOutlined />} block>
+            普通用户？进入 MCP 连接中心
+          </Button>
         </Card>
       </section>
     </main>

@@ -6,6 +6,7 @@ import {
   ExportOutlined,
   PlusOutlined,
   PoweroffOutlined,
+  SafetyCertificateOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
 import {
@@ -27,12 +28,15 @@ import {
 } from "antd";
 import { useMemo, useState } from "react";
 import { PageToolbar } from "../../components/PageToolbar";
-import type { McpInstance, McpServer } from "../../types";
+import type { AdminUser, McpInstance, McpServer } from "../../types";
 
 interface ServersPageProps {
   servers: McpServer[];
+  users: AdminUser[];
   onCreate: () => void;
   onAddInstance: (server: McpServer) => void;
+  onConfigureAuth: (server: McpServer) => void;
+  onConfigureUsers: (server: McpServer) => void;
   onToggle: (server: McpServer) => void;
   onToggleInstance: (server: McpServer, instance: McpInstance) => void;
   onDeleteInstance: (server: McpServer, instance: McpInstance) => void;
@@ -118,8 +122,8 @@ export function ServersPage(props: ServersPageProps) {
                   </span>
                   <span className="server-heading">
                     <small>LOGICAL ENDPOINT</small>
-                    <strong>{server.display_name}</strong>
-                    <code>/mcp/{server.name}</code>
+                    <strong title={server.display_name}>{server.display_name}</strong>
+                    <code title={`/mcp/${server.name}`}>/mcp/{server.name}</code>
                   </span>
                   <Switch
                     checked={server.enabled}
@@ -128,6 +132,19 @@ export function ServersPage(props: ServersPageProps) {
                     onChange={() => props.onToggle(server)}
                   />
                 </header>
+
+                <div className="server-policy">
+                  <div>
+                    <small>用户认证</small>
+                    <strong>{server.auth_mode === "none" ? "平台登录" : server.auth_mode === "api_key" ? "平台登录 + API Key" : "平台登录 + OAuth"}</strong>
+                  </div>
+                  <Button icon={<SafetyCertificateOutlined />} onClick={() => props.onConfigureAuth(server)}>设置认证</Button>
+                  <div>
+                    <small>访问授权</small>
+                    <strong>{server.user_count} 位普通用户</strong>
+                  </div>
+                  <Button icon={<TeamOutlined />} onClick={() => props.onConfigureUsers(server)}>分配权限</Button>
+                </div>
 
                 <div className="instance-list">
                   {server.instances.length ? (
@@ -138,12 +155,12 @@ export function ServersPage(props: ServersPageProps) {
                             <Badge
                               status={instance.enabled ? "success" : "default"}
                             />
-                            <strong>{instance.id}</strong>
+                            <strong title={instance.id}>{instance.id}</strong>
                             <Tag bordered={false}>
                               {instance.enabled ? "在线" : "已停用"}
                             </Tag>
                           </Flex>
-                          <Typography.Text ellipsis>
+                          <Typography.Text ellipsis={{ tooltip: instance.url }}>
                             {instance.url}
                           </Typography.Text>
                         </div>
@@ -201,9 +218,7 @@ export function ServersPage(props: ServersPageProps) {
                 </div>
 
                 <footer className="server-card-footer">
-                  <span>
-                    <TeamOutlined /> {server.user_count} 个用户授权
-                  </span>
+                  <span><TeamOutlined /> 管理员默认可访问 · {props.users.length} 个身份</span>
                   <Space size={4}>
                     <Button
                       type="link"
