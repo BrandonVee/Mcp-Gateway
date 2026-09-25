@@ -85,21 +85,21 @@ export function MonitoringPage() {
     <div className="page-stack page-enter monitor-page">
       <section className="monitor-overview">
         <div className="monitor-section-heading">
-          <div><span className="section-eyebrow">LIVE SERVICE PULSE</span><h3>{t("monitoring.servicePulse")}</h3></div>
+          <div><span className="section-eyebrow">{t("monitoring.pulseEyebrow")}</span><h3>{t("monitoring.servicePulse")}</h3></div>
           <span className="monitor-checked">{t("monitoring.checksEvery10SecondsTime", { time: healthCheckedAt ? timestamp(healthCheckedAt, language) : t("monitoring.checking") })}</span>
         </div>
         <div className="monitor-status-grid">
-          <StatusCell label="AUTH API" good={Boolean(auth?.ok)} detail={t("monitoring.authenticationService")} />
-          <StatusCell label="POSTGRES" good={Boolean(auth?.postgres)} detail={t("monitoring.primaryDataStore")} />
-          <StatusCell label="GATEWAY" good={Boolean(gateway?.ok)} detail={t("monitoring.mcpGateway")} />
-          <StatusCell label="REDIS" good={Boolean(gateway?.redis)} detail={t("monitoring.stickySessions")} />
-          <StatusCell label="REGISTRY" good={Boolean(gateway?.registry?.lastSuccessAt && !gateway?.registry?.lastError)} detail={gateway?.registry?.lastError ?? t("monitoring.databaseRouteSync")} />
+          <StatusCell label={t("monitoring.authApiLabel")} good={Boolean(auth?.ok)} detail={t("monitoring.authenticationService")} />
+          <StatusCell label="PostgreSQL" good={Boolean(auth?.postgres)} detail={t("monitoring.primaryDataStore")} />
+          <StatusCell label={t("monitoring.gatewayLabel")} good={Boolean(gateway?.ok)} detail={t("monitoring.mcpGateway")} />
+          <StatusCell label="Redis" good={Boolean(gateway?.redis)} detail={t("monitoring.stickySessions")} />
+          <StatusCell label={t("monitoring.registryLabel")} good={Boolean(gateway?.registry?.lastSuccessAt && !gateway?.registry?.lastError)} detail={gateway?.registry?.lastError ? t("monitoring.registrySyncFailed") : t("monitoring.databaseRouteSync")} />
         </div>
       </section>
 
       <section className="monitor-audit-panel">
         <div className="monitor-section-heading">
-          <div><span className="section-eyebrow">ADMINISTRATIVE AUDIT TRAIL</span><h3>{t("monitoring.auditTrail")}</h3></div>
+          <div><span className="section-eyebrow">{t("monitoring.auditEyebrow")}</span><h3>{t("monitoring.auditTrail")}</h3></div>
           <Tag color="cyan" bordered={false}>{t("monitoring.metadata90DayDefaultRetention")}</Tag>
         </div>
         <div className="monitor-toolbar">

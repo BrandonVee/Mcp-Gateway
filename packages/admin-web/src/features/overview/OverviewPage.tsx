@@ -87,7 +87,7 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
               <CardTitle
                 icon={<DeploymentUnitOutlined />}
                 title={t("overview.liveRouteTopology")}
-                subtitle="LIVE ROUTING FABRIC"
+                subtitle={t("overview.routingSubtitle")}
               />
             }
             extra={<Badge status="processing" text={t("overview.liveSync")} />}
@@ -95,7 +95,7 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
             <div className="route-map">
               <div className="route-origin">
                 <SafetyCertificateOutlined />
-                <strong>AUTH</strong>
+                <strong>{t("overview.authNode")}</strong>
                 <small>{t("auth.unifiedIdentity")}</small>
               </div>
               <div className="route-line" />
@@ -114,7 +114,7 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
                         color={server.enabled ? "success" : "default"}
                         bordered={false}
                       >
-                        {server.enabled ? "ROUTABLE" : "PAUSED"}
+                        {server.enabled ? t("status.routable") : t("status.paused")}
                       </Tag>
                     </div>
                   ))
@@ -136,7 +136,7 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
               <CardTitle
                 icon={<TeamOutlined />}
                 title={t("overview.recentUsers")}
-                subtitle="IDENTITY LEDGER"
+                subtitle={t("overview.identitySubtitle")}
               />
             }
           >
@@ -158,7 +158,7 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
                           color={user.role === "admin" ? "geekblue" : "default"}
                           bordered={false}
                         >
-                          {user.role}
+                          {user.role === "admin" ? t("common.administrator") : t("common.standardUser")}
                         </Tag>
                       </Flex>
                     }
@@ -178,11 +178,11 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
             <SyncOutlined spin={Boolean(health?.ok)} />
             <span>
               <strong>{t("overview.infrastructureStatus")}</strong>
-              <small>INFRASTRUCTURE STATUS</small>
+              <small>{t("overview.infrastructureSubtitle")}</small>
             </span>
           </div>
           <InfraStatus
-            label="Registry Sync"
+            label={t("overview.registrySync")}
             value={formatTime(health?.registry?.lastSuccessAt, language)}
             healthy={!health?.registry?.lastError}
           />

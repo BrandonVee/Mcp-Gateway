@@ -1,5 +1,31 @@
 import type { AdminConnection, AdminUser, AuditEventPage, AuthHealth, ConnectionServer, CreateServerInput, GatewayHealth, McpServer, ServerAuthInput } from "./types";
-import { getCurrentLanguage, getTranslation } from "./i18n";
+import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from "./i18n";
+
+/** Present stable, localized UI errors instead of leaking English backend strings. */
+export function apiErrorMessage(status: number, body: unknown, language: Language): string {
+  const payload = body && typeof body === "object" ? body as { error?: unknown } : {};
+  const code = typeof payload.error === "string" ? payload.error : undefined;
+  const known: Record<string, MessageKey> = {
+    invalid_admin_credentials: "api.invalidCredentials",
+    invalid_credentials: "api.invalidCredentials",
+    invalid_origin: "api.invalidOrigin",
+    "username already exists": "api.usernameExists",
+  };
+  const statusKey: Record<number, MessageKey> = {
+    400: "api.invalidRequest",
+    401: "api.unauthorized",
+    403: "api.forbidden",
+    404: "api.notFound",
+    409: "api.conflict",
+    429: "api.rateLimited",
+    500: "api.serverError",
+    502: "api.serverError",
+    503: "api.serviceUnavailable",
+    504: "api.serviceUnavailable",
+  };
+  const key = code && known[code] ? known[code] : statusKey[status];
+  return key ? getTranslation(key, language) : getTranslation("common.requestFailed", language, { status });
+}
 
 export class ApiError extends Error {
   constructor(
@@ -12,22 +38,22 @@ export class ApiError extends Error {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    credentials: "include",
-    ...init,
-    headers: {
-      ...(init?.body ? { "content-type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      credentials: "include",
+      ...init,
+      headers: {
+        ...(init?.body ? { "content-type": "application/json" } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw new ApiError(getTranslation("api.networkError", getCurrentLanguage()), 0);
+  }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message =
-      body?.error?.message ??
-      body?.error ??
-      body?.error_description ??
-      getTranslation("common.requestFailed", getCurrentLanguage(), { status: response.status });
-    throw new ApiError(message, response.status);
+    throw new ApiError(apiErrorMessage(response.status, body, getCurrentLanguage()), response.status);
   }
   return body as T;
 }
@@ -129,8 +155,8 @@ export const api = {
     if (options.method) params.set("method", options.method);
     return request<AuditEventPage>(`/api/admin/audit-events?${params}`);
   },
-  mySession: () => request<{ authenticated: boolean; username: string }>("/api/me/session"),
-  myLogin: (username: string, password: string) => request<{ authenticated: boolean; username: string }>("/api/me/session", {
+  mySession: () => request<{ authenticated: boolean; username: string; role: "admin" | "user" }>("/api/me/session"),
+  myLogin: (username: string, password: string) => request<{ authenticated: boolean; username: string; role: "admin" | "user" }>("/api/me/session", {
     method: "POST", body: JSON.stringify({ username, password }),
   }),
   myLogout: () => request("/api/me/session", { method: "DELETE" }),

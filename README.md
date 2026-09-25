@@ -191,7 +191,8 @@ curl -X PUT http://localhost:9001/admin/users/USER_ID/servers \
 - 上游实例添加、启停、删除；
 - Gateway、Redis、动态注册表运行状态总览。
 - 日志监控：Auth、PostgreSQL、Gateway、Redis、注册表状态，以及可筛选的管理操作审计。
-- 中文/英文界面切换：基于语义键的 `zh-CN` / `en-US` 资源文件，语言选择保存在浏览器本地存储；变量通过 `t("key", { name })` 传递。
+- 中文/英文界面切换：登录页、管理台、连接中心共用语言下拉菜单；页面标题、状态、表单、提示和请求错误均来自语义键的 `zh-CN` / `en-US` 资源文件。语言选择保存在浏览器本地存储，变量通过 `t("key", { name })` 传递。OAuth 登录/授权页按 `Accept-Language`（含权重）或 `?lang=zh-CN|en-US` 选择语言，并在表单提交时保持选择。协议名称、产品名称、HTTP 方法和实际标识符保持原文。
+- 界面字体：英文使用 Nunito，简体中文使用随前端打包的 [Resource Han Rounded CN](https://github.com/CyanoHao/Resource-Han-Rounded) 字形子集；字体许可及更新说明见 `packages/admin-web/src/assets/fonts/`。
 
 本地单独启动：
 

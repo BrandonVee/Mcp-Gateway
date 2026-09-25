@@ -94,7 +94,24 @@ async function main(): Promise<void> {
   // Browser flow: GET /authorize renders the login form.
   const loginPage = await fetch(authorizeUrl).then((r) => r.text());
   const hidden = [...loginPage.matchAll(/name="([^"]+)" value="([^"]*)"/g)].map((m) => [m[1], m[2]]);
-  check('authorize form rendered', loginPage.includes('Authorize') && hidden.some(([k]) => k === 'code_challenge'));
+  check('authorize form rendered in English', loginPage.includes('Sign in to authorize') && loginPage.includes('<html lang="en-US">') && hidden.some(([k]) => k === 'code_challenge'));
+  const zhLoginResponse = await fetch(authorizeUrl, { headers: { 'accept-language': 'zh-CN,zh;q=0.9' } });
+  const zhLoginPage = await zhLoginResponse.text();
+  check('authorize form follows Chinese browser language', zhLoginResponse.headers.get('content-language') === 'zh-CN' && zhLoginPage.includes('登录并授权'));
+  const weightedLanguagePage = await fetch(authorizeUrl, { headers: { 'accept-language': 'en-US;q=0.2,zh-CN;q=0.9' } }).then((r) => r.text());
+  check('authorize form honors language quality values', weightedLanguagePage.includes('<html lang="zh-CN">'));
+  const explicitEnglishUrl = new URL(authorizeUrl);
+  explicitEnglishUrl.searchParams.set('lang', 'en-US');
+  const explicitEnglishPage = await fetch(explicitEnglishUrl, { headers: { 'accept-language': 'zh-CN' } }).then((r) => r.text());
+  check('authorize language selection overrides browser language', explicitEnglishPage.includes('<html lang="en-US">'));
+  const badChineseForm = new URLSearchParams(hidden.map(([key, value]) => [key, value] as [string, string]));
+  badChineseForm.set('lang', 'zh-CN');
+  badChineseForm.set('username', 'demo-user');
+  badChineseForm.set('password', 'wrong-password');
+  const badChineseResponse = await fetch(`${AUTH}/authorize/submit`, {
+    method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: badChineseForm,
+  });
+  check('authorize login error is localized', badChineseResponse.status === 401 && (await badChineseResponse.text()).includes('用户名或密码错误'));
 
   const injectionState = '"><img src=x onerror=alert(1)>';
   const injectionUrl = new URL(authorizeUrl);
@@ -120,6 +137,8 @@ async function main(): Promise<void> {
   const sessionCookie = submit.headers.get('set-cookie')?.split(';', 1)[0];
   const injectionConsentPage = await fetch(injectionUrl, { headers: { cookie: sessionCookie ?? '' } }).then((r) => r.text());
   check('authorize consent page escapes hidden fields', !!sessionCookie && injectionConsentPage.includes(escapedState) && !injectionConsentPage.includes('<img'));
+  const zhConsentPage = await fetch(authorizeUrl, { headers: { cookie: sessionCookie ?? '', 'accept-language': 'zh-CN' } }).then((r) => r.text());
+  check('authorize consent page is localized', zhConsentPage.includes('授权客户端') && zhConsentPage.includes('<html lang="zh-CN">'));
 
   // Exchange code + verifier for tokens.
   const tokenRes = await fetch(`${AUTH}/token`, {
@@ -304,6 +323,11 @@ async function main(): Promise<void> {
     (await exchangeCode(new URL(adminFlow.submit.headers.get('location') ?? '').searchParams.get('code') ?? '', adminFlow.verifier)).access_token ?? '';
   const adminClaims = JSON.parse(Buffer.from(adminToken.split('.')[1], 'base64url').toString());
   check('admin JWT carries role=admin', adminClaims.role === 'admin', `role=${adminClaims.role}`);
+  const adminPersonalSession = await fetch(`${AUTH}/me/session`, {
+    headers: { cookie: adminFlow.submit.headers.get('set-cookie')?.split(';', 1)[0] ?? '' },
+  });
+  const adminPersonalData = await adminPersonalSession.json() as { role?: string };
+  check('connection center identifies administrator for console link', adminPersonalSession.status === 200 && adminPersonalData.role === 'admin');
   const crossOriginAdminWrite = await fetch(`${AUTH}/admin/users`, {
     method: 'POST',
     headers: { origin: 'https://untrusted.example', authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
@@ -452,7 +476,8 @@ async function main(): Promise<void> {
     body: JSON.stringify({ username: aliceName, password: 'alice-pass-1' }),
   });
   const personalCookie = personalLogin.headers.get('set-cookie')?.split(';', 1)[0] ?? '';
-  check('user signs in to connection center', personalLogin.status === 200 && !!personalCookie);
+  const personalSessionData = await personalLogin.json() as { role?: string };
+  check('user signs in to connection center without admin access', personalLogin.status === 200 && !!personalCookie && personalSessionData.role === 'user');
   const badOrigin = await fetch(`${AUTH}/me/session`, {
     method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://unrelated.example' },
     body: JSON.stringify({ username: aliceName, password: 'alice-pass-1' }),

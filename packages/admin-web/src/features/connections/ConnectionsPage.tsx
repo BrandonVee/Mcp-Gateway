@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { App, Button, Card, Empty, Form, Input, Modal, Tag, Typography } from "antd";
-import { ApiOutlined, DisconnectOutlined, KeyOutlined, LinkOutlined, LogoutOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ApiOutlined, DashboardOutlined, DisconnectOutlined, KeyOutlined, LinkOutlined, LogoutOutlined, ReloadOutlined } from "@ant-design/icons";
 import { api } from "../../api";
 import type { ConnectionServer } from "../../types";
 import { useI18n } from "../../i18n";
@@ -10,6 +10,7 @@ export function ConnectionsPage() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
   const [username, setUsername] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [servers, setServers] = useState<ConnectionServer[]>([]);
@@ -19,6 +20,7 @@ export function ConnectionsPage() {
   const load = async () => {
     const [session, list] = await Promise.all([api.mySession(), api.myServers()]);
     setUsername(session.username);
+    setIsAdmin(session.role === "admin");
     setServers(list.servers);
   };
 
@@ -89,15 +91,28 @@ export function ConnectionsPage() {
     <div className="connections-glow" />
     <header className="connections-header">
       <div className="connections-mark"><ApiOutlined /></div>
-      <div><span className="connections-eyebrow">MCP / PERSONAL ACCESS</span><strong>{t("connections.title")}</strong></div>
+      <div><span className="connections-eyebrow">{t("connections.personalAccessEyebrow")}</span><strong>{t("connections.title")}</strong></div>
       <LanguageSwitcher />
-      {username && <div className="connections-user"><span>{username}</span><Button icon={<LogoutOutlined />} onClick={async () => {
-        await api.myLogout(); setUsername(null); setServers([]);
-      }}>{t("connections.signOut")}</Button></div>}
+      {username && (
+        <div className="connections-user">
+          <span>{username}</span>
+          {isAdmin && (
+            <Button className="connections-admin-link" href="/" icon={<DashboardOutlined />}>
+              {t("connections.openAdminConsole")}
+            </Button>
+          )}
+          <Button icon={<LogoutOutlined />} onClick={async () => {
+            await api.myLogout();
+            setUsername(null);
+            setIsAdmin(false);
+            setServers([]);
+          }}>{t("connections.signOut")}</Button>
+        </div>
+      )}
     </header>
 
     {!username ? <section className="connections-login">
-      <div className="connections-eyebrow">IDENTITY REQUIRED</div>
+      <div className="connections-eyebrow">{t("connections.identityRequired")}</div>
       <h1>{t("connections.connectExternalServices")}</h1>
       <p>{t("connections.signPlatformAccountConfigureOwn")}</p>
       <Card bordered={false}>
@@ -108,7 +123,7 @@ export function ConnectionsPage() {
         </Form>
       </Card>
     </section> : <section className="connections-content">
-      <div className="connections-intro"><div><span className="connections-eyebrow">YOUR INTEGRATIONS</span><h1>{t("connections.letEveryToolWorkYou")}</h1>
+      <div className="connections-intro"><div><span className="connections-eyebrow">{t("connections.integrationsEyebrow")}</span><h1>{t("connections.letEveryToolWorkYou")}</h1>
         <p>{t("connections.credentialsUsedRelevantServicePlatform")}</p></div>
         <Button icon={<ReloadOutlined />} onClick={() => load().catch(() => message.error(t("common.refreshFailed")))}>{t("connections.refreshStatus")}</Button>
       </div>
@@ -118,7 +133,7 @@ export function ConnectionsPage() {
             {t(server.connection_status === "connected" ? "status.connected" : server.connection_status === "not_required" ? "connections.noConnectionNeeded" : server.connection_status === "expired" ? "status.expired" : "connections.notConnected")}
           </Tag></div>
         <h2>{server.display_name}</h2><code>/mcp/{server.name}</code>
-        <div className="connection-bottom"><span>{server.auth_mode === "api_key" ? "API KEY" : server.auth_mode === "oauth" ? "OAUTH 2.0" : "PLATFORM AUTH"}</span>
+        <div className="connection-bottom"><span>{t(server.auth_mode === "api_key" ? "connections.modeApiKey" : server.auth_mode === "oauth" ? "connections.modeOAuth" : "connections.modePlatform")}</span>
           {server.auth_mode === "api_key" && <Button type="primary" icon={<KeyOutlined />} onClick={() => setSelected(server)}>{t(server.connection_status === "connected" ? "connections.updateKey" : "connections.configureKey")}</Button>}
           {server.auth_mode === "oauth" && <Button type="primary" icon={<LinkOutlined />} loading={busy} onClick={() => connectOAuth(server)}>{t(server.connection_status === "connected" ? "connections.reauthorize" : "connections.connectAccount")}</Button>}
           {server.connection_status !== "not_required" && server.connection_status !== "not_connected" && <Button danger type="text" icon={<DisconnectOutlined />} onClick={() => disconnect(server)}>{t("connections.disconnectAction")}</Button>}

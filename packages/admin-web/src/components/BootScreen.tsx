@@ -12,7 +12,7 @@ export function BootScreen() {
       <Flex vertical align="center" gap={8}>
         <Typography.Text strong>{t("app.boot.title")}</Typography.Text>
         <Typography.Text type="secondary" className="mono-label">
-          <LoadingOutlined spin /> INITIALIZING CONTROL PLANE
+          <LoadingOutlined spin /> {t("app.boot.initializingDetail")}
         </Typography.Text>
       </Flex>
     </main>

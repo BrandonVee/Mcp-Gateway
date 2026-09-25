@@ -138,7 +138,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
           />
           <kbd>ESC</kbd>
         </div>
-        <div className="command-caption">NAVIGATION / {t("nav.navigation")}</div>
+        <div className="command-caption">{t("nav.commandNavigation")}</div>
         <div className="command-list">
           {filteredCommands.length ? (
             filteredCommands.map((command) => (
@@ -170,7 +170,7 @@ export function CommandPalette({ onNavigate }: CommandPaletteProps) {
           <span>
             <kbd>ESC</kbd> {t("common.close")}
           </span>
-          <i /> MCP CONTROL PLANE
+          <i /> {t("nav.commandFooter")}
         </div>
       </Modal>
     </>

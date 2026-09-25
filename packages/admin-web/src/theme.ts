@@ -22,8 +22,7 @@ export const appTheme: ThemeConfig = {
     fontSizeSM: 13,
     lineHeight: 1.55,
     wireframe: false,
-    fontFamily:
-      '"IBM Plex Sans", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontFamily: 'var(--font-ui)',
     boxShadowSecondary: "0 24px 70px rgba(0, 0, 0, 0.5)",
   },
   components: {

@@ -35,30 +35,30 @@ const { Header, Sider, Content } = Layout;
 
 const titles: Record<
   View,
-  { eyebrow: string; title: MessageKey; description: MessageKey }
+  { eyebrow: MessageKey; title: MessageKey; description: MessageKey }
 > = {
   overview: {
-    eyebrow: "CONTROL PLANE / OVERVIEW",
+    eyebrow: "nav.overview.eyebrow",
     title: "nav.overview.title",
     description: "nav.overview.description",
   },
   users: {
-    eyebrow: "CONTROL PLANE / ACCESS",
+    eyebrow: "nav.users.eyebrow",
     title: "nav.users.title",
     description: "nav.users.description",
   },
   servers: {
-    eyebrow: "CONTROL PLANE / REGISTRY",
+    eyebrow: "nav.servers.eyebrow",
     title: "nav.servers.title",
     description: "nav.servers.description",
   },
   credentials: {
-    eyebrow: "CONTROL PLANE / CONNECTIONS",
+    eyebrow: "nav.connections.eyebrow",
     title: "nav.connections.title",
     description: "nav.connections.description",
   },
   monitoring: {
-    eyebrow: "CONTROL PLANE / OBSERVABILITY",
+    eyebrow: "nav.monitoring.eyebrow",
     title: "nav.monitoring.title",
     description: "nav.monitoring.description",
   },
@@ -127,8 +127,8 @@ export function AppShell({
           </span>
           {!collapsed && (
             <span className="brand-copy">
-              <strong>MCP Console</strong>
-              <small>CONTROL PLANE</small>
+              <strong>{t("app.documentTitle")}</strong>
+              <small>{t("app.controlPlane")}</small>
             </span>
           )}
         </div>
@@ -157,7 +157,7 @@ export function AppShell({
               <Badge status="success" />
               <span>
                 <strong>{t("nav.servicesOnline")}</strong>
-                <small>CONTROL PLANE ONLINE</small>
+                <small>{t("app.controlPlaneOnline")}</small>
               </span>
             </div>
           )}
@@ -185,7 +185,7 @@ export function AppShell({
             />
             <div className="page-heading">
               <Typography.Text className="page-eyebrow">
-                {current.eyebrow}
+                {t(current.eyebrow)}
               </Typography.Text>
               <Flex align="baseline" gap={12} wrap>
                 <Typography.Title level={2}>{t(current.title)}</Typography.Title>
@@ -209,7 +209,7 @@ export function AppShell({
               color="success"
               className="secure-tag"
             >
-              SECURE
+              {t("app.secure")}
             </Tag>
             <Button
               icon={<ReloadOutlined spin={refreshing} />}

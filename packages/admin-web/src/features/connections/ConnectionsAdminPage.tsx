@@ -71,9 +71,9 @@ export function ConnectionsAdminPage({ users, servers, connections, onRevoke }: 
   }, [rows, keyword, filter]);
 
   const columns: ColumnsType<ConnectionRow> = [
-    { title: t("common.user"), dataIndex: ["user", "username"], key: "user", render: (_, row) => <span className="identity-copy"><strong>{row.user.username}</strong><small>ID / {row.user.id}</small></span> },
-    { title: "MCP Server", key: "server", render: (_, row) => <span className="identity-copy"><strong>{row.server.display_name}</strong><small>{row.server.name}</small></span> },
-    { title: t("connectionsAdmin.upstreamAuth"), key: "mode", width: 126, render: (_, row) => <Tag bordered={false} color={row.server.auth_mode === "oauth" ? "blue" : row.server.auth_mode === "api_key" ? "cyan" : "default"}>{row.server.auth_mode === "oauth" ? "OAuth" : row.server.auth_mode === "api_key" ? "API Key" : t("connectionsAdmin.noAuthRequired")}</Tag> },
+    { title: t("common.user"), dataIndex: ["user", "username"], key: "user", render: (_, row) => <span className="identity-copy"><strong>{row.user.username}</strong><small>{t("common.identifier")} / {row.user.id}</small></span> },
+    { title: t("common.mcpService"), key: "server", render: (_, row) => <span className="identity-copy"><strong>{row.server.display_name}</strong><small>{row.server.name}</small></span> },
+    { title: t("connectionsAdmin.upstreamAuth"), key: "mode", width: 126, render: (_, row) => <Tag bordered={false} color={row.server.auth_mode === "oauth" ? "blue" : row.server.auth_mode === "api_key" ? "cyan" : "default"}>{row.server.auth_mode === "oauth" ? "OAuth" : row.server.auth_mode === "api_key" ? t("connections.modeApiKey") : t("connectionsAdmin.noAuthRequired")}</Tag> },
     { title: t("connectionsAdmin.connectionStatus"), key: "status", width: 150, render: (_, row) => <Tag color={statusMeta[row.status].color}>{t(statusMeta[row.status].label)}</Tag> },
     { title: t("connectionsAdmin.updated"), key: "updated", width: 190, render: (_, row) => <Typography.Text type="secondary">{formatDate(row.credential?.updated_at, language)}</Typography.Text> },
     { title: t("common.actions"), key: "actions", width: 130, align: "right", render: (_, row) => row.credential ? <Button type="link" danger icon={<DisconnectOutlined />} onClick={() => onRevoke(row.user, row.server)}>{t("app.revokeConnection")}</Button> : <Typography.Text type="secondary">{t("connectionsAdmin.connectedUser")}</Typography.Text> },
@@ -85,7 +85,7 @@ export function ConnectionsAdminPage({ users, servers, connections, onRevoke }: 
 
   return <div className="page-stack page-enter">
     <PageToolbar
-      eyebrow="USER CREDENTIALS"
+      eyebrow="connectionsAdmin.eyebrow"
       title="connectionsAdmin.externalServiceConnections"
       description="connectionsAdmin.reviewUserConnectionsExternalMcp"
       primaryAction={<Button href="/connections" icon={<LinkOutlined />}>{t("connectionsAdmin.openPersonalConnections")}</Button>}

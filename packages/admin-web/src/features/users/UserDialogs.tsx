@@ -55,7 +55,7 @@ function CreateUserDialog({
       title={
         <ModalTitle
           icon={<UserAddOutlined />}
-          eyebrow="IDENTITY PROVISIONING"
+          eyebrow={t("userDialog.identityProvisioning")}
           title={t("userDialog.createIdentity")}
         />
       }
@@ -143,7 +143,7 @@ function AssignUserDialog({
       title={
         <ModalTitle
           icon={<InfoCircleOutlined />}
-          eyebrow="ACCESS MATRIX"
+          eyebrow={t("userDialog.accessMatrix")}
           title={t("userDialog.assignAccessUser", { user: user.username })}
         />
       }
@@ -204,7 +204,7 @@ function ResetPasswordDialog({
       title={
         <ModalTitle
           icon={<LockOutlined />}
-          eyebrow="CREDENTIAL ROTATION"
+          eyebrow={t("userDialog.credentialRotation")}
           title={t("userDialog.resetPasswordUser", { user: user.username })}
         />
       }

@@ -50,14 +50,14 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
             <CloudServerOutlined />
           </span>
           <span>
-            <strong>MCP Console</strong>
-            <small>UNIFIED CONTROL PLANE</small>
+            <strong>{t("app.documentTitle")}</strong>
+            <small>{t("auth.unifiedControlPlane")}</small>
           </span>
         </div>
 
         <div className="story-content">
           <Typography.Text className="story-index">
-            01 / CONTROL SURFACE
+            {t("auth.controlSurfaceStep")}
           </Typography.Text>
           <Typography.Title>
             {t("auth.oneEntryPointControlEvery")}
@@ -68,13 +68,13 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           </Typography.Paragraph>
           <div className="story-steps">
             {([
-              ["AUTH", "auth.unifiedIdentity"],
-              ["ROUTE", "auth.dynamicRouting"],
-              ["OBSERVE", "auth.liveObservability"],
+              ["auth.stepAuthentication", "auth.unifiedIdentity"],
+              ["auth.stepRouting", "auth.dynamicRouting"],
+              ["auth.stepObservability", "auth.liveObservability"],
             ] as const).map(([label, description], index) => (
               <div key={label}>
                 <span>{String(index + 1).padStart(2, "0")}</span>
-                <strong>{label}</strong>
+                <strong>{t(label)}</strong>
                 <small>{t(description)}</small>
               </div>
             ))}

@@ -85,7 +85,7 @@ export function UsersPage({
           </Avatar>
           <span className="identity-copy">
             <strong>{user.username}</strong>
-            <small>ID / {String(user.id).padStart(4, "0")}</small>
+            <small>{t("common.identifier")} / {String(user.id).padStart(4, "0")}</small>
           </span>
         </Flex>
       ),
@@ -183,7 +183,7 @@ export function UsersPage({
   return (
     <div className="page-stack page-enter">
       <PageToolbar
-        eyebrow="IDENTITY DIRECTORY"
+        eyebrow="users.eyebrow"
         title="users.whoAccessCapability"
         description="users.controlSignMcpAccessMaintain"
         primaryAction={

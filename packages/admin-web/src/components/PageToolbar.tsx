@@ -4,7 +4,7 @@ import { useI18n } from "../i18n";
 import type { MessageKey } from "../i18n";
 
 interface PageToolbarProps {
-  eyebrow: string;
+  eyebrow: MessageKey;
   title: MessageKey;
   description: MessageKey;
   primaryAction?: ReactNode;
@@ -30,7 +30,7 @@ export function PageToolbar({
       >
         <div>
           <Typography.Text className="section-eyebrow">
-            {eyebrow}
+            {t(eyebrow)}
           </Typography.Text>
           <Typography.Title level={3}>{t(title)}</Typography.Title>
           <Typography.Paragraph type="secondary">

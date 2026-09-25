@@ -76,7 +76,7 @@ export function ServersPage(props: ServersPageProps) {
   return (
     <div className="page-stack page-enter">
       <PageToolbar
-        eyebrow="ROUTE REGISTRY"
+        eyebrow="servers.eyebrow"
         title="servers.oneRegistryInternalExternalServers"
         description="servers.registerStreamableHttpEndpointsGateway"
         primaryAction={
@@ -123,14 +123,14 @@ export function ServersPage(props: ServersPageProps) {
                     {String(index + 1).padStart(2, "0")}
                   </span>
                   <span className="server-heading">
-                    <small>LOGICAL ENDPOINT</small>
+                    <small>{t("servers.logicalEndpoint")}</small>
                     <strong title={server.display_name}>{server.display_name}</strong>
                     <code title={`/mcp/${server.name}`}>/mcp/{server.name}</code>
                   </span>
                   <Switch
                     checked={server.enabled}
-                    checkedChildren="ROUTABLE"
-                    unCheckedChildren="PAUSED"
+                    checkedChildren={t("status.routable")}
+                    unCheckedChildren={t("status.paused")}
                     onChange={() => props.onToggle(server)}
                   />
                 </header>
@@ -220,7 +220,7 @@ export function ServersPage(props: ServersPageProps) {
                 </div>
 
                 <footer className="server-card-footer">
-                  <span><TeamOutlined /> {t("servers.adminsAccessDefaultCountIdentities", { count: props.users.length })}</span>
+                  <span><TeamOutlined /> {t("servers.adminsAccessDefaultCountIdentities", { count: props.users.filter((user) => user.role === "admin" || user.servers.includes("*")).length })}</span>
                   <Space size={4}>
                     <Button
                       type="link"

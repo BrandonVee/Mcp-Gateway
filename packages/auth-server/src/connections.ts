@@ -130,7 +130,7 @@ export function createConnectionsRouter(): Hono {
 
   router.get('/me/session', async (c) => {
     const user = await currentUser(c);
-    return user ? c.json({ authenticated: true, username: user.username }) : c.json({ error: 'unauthorized' }, 401);
+    return user ? c.json({ authenticated: true, username: user.username, role: user.role }) : c.json({ error: 'unauthorized' }, 401);
   });
 
   router.post('/me/session', async (c) => {
@@ -141,7 +141,7 @@ export function createConnectionsRouter(): Hono {
     setCookie(c, cookieName, await createLoginSession(user.username), {
       httpOnly: true, sameSite: 'Lax', secure: issuer.startsWith('https://'), path: '/', maxAge: 7 * 24 * 3600,
     });
-    return c.json({ authenticated: true, username: user.username });
+    return c.json({ authenticated: true, username: user.username, role: user.role });
   });
 
   router.delete('/me/session', async (c) => {
