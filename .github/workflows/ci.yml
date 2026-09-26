@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
+      COMPOSE_PROJECT_NAME: mcp-ci
       COMPOSE_FILE: docker-compose.yml:.github/compose.ci.yml
       # The runner registers this URL; the gateway resolves it inside Compose.
       REPORTS_UPSTREAM_URL: http://mcp-reports:3003
