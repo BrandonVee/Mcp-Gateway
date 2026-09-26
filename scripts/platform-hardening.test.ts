@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
+import { createServer } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { normalizeUpstreamEndpoint, validateProductionRuntime, type PlatformConfig } from '../packages/shared/src/index.js';
 import { filterRequestHeaders, filterResponseHeaders } from '../packages/gateway/src/routes/headers.js';
 import { isAllowedMcpOrigin, mcpCorsHeaders } from '../packages/gateway/src/routes/origin.js';
 import { activeUpstreamRequests, maxActiveUpstreamRequests, reserveUpstreamSlot } from '../packages/gateway/src/routes/capacity.js';
+import { isRetryableInitialize, orderedAvailableInstances, probeUpstreamTransport, UpstreamHealthTracker } from '../packages/gateway/src/upstream-health.js';
 
 const localConfig = JSON.parse(readFileSync(new URL('../config/default.json', import.meta.url), 'utf8')) as PlatformConfig;
 const productionConfig: PlatformConfig = {
@@ -68,6 +70,46 @@ test('upstream capacity releases slots exactly once', () => {
   for (const release of releases) release?.();
   releases[0]?.();
   assert.equal(activeUpstreamRequests(), 0);
+});
+
+test('unhealthy upstreams are skipped in order and recover after a successful probe', () => {
+  const health = new UpstreamHealthTracker(1_000);
+  const instances = ['http://first.test/mcp', 'http://second.test/mcp', 'http://third.test/mcp'];
+  assert.deepEqual(orderedAvailableInstances(instances, 1, health), [instances[1], instances[2], instances[0]]);
+  const now = Date.now();
+  health.recordFailure(instances[1], 'transport', now);
+  assert.equal(health.isAvailable(instances[1], now + 100), false);
+  assert.deepEqual(orderedAvailableInstances(instances, 1, health), [instances[2], instances[0]]);
+  assert.equal(health.isAvailable(instances[1], now + 1_000), true);
+  health.recordSuccess(instances[1]);
+  assert.equal(health.unavailableCount(instances), 0);
+  health.recordFailure(instances[2], 'http');
+  health.recordSuccess(instances[2], 'probe');
+  assert.equal(health.isAvailable(instances[2]), false, 'a TCP probe does not clear an HTTP failure');
+  health.recordSuccess(instances[2]);
+  assert.equal(health.isAvailable(instances[2]), true);
+  assert.deepEqual(orderedAvailableInstances([], 0, health), []);
+});
+
+test('only session-free initialize messages may retry on another instance', () => {
+  const initialize = Buffer.from('{"jsonrpc":"2.0","id":1,"method":"initialize"}');
+  assert.equal(isRetryableInitialize('POST', undefined, initialize), true);
+  assert.equal(isRetryableInitialize('POST', 'existing-session', initialize), false);
+  assert.equal(isRetryableInitialize('POST', undefined, Buffer.from('{"method":"tools/call"}')), false);
+  assert.equal(isRetryableInitialize('GET', undefined, initialize), false);
+  assert.equal(isRetryableInitialize('POST', undefined, Buffer.from('not-json')), false);
+});
+
+test('upstream transport probe detects a reachable TCP endpoint', async () => {
+  const server = createServer((socket) => socket.end());
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== 'string');
+    assert.equal(await probeUpstreamTransport(`http://127.0.0.1:${address.port}/mcp`), true);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 });
 
 test('gateway strips caller credentials and spoofed identity headers', () => {

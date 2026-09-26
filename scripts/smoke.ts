@@ -411,6 +411,36 @@ async function main(): Promise<void> {
     }),
   });
   check('admin registers external MCP endpoint', externalCreate.status === 201, `status ${externalCreate.status}`);
+  const failoverName = `failover-${randomBytes(3).toString('hex')}`;
+  const failoverCreate = await fetch(`${AUTH}/admin/servers`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({
+      name: failoverName,
+      instances: [
+        { id: `${failoverName}-down`, url: 'http://127.0.0.1:1/mcp' },
+        { id: `${failoverName}-ready`, url: `${REPORTS_UPSTREAM_URL}/mcp` },
+      ],
+    }),
+  });
+  check('admin registers a two-instance failover route', failoverCreate.status === 201);
+  let failoverRequest = '';
+  for (let id = 1; id < 100; id++) {
+    const body = JSON.stringify({ jsonrpc: '2.0', id, method: 'initialize', params: {
+      protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'failover-smoke', version: '0' },
+    } });
+    if (createHash('sha256').update(Buffer.from(body).toString('base64')).digest()[0] % 2 === 0) {
+      failoverRequest = body;
+      break;
+    }
+  }
+  const failoverInit = await fetch(`${GW}/mcp/${failoverName}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${adminToken}` },
+    body: failoverRequest,
+  });
+  const failoverBody = await readJson(failoverInit);
+  check('gateway initializes on healthy instance when preferred instance is down',
+    failoverInit.status === 200 && failoverBody?.result?.serverInfo?.name === 'reports');
   const oauthServerName = `oauth-${randomBytes(3).toString('hex')}`;
   const oauthRedirectUri = `${AUTH}/oauth/callback/${oauthServerName}`;
   const oauthClientRegistration = await fetch(`${AUTH}/register`, {
@@ -612,6 +642,7 @@ async function main(): Promise<void> {
     headers: { authorization: `Bearer ${adminToken}` },
   });
   check('admin removes external MCP server', externalDelete.status === 200);
+  await fetch(`${AUTH}/admin/servers/${failoverName}`, { method: 'DELETE', headers: { authorization: `Bearer ${adminToken}` } });
   await fetch(`${AUTH}/admin/servers/${oauthServerName}`, { method: 'DELETE', headers: { authorization: `Bearer ${adminToken}` } });
 
   await fetch(`${AUTH}/admin/users/${aliceId}`, {

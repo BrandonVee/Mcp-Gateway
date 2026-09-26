@@ -68,6 +68,7 @@ pnpm --filter @mcp/auth-server db:studio
 `knowledge` 是一个可直接测试的简单知识库 MCP，提供 `knowledge_list`、`knowledge_search`、`knowledge_get` 和 `server_info` 工具。
 
 同一个逻辑 server 可以有多个实例。Gateway 通过 Redis 保存 MCP session 与实例的粘性绑定。
+Gateway 每 15 秒对已注册实例做一次 TCP/TLS 连通性探测，并在连接失败或上游返回 502/503/504 时暂时避开该实例；`/health` 会报告不可用实例数量。尚未建立 session 的 `initialize` 请求可在实例失败时尝试同一逻辑 Server 的其他实例。已有 session 始终发送到原实例，不会错误地切换到不认识该 session 的实例；原实例故障时客户端需重新初始化。探测只验证传输层连通性，不等同于 MCP 工具可用性检查。
 
 Gateway 只读取数据库注册表；注册表在启动时不可用会导致 Gateway 启动失败，不会回退到旧的静态路由。MCP 进程仅通过 `MCP_SERVER_NAME`、`MCP_INSTANCE_ID`、`MCP_PORT` 确定自己的名称和监听端口。
 

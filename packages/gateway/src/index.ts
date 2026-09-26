@@ -5,6 +5,7 @@ import { registerMcpRoutes } from './routes/mcp.js';
 import { registerMetadataRoutes } from './routes/metadata.js';
 import { redisHealthy } from './lb.js';
 import { isAllowedMcpOrigin, mcpCorsHeaders } from './routes/origin.js';
+import { probeRegisteredUpstreams, upstreamHealth } from './upstream-health.js';
 
 const app = Fastify({
   logger: {
@@ -29,7 +30,11 @@ app.get('/health', async (_req, reply) => {
   const registryReady = Boolean(registryStatus.lastSuccessAt && !registryStatus.lastError
     && Date.now() - registryStatus.lastSuccessAt <= Math.max(60, env.registryRefreshSeconds * 3) * 1000);
   const ok = redis && registryReady;
-  return reply.code(ok ? 200 : 503).send({ ok, service: 'mcp-gateway', redis, registry: registryStatus });
+  const upstreamUrls = [...serverConfigs.values()].flatMap((server) => server.instances);
+  return reply.code(ok ? 200 : 503).send({
+    ok, service: 'mcp-gateway', redis, registry: registryStatus,
+    upstreams: { total: new Set(upstreamUrls).size, unavailable: upstreamHealth.unavailableCount(upstreamUrls) },
+  });
 });
 
 await app.register(async (instance) => {
@@ -73,6 +78,20 @@ const start = async (): Promise<void> => {
       }
     }
     startRegistryRefresh((err) => app.log.warn({ err }, 'server registry refresh failed'));
+    let probing = false;
+    const pollUpstreams = async (): Promise<void> => {
+      if (probing) return;
+      probing = true;
+      try {
+        await probeRegisteredUpstreams([...serverConfigs.values()].flatMap((server) => server.instances));
+      } catch (err) {
+        app.log.warn({ err }, 'upstream transport probe failed');
+      } finally {
+        probing = false;
+      }
+    };
+    void pollUpstreams();
+    setInterval(() => void pollUpstreams(), 15_000).unref();
     await app.listen({ port: env.port, host: '0.0.0.0' });
     app.log.info({ servers: [...serverConfigs.keys()] }, 'gateway routing ready');
   } catch (err) {

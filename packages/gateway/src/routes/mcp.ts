@@ -8,6 +8,7 @@ import { forbidden, hasServerAccess } from '../auth.js';
 import { filterRequestHeaders, filterResponseHeaders } from './headers.js';
 import { reserveUpstreamSlot } from './capacity.js';
 import { mcpCorsHeaders } from './origin.js';
+import { isRetryableInitialize, orderedAvailableInstances, upstreamHealth } from '../upstream-health.js';
 
 export function registerMcpRoutes(app: FastifyInstance): void {
   app.all('/mcp/:serverName', proxyHandler);
@@ -103,29 +104,30 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
   }
   const hashSeed = incomingSessionId ? undefined : Buffer.from((req.body as Buffer | undefined) ?? `${serverName}:${Math.random()}`).toString('base64');
   const target = await pickInstance(cfg, incomingSessionId, hashSeed);
-
-  // Build upstream headers: drop hop-by-hop + client-spoofable internal headers.
-  const headers = filterRequestHeaders(req.headers);
-  if (upstreamCredential) headers[upstreamCredential.header] = upstreamCredential.value;
-  const upstreamUrl = new URL(target.url);
-  const upstreamPort = upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? '443' : '80');
-  const selfHosts = new Set(['localhost', '127.0.0.1', '::1', 'gateway']);
-  if (selfHosts.has(upstreamUrl.hostname) && upstreamPort === String(env.port)) {
-    await reply.code(502).send({
-      error: 'invalid_upstream',
-      server: serverName,
-      error_description: 'The registered upstream endpoint points back to the Gateway',
-    });
+  if (incomingSessionId && !target.sticky) {
+    await reply.code(404).send({ error: 'session_not_found' });
     return;
   }
-  headers['host'] = upstreamUrl.host;
-  headers['x-forwarded-for'] = req.ip;
-  headers['x-forwarded-host'] = req.headers['host'] ?? '';
-  headers['x-forwarded-proto'] = req.protocol;
+  const candidates = incomingSessionId
+    ? [target.url] // Existing sessions cannot move; still try their bound instance.
+    : orderedAvailableInstances(cfg.instances, target.index);
+  if (!candidates.length) {
+    await reply.code(503).header('Retry-After', '1').send({ error: 'upstream_unavailable', server: serverName });
+    return;
+  }
+  const retryInitialize = isRetryableInitialize(req.method, incomingSessionId, req.body);
+  const attempts = retryInitialize ? candidates : candidates.slice(0, 1);
+
+  // Build upstream headers: drop hop-by-hop + client-spoofable internal headers.
+  const baseHeaders = filterRequestHeaders(req.headers);
+  if (upstreamCredential) baseHeaders[upstreamCredential.header] = upstreamCredential.value;
+  baseHeaders['x-forwarded-for'] = req.ip;
+  baseHeaders['x-forwarded-host'] = req.headers['host'] ?? '';
+  baseHeaders['x-forwarded-proto'] = req.protocol;
   if (req.mcpAuth && cfg.authMode === 'none') {
-    headers['x-mcp-user'] = String(req.mcpAuth.sub ?? '');
-    headers['x-mcp-client-id'] = String(req.mcpAuth.client_id ?? '');
-    headers['x-mcp-scope'] = String(req.mcpAuth.scope ?? '');
+    baseHeaders['x-mcp-user'] = String(req.mcpAuth.sub ?? '');
+    baseHeaders['x-mcp-client-id'] = String(req.mcpAuth.client_id ?? '');
+    baseHeaders['x-mcp-scope'] = String(req.mcpAuth.scope ?? '');
   }
 
   const releaseSlot = reserveUpstreamSlot();
@@ -135,53 +137,73 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
   }
 
   try {
-    const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
-    const upstream = await request(upstreamUrl.toString(), {
-      method: req.method as 'POST', // fastify gives the uppercase verb; widened by undici at runtime
-      headers,
-      body: hasBody ? (req.body as Buffer | undefined) : undefined,
-      headersTimeout: 15_000,
-      bodyTimeout: 0, // Streamable HTTP and SSE may keep the body open indefinitely.
-    }).catch((error: unknown) => {
-      req.log.warn({ error: error instanceof Error ? error.name : 'UnknownError', server: serverName }, 'upstream request failed');
-      return null;
-    });
-    if (!upstream) {
-      await reply.code(502).send({ error: 'upstream_unavailable', server: serverName });
+    for (const targetUrl of attempts) {
+      const upstreamUrl = new URL(targetUrl);
+      const upstreamPort = upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? '443' : '80');
+      const selfHosts = new Set(['localhost', '127.0.0.1', '::1', 'gateway']);
+      if (selfHosts.has(upstreamUrl.hostname.replace(/^\[|\]$/g, '')) && upstreamPort === String(env.port)) {
+        upstreamHealth.recordFailure(targetUrl, 'http');
+        continue;
+      }
+      const headers = { ...baseHeaders, host: upstreamUrl.host };
+      const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+      const upstream = await request(upstreamUrl.toString(), {
+        method: req.method as 'POST', // fastify gives the uppercase verb; widened by undici at runtime
+        headers,
+        body: hasBody ? (req.body as Buffer | undefined) : undefined,
+        headersTimeout: 15_000,
+        bodyTimeout: 0, // Streamable HTTP and SSE may keep the body open indefinitely.
+      }).catch((error: unknown) => {
+        upstreamHealth.recordFailure(targetUrl, 'transport');
+        req.log.warn({ error: error instanceof Error ? error.name : 'UnknownError', server: serverName }, 'upstream request failed');
+        return null;
+      });
+      if (!upstream) continue;
+
+      if (upstream.statusCode === 502 || upstream.statusCode === 503 || upstream.statusCode === 504) {
+        upstreamHealth.recordFailure(targetUrl, 'http');
+        if (retryInitialize) {
+          await upstream.body.dump().catch(() => undefined);
+          continue;
+        }
+      } else {
+        upstreamHealth.recordSuccess(targetUrl);
+      }
+
+      if (cfg.authMode !== 'none' && (upstream.statusCode === 401 || upstream.statusCode === 403)) {
+        await upstream.body.dump();
+        await reply.code(409).send({ error: 'upstream_credential_rejected', server: serverName, connect_url: env.connectionsWebUrl });
+        return;
+      }
+
+      // Session affinity: bind the MCP session id (from initialize response) to
+      // the instance that created it. Re-bind on every request to refresh TTL.
+      const sessionId = upstream.headers['mcp-session-id'];
+      if (typeof sessionId === 'string' && sessionId) {
+        await bindSession(cfg.name, sessionId, targetUrl, sessionOwner);
+      }
+
+      const resHeaders = { ...filterResponseHeaders(upstream.headers), ...mcpCorsHeaders(req.headers.origin, env.resourceBaseUrl) };
+
+      // Hand the raw response over so we can stream (SSE-safe).
+      reply.hijack();
+      const raw = reply.raw;
+      raw.writeHead(upstream.statusCode, resHeaders);
+
+      if (!upstream.body || req.method === 'HEAD') {
+        raw.end();
+        return;
+      }
+      try {
+        await pipeline(upstream.body, raw); // undici body is already a Node Readable
+      } catch (err) {
+        // Client aborted or upstream died mid-stream; nothing sensible to send now.
+        req.log.warn({ err }, 'upstream stream ended abnormally');
+        raw.destroy();
+      }
       return;
     }
-
-    if (cfg.authMode !== 'none' && (upstream.statusCode === 401 || upstream.statusCode === 403)) {
-      await upstream.body.dump();
-      await reply.code(409).send({ error: 'upstream_credential_rejected', server: serverName, connect_url: env.connectionsWebUrl });
-      return;
-    }
-
-    // Session affinity: bind the MCP session id (from initialize response) to
-    // the instance that created it. Re-bind on every request to refresh TTL.
-    const sessionId = upstream.headers['mcp-session-id'];
-    if (typeof sessionId === 'string' && sessionId) {
-      await bindSession(cfg.name, sessionId, target.url, sessionOwner);
-    }
-
-    const resHeaders = { ...filterResponseHeaders(upstream.headers), ...mcpCorsHeaders(req.headers.origin, env.resourceBaseUrl) };
-
-    // Hand the raw response over so we can stream (SSE-safe).
-    reply.hijack();
-    const raw = reply.raw;
-    raw.writeHead(upstream.statusCode, resHeaders);
-
-    if (!upstream.body || req.method === 'HEAD') {
-      raw.end();
-      return;
-    }
-    try {
-      await pipeline(upstream.body, raw); // undici body is already a Node Readable
-    } catch (err) {
-      // Client aborted or upstream died mid-stream; nothing sensible to send now.
-      req.log.warn({ err }, 'upstream stream ended abnormally');
-      raw.destroy();
-    }
+    await reply.code(502).send({ error: 'upstream_unavailable', server: serverName });
   } finally {
     releaseSlot();
   }
