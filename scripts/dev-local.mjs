@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
 import { createRequire } from 'node:module';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
@@ -36,6 +36,7 @@ function ensureLocalSecrets() {
     writeFileSync(localEnvPath, `${prefix}${generated.join('\n')}\n`, { mode: 0o600, flag: 'a' });
     console.log('[local] generated missing secrets in .env.local');
   }
+  if (existsSync(localEnvPath)) chmodSync(localEnvPath, 0o600);
 }
 
 function tcpOpen(host, port, timeout = 1500) {

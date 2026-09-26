@@ -4,6 +4,7 @@ import { authHook, hasServerAccess } from './auth.js';
 import { registerMcpRoutes } from './routes/mcp.js';
 import { registerMetadataRoutes } from './routes/metadata.js';
 import { redisHealthy } from './lb.js';
+import { isAllowedMcpOrigin, mcpCorsHeaders } from './routes/origin.js';
 
 const app = Fastify({
   logger: {
@@ -32,6 +33,15 @@ app.get('/health', async (_req, reply) => {
 });
 
 await app.register(async (instance) => {
+  instance.addHook('onRequest', async (req, reply) => {
+    if (!req.url.split('?')[0].startsWith('/mcp/')) return;
+    if (!isAllowedMcpOrigin(req.headers.origin, env.resourceBaseUrl)) {
+      await reply.code(403).send({ error: 'invalid_origin' });
+      return;
+    }
+    for (const [name, value] of Object.entries(mcpCorsHeaders(req.headers.origin, env.resourceBaseUrl))) reply.header(name, value);
+    if (req.method === 'OPTIONS' && req.headers.origin) await reply.code(204).send();
+  });
   instance.addHook('onRequest', authHook);
   instance.get('/servers', async (req) => ({
     servers: [...serverConfigs.values()]

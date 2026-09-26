@@ -95,6 +95,7 @@ http://localhost:8000/mcp/external-search
 ```
 
 外部地址支持 HTTP/HTTPS 和自定义路径；如果只填写主机根地址，系统会自动补全 `/mcp`。
+生产环境必须通过 `MCP_UPSTREAM_ALLOWED_HOSTS` 指定可信上游主机名（逗号分隔），Auth Server 注册时与 Gateway 同步路由时均会校验。Gateway 还会拒绝不在 `MCP_ALLOWED_ORIGINS` 中的浏览器 MCP Origin，并用 `UPSTREAM_MAX_ACTIVE_REQUESTS`（默认 100，每进程）限制同时上游请求数；部署配置和网络隔离要求见 [生产部署与上线检查](docs/production.md)。
 
 ## 外部服务的用户级认证
 
@@ -220,7 +221,7 @@ pnpm db:seed:dev  # 仅首次准备演示数据时执行
 pnpm dev:local
 ```
 
-`pnpm dev:local` 会一次启动 Auth Server、Gateway、管理前端，以及 `scripts/dev-fixtures.json` 中的本地示例 MCP 进程；Server 路由仍只来自数据库。首次启动自动生成被 Git 忽略的 `.env.local`，持久保存本地凭据加密密钥与内部 Broker Token。打开 <http://localhost:5173>，按 `Ctrl+C` 停止这组 Node 进程。PostgreSQL 和 Redis 是独立服务，不随脚本退出。
+`pnpm dev:local` 会一次启动 Auth Server、Gateway、管理前端，以及 `scripts/dev-fixtures.json` 中的本地示例 MCP 进程；Server 路由仍只来自数据库。需要自定义本地配置时，可先执行 `cp .env.local.example .env.local`（已有 `.env.local` 时不要覆盖）；首次启动会向 `.env.local` 写入生成的凭据加密密钥与内部 Broker Token，并将文件权限设为 `0600`。该文件被 Git 忽略。打开 <http://localhost:5173>，按 `Ctrl+C` 停止这组 Node 进程。PostgreSQL 和 Redis 是独立服务，不随脚本退出。
 
 默认数据库连接是 `postgres://mcp:mcp-dev-password@localhost:5432/mcp`，Redis 是 `redis://localhost:6379`。可在 `.env.local` 中设置 `DATABASE_URL`、`REDIS_URL`、`CONFIG_FILE` 等覆盖本地配置；重新启动前请保持原有 `CREDENTIAL_ENCRYPT_KEY`，否则已保存的用户连接凭据不能解密。若 5173、8000、9001 或 MCP 实例端口被其他进程占用，脚本会明确报错。
 

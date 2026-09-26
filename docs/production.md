@@ -17,14 +17,19 @@
    CREDENTIAL_ENCRYPT_KEY=<32 字节随机值的 64 位十六进制编码>
    ADMIN_WEB_URL=https://ADMIN_HOST
    CONNECTIONS_WEB_URL=https://ADMIN_HOST/connections
+   MCP_UPSTREAM_ALLOWED_HOSTS=mcp-a.internal.example,mcp-b.internal.example
+   MCP_ALLOWED_ORIGINS=https://ADMIN_HOST
+   UPSTREAM_MAX_ACTIVE_REQUESTS=100
    ADMIN_PASSWORD=<首次初始化时至少 16 字符>
    ```
 
 3. Secret 应由部署平台的 Secret 管理器注入。不要复用 Compose 内的本地默认值，也不要将 `.env.local` 放进镜像；`.dockerignore` 已排除它。
 4. 在外部负载均衡器终止 TLS，并只把公开入口暴露给客户端。Auth 的 `/internal/*` 与 PostgreSQL、Redis 应留在受限网络。根据业务需要限制管理员入口 IP 与上游 MCP Endpoint 范围。
+   `MCP_UPSTREAM_ALLOWED_HOSTS` 在 Auth 和 Gateway 中必须配置为相同的、逗号分隔的上游主机名（不含协议、端口或路径）；注册和 Gateway 刷新路由时都会拒绝列表外的地址。此名单只限制主机名，仍须用防火墙或容器网络策略限制 Gateway 的实际出站目的地，防止 DNS 变化导致越界访问。
+   浏览器 MCP 客户端如从其他源发起请求，将其完整 Origin 加到 `MCP_ALLOWED_ORIGINS`；不带 Origin 的非浏览器客户端不受此项影响。`UPSTREAM_MAX_ACTIVE_REQUESTS` 是**每个 Gateway 进程**允许的同时上游请求数，默认 100；长时间 SSE 连接也占用一个名额，超出时返回 503 和 `Retry-After: 1`。应按实例内存与实际连接数压测后调整。
 5. 先备份 PostgreSQL 和 `CREDENTIAL_ENCRYPT_KEY`，再部署迁移。演练恢复：数据库、签名密钥记录和加密密钥必须一起恢复；丢失加密密钥将使已保存的用户连接凭据失效。
 
-生产模式在启动时执行配置校验；缺少独立配置文件、HTTPS 公网地址、数据库/Redis 地址或安全密钥时会拒绝启动。首次空数据库还要求显式提供管理员密码。存活探针使用 `/live`，就绪探针使用 `/health`（依赖故障返回 503）。
+生产模式在启动时执行配置校验；缺少独立配置文件、HTTPS 公网地址、数据库/Redis 地址、安全密钥或上游主机名单时会拒绝启动。首次空数据库还要求显式提供管理员密码。存活探针使用 `/live`，就绪探针使用 `/health`（依赖故障返回 503）。
 
 ## 持续集成
 

@@ -8,6 +8,25 @@ export interface McpServerConfig {
   authMode: 'none' | 'api_key' | 'oauth';
 }
 
+/** Explicit host allowlist shared by the control plane and every Gateway replica. */
+export function allowedUpstreamHosts(env: NodeJS.ProcessEnv = process.env): Set<string> {
+  return new Set((env.MCP_UPSTREAM_ALLOWED_HOSTS ?? '').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean));
+}
+
+export function normalizeUpstreamEndpoint(value: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.hash) return null;
+    const allowed = allowedUpstreamHosts(env);
+    if (allowed.size > 0 && !allowed.has(url.hostname.toLowerCase())) return null;
+    if (env.NODE_ENV === 'production' && allowed.size === 0) return null;
+    if (url.pathname === '/' || !url.pathname) url.pathname = '/mcp';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
 export interface PlatformConfig {
   auth: {
     port: number;
@@ -84,6 +103,10 @@ export function validateProductionRuntime(
   };
 
   if (!env.CONFIG_FILE) fail('CONFIG_FILE must select a deployment-specific configuration file');
+  const upstreamHosts = allowedUpstreamHosts(env);
+  if (upstreamHosts.size === 0 || [...upstreamHosts].some((host) => !/^[a-z0-9][a-z0-9.-]*$/.test(host) || host.includes('..'))) {
+    fail('MCP_UPSTREAM_ALLOWED_HOSTS must list trusted upstream hostnames');
+  }
   requireHttps('auth.issuer', config.auth.issuer);
   requireHttps('gateway.resourceBaseUrl', config.gateway.resourceBaseUrl);
   const internalToken = requireSecret('INTERNAL_API_TOKEN');

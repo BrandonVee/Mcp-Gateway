@@ -1,4 +1,4 @@
-import { loadPlatformConfig, validateProductionRuntime, type McpServerConfig } from '@mcp/shared';
+import { loadPlatformConfig, normalizeUpstreamEndpoint, validateProductionRuntime, type McpServerConfig } from '@mcp/shared';
 
 const config = loadPlatformConfig();
 validateProductionRuntime(config, 'gateway');
@@ -51,9 +51,9 @@ export async function refreshServerConfigs(): Promise<void> {
     for (const server of body.servers) {
       if (!server.name || !Array.isArray(server.instances) || !server.instances.length) continue;
       const instances = server.instances.map((instance) => {
-        const url = new URL(instance.url);
-        if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error(`unsupported URL for ${server.name}`);
-        return url.toString().replace(/\/$/, '');
+        const url = normalizeUpstreamEndpoint(instance.url);
+        if (!url) throw new Error(`unapproved upstream URL for ${server.name}`);
+        return url;
       });
       if (server.authMode && !['none', 'api_key', 'oauth'].includes(server.authMode)) throw new Error(`invalid auth mode for ${server.name}`);
       next.set(server.name, { name: server.name, authMode: server.authMode ?? 'none', instances });

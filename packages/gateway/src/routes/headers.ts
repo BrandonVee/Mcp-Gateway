@@ -19,7 +19,7 @@ function copyHeaders(headers: Record<string, unknown>, excluded: Set<string>): R
 /** Only the Gateway may construct identity and forwarding headers for upstreams. */
 export function filterRequestHeaders(headers: Record<string, unknown>): Record<string, string> {
   const excluded = new Set([
-    'host', 'content-length', 'authorization', 'cookie', 'set-cookie',
+    'host', 'content-length', 'authorization', 'cookie', 'set-cookie', 'origin',
     'forwarded', 'x-real-ip', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto',
     'x-forwarded-port', 'x-forwarded-server',
   ]);

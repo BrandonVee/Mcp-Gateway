@@ -8,7 +8,7 @@ import type { Context as HonoContext } from 'hono';
 import { and, count, desc, eq, lt } from 'drizzle-orm';
 import { auditEvents, authCodes, loginSessions, mcpServerInstances, mcpServers, refreshTokens, userMcpCredentials, userServerAccess, users } from './schema.js';
 import { randomUUID } from 'node:crypto';
-import { loadPlatformConfig } from '@mcp/shared';
+import { loadPlatformConfig, normalizeUpstreamEndpoint } from '@mcp/shared';
 import { encryptCredential } from './credential-crypto.js';
 
 export interface AdminDeps {
@@ -23,13 +23,13 @@ const ADMIN_WEB_URL = process.env.ADMIN_WEB_URL ?? 'http://localhost:5173';
 
 function normalizeMcpEndpoint(value: string): string | null {
   try {
-    const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    if (url.pathname === '/' || !url.pathname) url.pathname = '/mcp';
+    const normalized = normalizeUpstreamEndpoint(value);
+    if (!normalized) return null;
+    const url = new URL(normalized);
     // A Gateway route is a client-facing URL, never an upstream instance.
     // Accepting it here creates a proxy loop and repeated OAuth challenges.
     if (url.origin === GATEWAY_PUBLIC_URL.origin && /^\/mcp(?:\/|$)/.test(url.pathname)) return null;
-    return url.toString().replace(/\/$/, '');
+    return normalized;
   } catch {
     return null;
   }

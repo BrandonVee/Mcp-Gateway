@@ -90,6 +90,15 @@ async function main(): Promise<void> {
     'gateway rejects anonymous request (401)',
     gwUnauthorized.status === 401 && (gwUnauthorized.headers.get('www-authenticate') ?? '').includes('resource_metadata'),
   );
+  const crossOriginMcp = await fetch(`${GW}/mcp/demo`, {
+    method: 'POST', headers: { origin: 'https://untrusted.example.test' }, body: '{}',
+  });
+  check('gateway rejects untrusted MCP browser origin (403)', crossOriginMcp.status === 403);
+  const allowedPreflight = await fetch(`${GW}/mcp/demo`, {
+    method: 'OPTIONS', headers: { origin: new URL(GW).origin, 'access-control-request-method': 'POST' },
+  });
+  check('gateway handles allowed MCP browser preflight', allowedPreflight.status === 204
+    && allowedPreflight.headers.get('access-control-allow-origin') === new URL(GW).origin);
 
   // Browser flow: GET /authorize renders the login form.
   const loginPage = await fetch(authorizeUrl).then((r) => r.text());
@@ -216,7 +225,7 @@ async function main(): Promise<void> {
 
   const initRes = await fetch(`${GW}/mcp/demo`, {
     method: 'POST',
-    headers: mcpHeaders,
+    headers: { ...mcpHeaders, origin: new URL(GW).origin },
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
@@ -229,6 +238,8 @@ async function main(): Promise<void> {
     }),
   });
   const sessionId = initRes.headers.get('mcp-session-id');
+  check('gateway exposes MCP response headers to allowed browsers', initRes.headers.get('access-control-allow-origin') === new URL(GW).origin
+    && !!sessionId);
   const initBody = await readJson(initRes);
   check('initialize via gateway', initBody?.result?.serverInfo?.name === 'demo', `server=${initBody?.result?.serverInfo?.name} session=${sessionId?.slice(0, 8)}...`);
 
