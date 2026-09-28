@@ -48,24 +48,15 @@ export async function loadSigningKeys(): Promise<SigningKeys> {
     publicKeyPem = publicKey;
   }
 
-  const privateKey = await importPKCS8(privateKeyPem, 'RS256');
-  const publicKey = await importSPKI(publicKeyPem, 'RS256');
-  const publicJwk = await exportJWK(publicKey);
   const kid = randomUUID();
   await persistKeys(privateKeyPem, publicKeyPem, kid);
-  return {
-    kid,
-    privateKey,
-    publicJwk: { ...publicJwk, kid, alg: 'RS256', use: 'sig' },
-  };
+  // Another replica may have inserted its key first. Always use the winner.
+  return loadSigningKeys();
 }
 
 async function persistKeys(privateKeyPem: string, publicKeyPem: string, kid: string): Promise<void> {
   await db
     .insert(meta)
     .values({ key: 'signing_pem', value: JSON.stringify({ privateKeyPem, publicKeyPem, kid }) })
-    .onConflictDoUpdate({
-      target: meta.key,
-      set: { value: JSON.stringify({ privateKeyPem, publicKeyPem, kid }) },
-    });
+    .onConflictDoNothing({ target: meta.key });
 }

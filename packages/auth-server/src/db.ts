@@ -1,11 +1,11 @@
 import { randomToken, scryptHash, scryptVerify } from './users.js';
 import { loadPlatformConfig } from '@mcp/shared';
-import { and, count, eq, lt } from 'drizzle-orm';
+import { and, count, eq, lt, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
 import { fileURLToPath } from 'node:url';
-import { auditEvents, authCodes, loginSessions, mcpServers, oauthConnectionStates, refreshTokens, userServerAccess, users } from './schema.js';
+import { auditEvents, authCodes, clients, loginSessions, mcpServers, oauthConnectionStates, refreshTokens, userServerAccess, users } from './schema.js';
 import * as schema from './schema.js';
 
 const platformConfig = loadPlatformConfig();
@@ -25,7 +25,22 @@ export const db = drizzle(pool, { schema });
 /** Apply checked-in Drizzle migrations before serving traffic. */
 export async function initializeDatabase(): Promise<void> {
   const migrationsFolder = fileURLToPath(new URL('../drizzle', import.meta.url));
-  await migrate(db, { migrationsFolder });
+  const client = await pool.connect();
+  try {
+    // Drizzle's migration journal needs one writer when Auth has many replicas.
+    await client.query('SELECT pg_advisory_lock(762441, 1)');
+    await migrate(drizzle(client, { schema }), { migrationsFolder });
+  } finally {
+    await client.query('SELECT pg_advisory_unlock(762441, 1)').finally(() => client.release());
+  }
+}
+
+/** A development database must never be silently promoted with demo credentials. */
+export async function assertNoDevelopmentFixtures(): Promise<void> {
+  if (process.env.NODE_ENV !== 'production') return;
+  const [demoUser] = await db.select({ id: users.id }).from(users).where(eq(users.username, 'demo-user')).limit(1);
+  const [demoClient] = await db.select({ id: clients.clientId }).from(clients).where(eq(clients.clientId, 'demo-client')).limit(1);
+  if (demoUser || demoClient) throw new Error('Production database contains development demo-user or demo-client; remove fixtures before startup');
 }
 
 /** Periodically purge expired OAuth state through Drizzle ORM. */
@@ -48,25 +63,30 @@ export function startExpirySweep(): void {
 
 /** Create the initial administrator if no administrator exists yet. */
 export async function bootstrapAdmin(): Promise<void> {
-  const [{ value }] = await db.select({ value: count() }).from(users).where(eq(users.role, 'admin'));
-  if (value > 0) return;
-
   const bootstrap = platformConfig.auth.bootstrap;
   const username = process.env.ADMIN_USERNAME ?? bootstrap.adminUsername;
-  if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
-    throw new Error('Production bootstrap requires ADMIN_PASSWORD when the user table is empty');
-  }
   const configuredPassword = process.env.ADMIN_PASSWORD ?? bootstrap.adminPassword;
-  if (process.env.NODE_ENV === 'production' && configuredPassword && configuredPassword.length < 16) {
-    throw new Error('Production ADMIN_PASSWORD must contain at least 16 characters');
-  }
-  const password = configuredPassword ?? randomToken(12);
-  await createUserRow(username, password, 'admin');
+  const created = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(762441, 2)`);
+    const [{ value }] = await tx.select({ value: count() }).from(users).where(eq(users.role, 'admin'));
+    if (value > 0) return null;
+    if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
+      throw new Error('Production bootstrap requires ADMIN_PASSWORD when the user table is empty');
+    }
+    if (process.env.NODE_ENV === 'production' && configuredPassword && configuredPassword.length < 16) {
+      throw new Error('Production ADMIN_PASSWORD must contain at least 16 characters');
+    }
+    const password = configuredPassword ?? randomToken(12);
+    const now = Date.now();
+    await tx.insert(users).values({ username, passwordHash: scryptHash(password), role: 'admin', disabled: false, createdAt: now, updatedAt: now });
+    return password;
+  });
+  if (created === null) return;
   if (!configuredPassword) {
     console.log('='.repeat(60));
     console.log('[bootstrap] initial admin account created');
     console.log(`[bootstrap]   username: ${username}`);
-    console.log(`[bootstrap]   password: ${password}   <-- shown ONCE, store it now`);
+    console.log(`[bootstrap]   password: ${created}   <-- shown ONCE, store it now`);
     console.log('='.repeat(60));
   } else {
     console.log(`[bootstrap] initial admin "${username}" created from configuration`);

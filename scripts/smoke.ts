@@ -665,6 +665,37 @@ async function main(): Promise<void> {
   const forbiddenAudit = await fetch(`${AUTH}/admin/audit-events`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
   check('non-admin blocked from audit API (403)', forbiddenAudit.status === 403);
 
+  const workBuddyCallback = 'workbuddy://workbuddy/mcp/connector%3Amcp-demo/oauth/callback';
+  const workBuddyRegistration = await fetch(`${AUTH}/register`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ redirect_uris: [workBuddyCallback] }),
+  });
+  const workBuddyClient = await workBuddyRegistration.json() as { redirect_uris?: string[] };
+  check('WorkBuddy native OAuth callback registers exactly', workBuddyRegistration.status === 201
+    && workBuddyClient.redirect_uris?.[0] === workBuddyCallback);
+
+  // A direct client cannot evade the shared registration limiter with XFF.
+  let registrationLimitReached = false;
+  for (let attempt = 0; attempt < 21; attempt++) {
+    const response = await fetch(`${AUTH}/register`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+    });
+    if (response.status === 429) {
+      registrationLimitReached = response.headers.get('retry-after') === '60';
+      break;
+    }
+    if (response.status !== 400) break;
+  }
+  const spoofedRegistration = await fetch(`${AUTH}/register`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.99' }, body: '{}',
+  });
+  check('registration rate limit ignores spoofed XFF', registrationLimitReached && spoofedRegistration.status === 429);
+
+  const oversizedAuthRequest = await fetch(`${AUTH}/token`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: 'x'.repeat(1024 * 1024 + 1),
+  });
+  check('auth rejects oversized request bodies', oversizedAuthRequest.status === 413);
+
 
   console.log(`\n${process.exitCode ? 'SMOKE TEST FAILED' : 'ALL SMOKE TESTS PASSED'}`);
 }

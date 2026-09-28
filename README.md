@@ -141,11 +141,11 @@ export CREDENTIAL_BROKER_TOKEN="$(openssl rand -hex 32)"
 
 配置文件只管理 Auth Server、PostgreSQL、Gateway、Redis 等服务参数；逻辑 Server、实例地址和用户授权以 PostgreSQL 为准。密钥、数据库密码等生产机密仍可通过环境变量或 Secret 注入覆盖。
 
-生产部署需设置 `NODE_ENV=production` 和独立的 `CONFIG_FILE`。服务会在监听端口前校验公网 HTTPS 地址、独立的内部令牌、凭据加密密钥及数据库/Redis 环境变量，并拒绝仓库内的开发默认凭据。首次创建管理员还需通过 `ADMIN_PASSWORD` 提供至少 16 位密码；已有用户的数据库启动时不依赖此变量。当前 Compose 文件与 Vite 开发服务仅用于本地开发，不是生产部署清单。详见 [生产部署与上线检查](docs/production.md)。
+生产部署需设置 `NODE_ENV=production` 和独立的 `CONFIG_FILE`。服务会在监听端口前校验公网 HTTPS 地址、独立的内部令牌、凭据加密密钥及数据库/Redis 环境变量，并拒绝仓库内的开发默认凭据与演示用户/客户端。首次创建管理员还需通过 `ADMIN_PASSWORD` 提供至少 16 位密码；已有用户的数据库启动时不依赖此变量。根目录 Compose 文件与 Vite 开发服务仅用于本地开发；生产镜像和部署示例位于 `Dockerfile.production`、`deploy/`。详见 [生产部署与上线检查](docs/production.md)。
 
 ## 管理 API
 
-管理接口需要 `role=admin` 的 Bearer token：
+开发环境中的管理接口可用 `role=admin` 的 Bearer token；生产环境默认使用管理员浏览器会话，自动化 Bearer 调用还需显式配置受信 Client ID 和管理 API Audience（见生产部署文档）：
 
 ```http
 GET    /admin/servers
@@ -193,6 +193,7 @@ curl -X PUT http://localhost:9001/admin/users/USER_ID/servers \
 - 上游实例添加、启停、删除；
 - Gateway、Redis、动态注册表运行状态总览。
 - 日志监控：Auth、PostgreSQL、Gateway、Redis、注册表状态，以及可筛选的管理操作审计。
+- 个人连接中心可复制单个或全部已授权 Server 的 WorkBuddy MCP 导入配置；配置只包含 Gateway URL，登录和二次认证仍由各自的 OAuth/连接流程完成。平台动态注册支持 [WorkBuddy 文档](https://open.workbuddy.cn/docs/connector)所述的私有协议 OAuth 回调及本机回环回调。
 - 中文/英文界面切换：登录页、管理台、连接中心共用语言下拉菜单；页面标题、状态、表单、提示和请求错误均来自语义键的 `zh-CN` / `en-US` 资源文件。语言选择保存在浏览器本地存储，变量通过 `t("key", { name })` 传递。OAuth 登录/授权页按 `Accept-Language`（含权重）或 `?lang=zh-CN|en-US` 选择语言，并在表单提交时保持选择。协议名称、产品名称、HTTP 方法和实际标识符保持原文。
 - 界面字体：英文使用 Nunito，简体中文使用随前端打包的 [Resource Han Rounded CN](https://github.com/CyanoHao/Resource-Han-Rounded) 字形子集；字体许可及更新说明见 `packages/admin-web/src/assets/fonts/`。
 
@@ -248,8 +249,10 @@ docker compose up -d --build postgres redis auth
 docker compose exec -T auth pnpm --filter @mcp/auth-server db:seed:dev --docker  # 仅首次需要
 docker compose up -d --build
 pnpm typecheck
-pnpm smoke
+REPORTS_UPSTREAM_URL=http://mcp-reports:3003 pnpm smoke
 ```
+
+全容器模式下，冒烟测试注册的示例上游地址须使用 Compose 网络中的服务名，供 Gateway 容器访问；宿主机模式运行 `pnpm smoke` 时可保留默认的 `http://localhost:3003`。
 
 同一数据库从宿主机开发切换到 Compose 全容器模式时，可显式加 `--sync-urls` 将示例实例地址改为 Docker 服务名；切回宿主机时运行不带 `--docker` 的同步命令。此操作不会在正常启动时自动执行。
 

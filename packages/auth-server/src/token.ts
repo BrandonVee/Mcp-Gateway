@@ -56,7 +56,9 @@ export function createTokenRouter(deps: TokenRouteDeps): Hono {
       if (!entry) return jsonError(c, 'invalid_grant', 'authorization code is invalid or expired');
       if (entry.client_id !== client_id || !(await getClient(client_id))) return jsonError(c, 'invalid_grant', 'client_id mismatch');
       if (entry.redirect_uri !== redirect_uri) return jsonError(c, 'invalid_grant', 'redirect_uri mismatch');
-      if (!code_verifier || s256(code_verifier) !== entry.code_challenge) return jsonError(c, 'invalid_grant', 'PKCE verification failed');
+      if (!/^[A-Za-z0-9._~-]{43,128}$/.test(code_verifier ?? '') || s256(code_verifier) !== entry.code_challenge) {
+        return jsonError(c, 'invalid_grant', 'PKCE verification failed');
+      }
 
       let accessToken: string;
       try {

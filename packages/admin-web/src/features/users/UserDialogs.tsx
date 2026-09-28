@@ -91,10 +91,10 @@ function CreateUserDialog({
           label={t("userDialog.initialPassword")}
           rules={[
             { required: true, message: t("userDialog.enterInitialPassword") },
-            { min: 6, message: t("userDialog.passwordMustLeast6Characters") },
+            { min: 12, message: t("userDialog.passwordMustLeast12Characters") },
           ]}
         >
-          <Input.Password prefix={<LockOutlined />} placeholder={t("userDialog.least6Characters")} />
+          <Input.Password prefix={<LockOutlined />} placeholder={t("userDialog.least12Characters")} />
         </Form.Item>
         <Form.Item name="role" label={t("common.role")}>
           <Radio.Group optionType="button" buttonStyle="solid">
@@ -224,12 +224,12 @@ function ResetPasswordDialog({
           label={t("userDialog.newPassword")}
           rules={[
             { required: true, message: t("userDialog.enterNewPassword") },
-            { min: 6, message: t("userDialog.passwordMustLeast6Characters") },
+            { min: 12, message: t("userDialog.passwordMustLeast12Characters") },
           ]}
         >
           <Input.Password
             prefix={<LockOutlined />}
-            placeholder={t("userDialog.least6Characters")}
+            placeholder={t("userDialog.least12Characters")}
             autoFocus
           />
         </Form.Item>

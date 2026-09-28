@@ -8,6 +8,7 @@ import { isAllowedMcpOrigin, mcpCorsHeaders } from './routes/origin.js';
 import { probeRegisteredUpstreams, upstreamHealth } from './upstream-health.js';
 
 const app = Fastify({
+  bodyLimit: 1024 * 1024,
   logger: {
     serializers: {
       req(req) {

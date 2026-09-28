@@ -109,12 +109,18 @@ export function validateProductionRuntime(
   }
   requireHttps('auth.issuer', config.auth.issuer);
   requireHttps('gateway.resourceBaseUrl', config.gateway.resourceBaseUrl);
+  if (new URL(config.auth.issuer).origin !== config.auth.issuer.replace(/\/$/, '')) fail('auth.issuer must be an HTTPS origin without a path');
+  if (new URL(config.gateway.resourceBaseUrl).origin !== config.gateway.resourceBaseUrl.replace(/\/$/, '')) fail('gateway.resourceBaseUrl must be an HTTPS origin without a path');
   const internalToken = requireSecret('INTERNAL_API_TOKEN');
   const brokerToken = requireSecret('CREDENTIAL_BROKER_TOKEN');
   if (internalToken === brokerToken) fail('INTERNAL_API_TOKEN and CREDENTIAL_BROKER_TOKEN must differ');
   if (service === 'auth') {
     if (!env.DATABASE_URL) fail('DATABASE_URL must be supplied via the environment');
-    if (env.DATABASE_URL?.includes('mcp-dev-password')) fail('DATABASE_URL still contains the development password');
+    if (!env.REDIS_URL) fail('REDIS_URL must be supplied via the environment');
+    let databaseUrl: URL;
+    try { databaseUrl = new URL(env.DATABASE_URL ?? ''); } catch { return fail('DATABASE_URL must be a PostgreSQL URL'); }
+    if (!['postgres:', 'postgresql:'].includes(databaseUrl.protocol) || !databaseUrl.hostname) fail('DATABASE_URL must be a PostgreSQL URL');
+    if (decodeURIComponent(databaseUrl.password) === 'mcp-dev-password') fail('DATABASE_URL still contains the development password');
     if (!/^[0-9a-fA-F]{64}$/.test(env.CREDENTIAL_ENCRYPT_KEY ?? '')) fail('CREDENTIAL_ENCRYPT_KEY must be a 32-byte hex key');
     if (env.CREDENTIAL_ENCRYPT_KEY === developmentEncryptionKey) fail('CREDENTIAL_ENCRYPT_KEY must not use the development default');
     requireHttps('ADMIN_WEB_URL', env.ADMIN_WEB_URL);
@@ -122,4 +128,7 @@ export function validateProductionRuntime(
     if (!env.REDIS_URL) fail('REDIS_URL must be supplied via the environment');
     requireHttps('CONNECTIONS_WEB_URL', env.CONNECTIONS_WEB_URL);
   }
+  let redisUrl: URL;
+  try { redisUrl = new URL(env.REDIS_URL ?? ''); } catch { return fail('REDIS_URL must be a Redis URL'); }
+  if (!['redis:', 'rediss:'].includes(redisUrl.protocol) || !redisUrl.hostname) fail('REDIS_URL must be a Redis URL');
 }

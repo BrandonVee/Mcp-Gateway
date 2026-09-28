@@ -19,6 +19,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: "mcp"
       POSTGRES_USER: "mcp"
@@ -35,6 +36,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "127.0.0.1:6380:6379"
     healthcheck:
@@ -65,6 +67,8 @@ services:
       retries: 20
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   gateway:

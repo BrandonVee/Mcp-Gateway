@@ -4,6 +4,7 @@ import { getClient, isRedirectUriAllowed } from './clients.js';
 import { verifyUser, createLoginSession, getSessionUser } from './db.js';
 import { saveAuthCode } from './stores.js';
 import { loadPlatformConfig } from '@mcp/shared';
+import { limitLoginAccount } from './rate-limit.js';
 
 /**
  * Authorization Code + PKCE (S256) with real user authentication.
@@ -91,6 +92,14 @@ authorizeRouter.post('/authorize/submit', async (c: Context) => {
     const username = str('username').trim();
     const password = str('password');
     if (!username || !password) return c.html(loginPage(q, language, 'missingCredentials'), 400);
+    try {
+      if (!(await limitLoginAccount(username))) {
+        c.header('Retry-After', '900');
+        return c.json({ error: 'rate_limit_exceeded' }, 429);
+      }
+    } catch {
+      return c.json({ error: 'rate_limit_unavailable' }, 503);
+    }
     const user = await verifyUser(username, password);
     if (!user) {
       return c.html(loginPage(q, language, 'invalidCredentials'), 401);
@@ -134,7 +143,7 @@ async function validateAuthorizeParams(q: Record<string, string>): Promise<{ err
   if (!q.redirect_uri || !isRedirectUriAllowed(client, q.redirect_uri)) {
     return { error: 'invalid_request', error_description: 'redirect_uri not registered' };
   }
-  if (!q.code_challenge || q.code_challenge_method !== 'S256') {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(q.code_challenge ?? '') || q.code_challenge_method !== 'S256') {
     return { error: 'invalid_request', error_description: 'PKCE with S256 is required' };
   }
   if (q.scope && !SCOPE_RE.test(q.scope)) return { error: 'invalid_scope' };

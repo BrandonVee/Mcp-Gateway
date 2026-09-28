@@ -1,9 +1,10 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { bodyLimit } from 'hono/body-limit';
 import { randomUUID } from 'node:crypto';
 import { loadSigningKeys } from './keys.js';
-import { bootstrapAdmin, db, initializeDatabase, startExpirySweep } from './db.js';
+import { assertNoDevelopmentFixtures, bootstrapAdmin, db, initializeDatabase, startExpirySweep } from './db.js';
 import { authorizeRouter } from './authorize.js';
 import { createTokenRouter } from './token.js';
 import { createMetadataRouter } from './metadata.js';
@@ -12,6 +13,7 @@ import { loadPlatformConfig, validateProductionRuntime } from '@mcp/shared';
 import { users } from './schema.js';
 import { createRegistryRouter } from './registry.js';
 import { createConnectionsRouter } from './connections.js';
+import { limitRequest, rateLimitHealthy } from './rate-limit.js';
 
 const config = loadPlatformConfig();
 validateProductionRuntime(config, 'auth');
@@ -24,10 +26,12 @@ const DEFAULT_AUDIENCE = config.auth.defaultAudience;
 
 // Database bootstrap: schema and the initial administrator only.
 await initializeDatabase();
+await assertNoDevelopmentFixtures();
 await bootstrapAdmin();
 startExpirySweep();
 
 const keys = await loadSigningKeys();
+if (!(await rateLimitHealthy())) throw new Error('Redis rate limiter is unavailable');
 
 const app = new Hono();
 
@@ -57,14 +61,46 @@ app.use('*', async (c, next) => {
     }
   }
 });
+app.use('*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'payload_too_large' }, 413) }));
 app.use('*', cors({ allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowHeaders: ['content-type', 'authorization'], credentials: true }));
+
+const publicPostLimits: Record<string, [number, number]> = {
+  '/authorize/submit': [30, 60],
+  '/admin/session': [20, 60],
+  '/me/session': [20, 60],
+  '/token': [120, 60],
+  '/register': [20, 60],
+};
+app.use('*', async (c, next) => {
+  if (c.req.method === 'POST') {
+    const policy = publicPostLimits[c.req.path];
+    if (policy) {
+      let allowed: boolean;
+      try {
+        allowed = await limitRequest(c, c.req.path, policy[0], policy[1]);
+      } catch {
+        return c.json({ error: 'rate_limit_unavailable' }, 503);
+      }
+      if (!allowed) {
+        c.header('Retry-After', String(policy[1]));
+        console.warn(JSON.stringify({ level: 'warn', service: 'auth', event: 'rate_limit_exceeded', path: c.req.path }));
+        return c.json({ error: 'rate_limit_exceeded' }, 429);
+      }
+    }
+  }
+  if (['/authorize', '/authorize/submit', '/token', '/admin/session', '/me/session', '/register'].includes(c.req.path)) {
+    c.header('Cache-Control', 'no-store');
+  }
+  await next();
+});
 
 app.get('/live', (c) => c.json({ ok: true, service: 'auth-server' }));
 
 app.get('/health', async (c) => {
   try {
     await db.select({ id: users.id }).from(users).limit(1);
-    return c.json({ ok: true, service: 'auth-server', postgres: true });
+    const redis = await rateLimitHealthy();
+    return c.json({ ok: redis, service: 'auth-server', postgres: true, redis }, redis ? 200 : 503);
   } catch {
     return c.json({ ok: false, service: 'auth-server', postgres: false }, 503);
   }

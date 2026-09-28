@@ -18,6 +18,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test:unit
       - run: pnpm build:admin
+      - run: pnpm build:runtime
+      - run: pnpm audit --prod --audit-level high
 
   smoke:
     needs: verify
@@ -38,11 +40,13 @@ jobs:
       - name: Build application images
         run: docker compose build
       - name: Verify packaged frontend
-        run: docker compose run --rm --no-deps admin-web test -s /app/packages/admin-web/dist/index.html
+        run: docker compose run --rm --no-deps --entrypoint test admin-web -s /usr/share/nginx/html/index.html
       - name: Start dependencies and seed fixtures
         run: |
           docker compose up -d --wait postgres redis auth mcp-a mcp-b mcp-reports mcp-knowledge
-          docker compose exec -T auth pnpm --filter @mcp/auth-server db:seed:dev --docker
+          DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp \
+            CONFIG_FILE="$PWD/config/docker.json" \
+            pnpm db:seed:dev --docker
       - name: Start gateway and admin web
         run: docker compose up -d --wait gateway admin-web
       - name: Run end-to-end smoke test against built images
@@ -59,6 +63,8 @@ jobs:
             fi
             sleep 2
           done
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5173/api/internal/mcp-servers)" = 404
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5173/gateway/mcp/demo)" = 404
           pnpm smoke
       - name: Show service logs on failure
         if: failure()

@@ -1,0 +1,102 @@
+# Example for a host-local TLS ingress with external PostgreSQL and Redis.
+# Copy production.json.example to production.json and inject the required
+# environment variables from your secret manager before starting services.
+services:
+  auth:
+    image: mcp-runtime:${MCP_VERSION:?set MCP_VERSION}
+    build:
+      context: ..
+      dockerfile: Dockerfile.production
+      target: runtime
+    command: ["node", "packages/auth-server/dist/index.js"]
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      NODE_ENV: production
+      CONFIG_FILE: /app/config/production.json
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:?set REDIS_URL}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN}
+      CREDENTIAL_BROKER_TOKEN: ${CREDENTIAL_BROKER_TOKEN:?set CREDENTIAL_BROKER_TOKEN}
+      CREDENTIAL_ENCRYPT_KEY: ${CREDENTIAL_ENCRYPT_KEY:?set CREDENTIAL_ENCRYPT_KEY}
+      ADMIN_WEB_URL: ${ADMIN_WEB_URL:?set ADMIN_WEB_URL}
+      MCP_UPSTREAM_ALLOWED_HOSTS: ${MCP_UPSTREAM_ALLOWED_HOSTS:?set MCP_UPSTREAM_ALLOWED_HOSTS}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      AUTH_TRUSTED_PROXY_IPS: ${AUTH_TRUSTED_PROXY_IPS:-}
+    volumes:
+      - ./production.json:/app/config/production.json:ro
+    ports:
+      - "127.0.0.1:${AUTH_HOST_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+    networks: [control]
+
+  gateway:
+    image: mcp-runtime:${MCP_VERSION:?set MCP_VERSION}
+    command: ["node", "packages/gateway/dist/index.js"]
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      NODE_ENV: production
+      CONFIG_FILE: /app/config/production.json
+      REDIS_URL: ${REDIS_URL:?set REDIS_URL}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?set INTERNAL_API_TOKEN}
+      CREDENTIAL_BROKER_TOKEN: ${CREDENTIAL_BROKER_TOKEN:?set CREDENTIAL_BROKER_TOKEN}
+      CONNECTIONS_WEB_URL: ${CONNECTIONS_WEB_URL:?set CONNECTIONS_WEB_URL}
+      MCP_UPSTREAM_ALLOWED_HOSTS: ${MCP_UPSTREAM_ALLOWED_HOSTS:?set MCP_UPSTREAM_ALLOWED_HOSTS}
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+      UPSTREAM_MAX_ACTIVE_REQUESTS: ${UPSTREAM_MAX_ACTIVE_REQUESTS:-100}
+    volumes:
+      - ./production.json:/app/config/production.json:ro
+    ports:
+      - "127.0.0.1:${GATEWAY_HOST_PORT:-8000}:8000"
+    depends_on:
+      auth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+    networks: [control]
+
+  admin-web:
+    image: mcp-admin-web:${MCP_VERSION:?set MCP_VERSION}
+    build:
+      context: ..
+      dockerfile: Dockerfile.production
+      target: admin-web
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    ports:
+      - "127.0.0.1:${ADMIN_HOST_PORT:-8080}:8080"
+    depends_on:
+      auth:
+        condition: service_healthy
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+    networks: [control]
+
+networks:
+  control:

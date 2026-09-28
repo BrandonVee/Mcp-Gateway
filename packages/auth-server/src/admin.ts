@@ -10,6 +10,8 @@ import { auditEvents, authCodes, loginSessions, mcpServerInstances, mcpServers, 
 import { randomUUID } from 'node:crypto';
 import { loadPlatformConfig, normalizeUpstreamEndpoint } from '@mcp/shared';
 import { encryptCredential } from './credential-crypto.js';
+import { limitLoginAccount } from './rate-limit.js';
+import { trustedAdminBearerClient } from './admin-bearer.js';
 
 export interface AdminDeps {
   keys: SigningKeys;
@@ -134,8 +136,12 @@ async function getAdminActor(c: HonoContext, deps: AdminDeps): Promise<string | 
   const header = c.req.header('authorization');
   if (header?.startsWith('Bearer ')) {
     try {
-      const { payload } = await jwtVerify(header.slice(7).trim(), deps.keys.publicJwk, { issuer: deps.issuer });
-      if (payload.role === 'admin' && typeof payload.sub === 'string' && (await isActiveAdmin(payload.sub))) return payload.sub;
+      const { payload } = await jwtVerify(header.slice(7).trim(), deps.keys.publicJwk, {
+        issuer: deps.issuer,
+        ...(process.env.NODE_ENV === 'production' ? { audience: `${deps.issuer}/admin` } : {}),
+      });
+      if (payload.role === 'admin' && typeof payload.sub === 'string'
+        && trustedAdminBearerClient(payload.client_id) && (await isActiveAdmin(payload.sub))) return payload.sub;
     } catch {
       /* An invalid explicit credential must not fall back to a browser cookie. */
     }
@@ -200,6 +206,16 @@ export function createAdminRouter(deps: AdminDeps): Hono {
 
   router.post('/admin/session', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { username?: string; password?: string };
+    if (typeof body.username === 'string' && body.username.trim()) {
+      try {
+        if (!(await limitLoginAccount(body.username))) {
+          c.header('Retry-After', '900');
+          return c.json({ error: 'rate_limit_exceeded' }, 429);
+        }
+      } catch {
+        return c.json({ error: 'rate_limit_unavailable' }, 503);
+      }
+    }
     const user = body.username && body.password ? await verifyUser(body.username.trim(), body.password) : null;
     if (!user || user.role !== 'admin') {
       await recordAudit(c, typeof body.username === 'string' && SERVER_NAME_RE.test(body.username) ? body.username : 'anonymous', 401);
@@ -278,7 +294,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const body = await c.req.json().catch(() => ({}));
     const { username, password, role, servers } = body as { username?: string; password?: string; role?: string; servers?: unknown };
     if (!username || !/^[a-zA-Z0-9._-]{2,64}$/.test(username)) return jsonError(c, 'username must be 2-64 chars [a-zA-Z0-9._-]');
-    if (!password || password.length < 6) return jsonError(c, 'password must be at least 6 characters');
+    if (!password || password.length < 12) return jsonError(c, 'password must be at least 12 characters');
     const userRole = role ?? 'user';
     if (userRole !== 'admin' && userRole !== 'user') return jsonError(c, 'role must be admin or user');
     if (servers !== undefined && (!Array.isArray(servers) || !servers.every((name) => typeof name === 'string'))) {
@@ -376,7 +392,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     if (!row) return jsonError(c, 'user not found', 404);
     const body = await c.req.json().catch(() => ({}));
     const { password, role, disabled } = body as { password?: string; role?: string; disabled?: boolean };
-    if (password !== undefined && (typeof password !== 'string' || password.length < 6)) return jsonError(c, 'password must be at least 6 characters');
+    if (password !== undefined && (typeof password !== 'string' || password.length < 12)) return jsonError(c, 'password must be at least 12 characters');
     if (role !== undefined && role !== 'admin' && role !== 'user') return jsonError(c, 'role must be admin or user');
     if (disabled !== undefined && typeof disabled !== 'boolean') return jsonError(c, 'disabled must be a boolean');
     if (row.username === 'admin' && role !== undefined && role !== 'admin') return jsonError(c, 'cannot demote the bootstrap admin');

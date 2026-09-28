@@ -1,23 +1,50 @@
-# Exercise files baked into the image, not source bind mounts or watch processes.
+# Exercise the production runtime images, not source bind mounts or dev servers.
 services:
   admin-web:
-    command: pnpm --filter @mcp/admin-web preview --host 0.0.0.0 --port 5173
+    image: mcp-admin-web:ci
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: admin-web
+    command: !override []
+    read_only: true
+    tmpfs: ["/tmp"]
+    ports: !override ["127.0.0.1:5173:8080"]
     volumes: !reset []
   auth:
-    command: pnpm --filter @mcp/auth-server start
-    volumes: !reset []
+    image: mcp-runtime:ci
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: runtime
+    command: ["node", "packages/auth-server/dist/index.js"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    volumes: !override ["./config:/app/config:ro"]
   gateway:
-    command: pnpm --filter @mcp/gateway start
-    volumes: !reset []
+    image: mcp-runtime:ci
+    build: !reset null
+    command: ["node", "packages/gateway/dist/index.js"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    volumes: !override ["./config:/app/config:ro"]
   mcp-a:
-    command: pnpm --filter @mcp/mcp-server start
+    image: mcp-runtime:ci
+    build: !reset null
+    command: ["node", "packages/mcp-server/dist/index.js"]
     volumes: !reset []
   mcp-b:
-    command: pnpm --filter @mcp/mcp-server start
+    image: mcp-runtime:ci
+    build: !reset null
+    command: ["node", "packages/mcp-server/dist/index.js"]
     volumes: !reset []
   mcp-reports:
-    command: pnpm --filter @mcp/mcp-server start
+    image: mcp-runtime:ci
+    build: !reset null
+    command: ["node", "packages/mcp-server/dist/index.js"]
     volumes: !reset []
   mcp-knowledge:
-    command: pnpm --filter @mcp/mcp-server start
+    image: mcp-runtime:ci
+    build: !reset null
+    command: ["node", "packages/mcp-server/dist/index.js"]
     volumes: !reset []

@@ -146,6 +146,7 @@ export const api = {
       { method: "DELETE" },
     ),
   gatewayHealth: () => request<GatewayHealth>("/gateway/health"),
+  gatewayResource: () => request<{ resource: string }>("/gateway/.well-known/oauth-protected-resource"),
   authHealth: () => request<AuthHealth>("/api/health"),
   auditEvents: (options: { limit?: number; before?: number; actor?: string; method?: string } = {}) => {
     const params = new URLSearchParams();

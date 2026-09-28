@@ -6,6 +6,7 @@ import { loadPlatformConfig } from '@mcp/shared';
 import { createLoginSession, db, deleteLoginSession, getSessionUser, verifyUser } from './db.js';
 import { decryptCredential, encryptCredential } from './credential-crypto.js';
 import { mcpServers, oauthConnectionStates, userMcpCredentials, userServerAccess, users } from './schema.js';
+import { limitLoginAccount } from './rate-limit.js';
 
 const config = loadPlatformConfig();
 const issuer = config.auth.issuer.replace(/\/+$/, '');
@@ -135,6 +136,16 @@ export function createConnectionsRouter(): Hono {
 
   router.post('/me/session', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { username?: string; password?: string };
+    if (typeof body.username === 'string' && body.username.trim()) {
+      try {
+        if (!(await limitLoginAccount(body.username))) {
+          c.header('Retry-After', '900');
+          return c.json({ error: 'rate_limit_exceeded' }, 429);
+        }
+      } catch {
+        return c.json({ error: 'rate_limit_unavailable' }, 503);
+      }
+    }
     const user = typeof body.username === 'string' && typeof body.password === 'string'
       ? await verifyUser(body.username.trim(), body.password) : null;
     if (!user) return c.json({ error: 'invalid_credentials' }, 401);
