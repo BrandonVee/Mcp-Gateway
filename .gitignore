@@ -3,6 +3,8 @@ node_modules/
 __pycache__/
 .run.pid
 deploy/production.json
+deploy/production.env
+deploy/single-host/
 dist/
 *.tsbuildinfo
 *.log

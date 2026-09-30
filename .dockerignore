@@ -2,6 +2,9 @@
 .github
 .env
 .env.*
+deploy/production.env
+deploy/production.json
+deploy/single-host/
 node_modules
 **/node_modules
 **/dist

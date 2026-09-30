@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "../api";
 import { getCurrentLanguage, getTranslation } from "../i18n";
-import type { AdminConnection, AdminUser, GatewayHealth, McpServer } from "../types";
+import type { SystemSettings, AdminConnection, AdminUser, GatewayHealth, McpServer } from "../types";
 
 export function useControlPlane() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [servers, setServers] = useState<McpServer[]>([]);
   const [connections, setConnections] = useState<AdminConnection[]>([]);
@@ -17,7 +18,7 @@ export function useControlPlane() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [userData, serverData, connectionData, gatewayHealth] = await Promise.all([
+      const [userData, serverData, connectionData, gatewayHealth, settingsData] = await Promise.all([
         api.users(),
         api.servers(),
         api.adminConnections(),
@@ -31,7 +32,9 @@ export function useControlPlane() {
             },
           }),
         ),
+        api.systemSettings(),
       ]);
+      setSettings(settingsData);
       setUsers(userData.users);
       setServers(serverData.servers);
       setConnections(connectionData.connections);
@@ -123,6 +126,7 @@ export function useControlPlane() {
   return {
     api,
     authenticated,
+    settings,
     users,
     servers,
     connections,

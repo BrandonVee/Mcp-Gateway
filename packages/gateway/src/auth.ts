@@ -10,12 +10,12 @@ declare module 'fastify' {
   }
 }
 
-const RESOURCE_BASE = env.resourceBaseUrl.replace(/\/+$/, "");
+const resourceBase = () => env.resourceBaseUrl.replace(/\/+$/, "");
 // RFC 8707: clients send the gateway URL as `resource`; the auth server uses
 // it as the JWT audience. Accept both it (with/without trailing slash) and
 // the plain configured audience. A server-specific resource URL is accepted
 // only on that server's route.
-const BASE_AUDIENCES = [env.jwtAudience, RESOURCE_BASE, RESOURCE_BASE + '/'];
+const baseAudiences = () => [env.jwtAudience, resourceBase(), resourceBase() + '/'];
 
 function routeServerName(req: FastifyRequest): string | undefined {
   const match = req.url.split('?')[0].match(/^\/mcp\/([^/]+)/);
@@ -29,8 +29,8 @@ function routeServerName(req: FastifyRequest): string | undefined {
 
 function resourceMetadataUrl(serverName?: string): string {
   return serverName
-    ? `${RESOURCE_BASE}/.well-known/oauth-protected-resource/mcp/${encodeURIComponent(serverName)}`
-    : `${RESOURCE_BASE}/.well-known/oauth-protected-resource`;
+    ? `${resourceBase()}/.well-known/oauth-protected-resource/mcp/${encodeURIComponent(serverName)}`
+    : `${resourceBase()}/.well-known/oauth-protected-resource`;
 }
 
 export function unauthorized(reply: FastifyReply, code: string, description: string, serverName?: string): FastifyReply {
@@ -88,10 +88,10 @@ export async function authHook(req: FastifyRequest, reply: FastifyReply): Promis
   }
   const token = header.slice('Bearer '.length).trim();
   try {
-    const serverResource = serverName ? `${RESOURCE_BASE}/mcp/${encodeURIComponent(serverName)}` : undefined;
+    const serverResource = serverName ? `${resourceBase()}/mcp/${encodeURIComponent(serverName)}` : undefined;
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: env.authIssuer,
-      audience: serverResource ? [...BASE_AUDIENCES, serverResource, `${serverResource}/`] : BASE_AUDIENCES,
+      audience: serverResource ? [...baseAudiences(), serverResource, `${serverResource}/`] : baseAudiences(),
     });
     req.mcpAuth = payload;
   } catch (err) {

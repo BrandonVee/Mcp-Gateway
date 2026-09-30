@@ -2,9 +2,9 @@
 
 MCP 统一认证与多入口网关，集中管理服务接入、访问权限和用户连接。
 
-管理前端：**http://localhost:5173**（默认管理员账号见 `config/default.json` / `config/docker.json`）。
+本地开发管理前端：**http://localhost:5173**（默认管理员账号见 `config/default.json` / `config/docker.json`）。
 
-访问 Auth Server 的 `/admin` 也会跳转到该 Ant Design 管理端；部署到其他域名时可通过 `ADMIN_WEB_URL` 指定管理端公开地址。
+访问 Auth Server 的 `/admin` 也会跳转到管理端；推荐部署的公开地址在后台“系统设置”中维护。
 
 这个项目把认证、授权和 MCP 实例路由拆成三层：
 
@@ -15,6 +15,75 @@ MCP Client ── OAuth ──>│  Gateway
                               │
                               └─ 校验统一 Auth Server 签发的 JWT
 ```
+
+## 服务器部署（推荐）
+
+服务器只需要 **Docker（含 Compose）和 Git**。应用对外提供一个 HTTP 端口，域名、证书和 HTTPS 由你自己的 Nginx 处理。
+
+```bash
+git clone https://github.com/BrandonVee/mcp.git mcp-gateway
+cd mcp-gateway
+./scripts/deploy.sh
+```
+
+脚本会自动生成并保存数据库密码、内部令牌、凭据加密密钥和初始管理员密码，启动 PostgreSQL、Redis、Auth Server、Gateway 和管理前端。默认仅暴露 `127.0.0.1:8080`，不需要手写环境文件或配置数据库。首次执行会构建生产镜像；管理员用户名为 `admin`，初始密码会在终端显示一次。
+
+### Nginx 转发与首次设置
+
+在你已有的 HTTPS `server` 中加入：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_request_buffering off;
+    proxy_read_timeout 3600s;
+}
+```
+
+通过你的 HTTPS 地址打开后台，使用初始管理员登录。系统会引导进入**系统设置**：
+
+1. **对外访问地址**：填写 Nginx 对外的 HTTPS 根地址，例如 `https://mcp.example.com`。OAuth 登录、MCP 入口与个人连接中心统一使用此地址，部署时无需配置 `PUBLIC_URL`。
+2. **可信上游主机**：填写计划接入的 MCP 服务主机名，每行一个，不带协议、端口或路径；以后新增主机时也在此更新。
+3. 保存后注册实际 MCP 服务、创建用户并分配访问权限。客户端入口为 `https://mcp.example.com/mcp/{SERVER_NAME}`。
+
+系统设置持久化在 PostgreSQL 中，重启后继续生效。未设置访问地址时，管理后台可用，OAuth 与 MCP 接入返回 `503 system_not_configured`；生产环境的访问地址需使用 HTTPS。更换地址后，已有 MCP 客户端需重新授权。
+
+这里的 Nginx 运行在同一台宿主机。若你自己的 Nginx 在容器中，需让它能访问应用入口，再调整 `proxy_pass`；`127.0.0.1` 在容器中指的是该 Nginx 容器自身。
+
+### 升级、查看日志与备份
+
+```bash
+# 更新到要部署的代码版本，再执行同一条命令。
+git pull --ff-only
+./scripts/deploy.sh
+
+# 查看容器和日志。
+docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml ps
+docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs --tail=100 auth gateway admin-web
+```
+
+脚本会保留已生成的密钥和密码；数据库与 Redis 使用命名卷持久化。升级前备份 PostgreSQL 和 `deploy/single-host/`，尤其是 `runtime.env` 中的凭据加密密钥。不要用 `down -v` 停止生产部署，它会删除数据库卷。单机升级可能短暂中断，已有 MCP 会话中断后客户端需重新初始化。
+
+需要改 HTTP 端口时可运行 `MCP_HTTP_PORT=18080 ./scripts/deploy.sh`，随后调整你自己的 Nginx 上游端口。
+
+### 已发布镜像的部署
+
+当前 CI 会构建和测试镜像，尚未自动发布到镜像仓库。将 `runtime` 与 `admin-web` 两个生产目标发布为同版本的 `mcp-runtime` 和 `mcp-admin-web` 后，服务器也可直接拉取：
+
+```bash
+# 私有镜像仓库先使用 docker login 登录。
+MCP_IMAGE_PREFIX=ghcr.io/your-lowercase-account/ MCP_VERSION=YOUR_RELEASE_TAG ./scripts/deploy.sh
+```
+
+此方式使用相同的一键部署和后台设置流程，跳过服务器源码构建。镜像前缀保留末尾 `/`，版本须与已发布 tag 一致。
+
+镜像发布命令、使用独立数据库的高级部署和回退说明见 [生产部署文档](docs/production.md)。
 
 ## 权限模型
 
@@ -158,6 +227,8 @@ GET /admin/users/:id/servers
 PUT /admin/users/:id/servers
 PATCH /admin/users/:id
 GET   /admin/audit-events
+GET   /admin/system-settings
+PUT   /admin/system-settings
 ```
 
 `GET /admin/audit-events` 仅管理员可读，支持 `limit`（1–100，默认 50）、`before`（上一页最后一条事件 ID）、`actor` 和 `method`（POST/PUT/PATCH/DELETE）查询参数。响应为 `{ "events": [...], "next_before": ID | null }`；参数错误返回 400，未授权返回 403。事件仅包含时间、操作人、HTTP 方法、路径、状态码和请求 ID，不保存请求正文、Cookie、Token 或密钥。
@@ -187,6 +258,7 @@ curl -X PUT http://localhost:9001/admin/users/USER_ID/servers \
 - 内部/外部 MCP Server 注册、启停和删除；
 - 上游实例添加、启停、删除；
 - Gateway、Redis、动态注册表运行状态总览。
+- 系统设置：维护对外访问地址与可信上游主机，保存后即时生效并持久化。
 - 日志监控：Auth、PostgreSQL、Gateway、Redis、注册表状态，以及可筛选的管理操作审计。
 - 个人连接中心可复制单个或全部已授权 Server 的 WorkBuddy MCP 导入配置；配置只包含 Gateway URL，登录和二次认证仍由各自的 OAuth/连接流程完成。平台动态注册支持 [WorkBuddy 文档](https://open.workbuddy.cn/docs/connector)所述的私有协议 OAuth 回调及本机回环回调。
 - 中文/英文界面切换：登录页、管理台、连接中心共用语言下拉菜单；页面标题、状态、表单、提示和请求错误均来自语义键的 `zh-CN` / `en-US` 资源文件。语言选择保存在浏览器本地存储，变量通过 `t("key", { name })` 传递。OAuth 登录/授权页按 `Accept-Language`（含权重）或 `?lang=zh-CN|en-US` 选择语言，并在表单提交时保持选择。协议名称、产品名称、HTTP 方法和实际标识符保持原文。

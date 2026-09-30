@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { App as AntApp, ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import enUS from "antd/locale/en_US";
@@ -15,6 +15,7 @@ const LoginPage = lazy(() =>
     default: module.LoginPage,
   })),
 );
+const SettingsPage = lazy(() => import("./features/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 const OverviewPage = lazy(() =>
   import("./features/overview/OverviewPage").then((module) => ({
     default: module.OverviewPage,
@@ -66,6 +67,9 @@ function ControlPlane() {
   const { t } = useI18n();
   const controlPlane = useControlPlane();
   const [view, setView] = useState<View>("overview");
+  useEffect(() => {
+    if (controlPlane.settings?.managed && !controlPlane.settings.configured) setView("settings");
+  }, [controlPlane.settings]);
   const [dialog, setDialog] = useState<DialogState>({ type: null });
 
   const execute = async (
@@ -124,6 +128,11 @@ function ControlPlane() {
         />
       ) : (
         <>
+          {view === "settings" && controlPlane.settings && (
+            <SettingsPage settings={controlPlane.settings} onSave={(body) => execute(
+              () => controlPlane.api.saveSystemSettings(body), t("settings.saved"),
+            )} />
+          )}
           {view === "overview" && (
             <OverviewPage
               users={controlPlane.users}

@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { databaseSettingsEnabled, systemConfigured } from '@mcp/shared';
 import { env, refreshServerConfigs, registryStatus, serverConfigs, startRegistryRefresh } from './config.js';
 import { authHook, hasServerAccess } from './auth.js';
 import { registerMcpRoutes } from './routes/mcp.js';
@@ -40,7 +41,12 @@ app.get('/health', async (_req, reply) => {
 
 await app.register(async (instance) => {
   instance.addHook('onRequest', async (req, reply) => {
-    if (!req.url.split('?')[0].startsWith('/mcp/')) return;
+    const path = req.url.split('?')[0];
+    if (databaseSettingsEnabled() && (path.startsWith('/mcp') || path === '/servers')) {
+      try { await refreshServerConfigs(); } catch { return reply.code(503).send({ error: 'system_settings_unavailable' }); }
+      if (!systemConfigured()) return reply.code(503).send({ error: 'system_not_configured' });
+    }
+    if (!path.startsWith('/mcp/')) return;
     if (!isAllowedMcpOrigin(req.headers.origin, env.resourceBaseUrl)) {
       await reply.code(403).send({ error: 'invalid_origin' });
       return;

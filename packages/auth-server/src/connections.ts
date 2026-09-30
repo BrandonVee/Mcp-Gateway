@@ -2,15 +2,12 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { loadPlatformConfig } from '@mcp/shared';
+import { authIssuer, adminWebUrl } from '@mcp/shared';
 import { createLoginSession, db, deleteLoginSession, getSessionUser, verifyUser } from './db.js';
 import { decryptCredential, encryptCredential } from './credential-crypto.js';
 import { mcpServers, oauthConnectionStates, userMcpCredentials, userServerAccess, users } from './schema.js';
 import { limitLoginAccount } from './rate-limit.js';
 
-const config = loadPlatformConfig();
-const issuer = config.auth.issuer.replace(/\/+$/, '');
-const webUrl = process.env.ADMIN_WEB_URL ?? 'http://localhost:5173';
 const cookieName = 'auth_session';
 type User = { id: number; username: string; role: 'admin' | 'user'; allServers: boolean };
 
@@ -41,11 +38,11 @@ function internalTokenMatches(header: string | undefined): boolean {
 }
 
 function callbackUrl(serverName: string): string {
-  return `${issuer}/oauth/callback/${encodeURIComponent(serverName)}`;
+  return `${authIssuer()}/oauth/callback/${encodeURIComponent(serverName)}`;
 }
 
 function portalUrl(result: string, serverName: string): string {
-  const url = new URL('/connections', webUrl);
+  const url = new URL('/connections', adminWebUrl());
   url.searchParams.set('result', result);
   url.searchParams.set('server', serverName);
   return url.toString();
@@ -123,7 +120,7 @@ export function createConnectionsRouter(): Hono {
   router.use('/me/*', async (c, next) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
       const origin = c.req.header('origin');
-      const accepted = [new URL(issuer).origin, new URL(webUrl).origin];
+      const accepted = [new URL(authIssuer()).origin, new URL(adminWebUrl()).origin];
       if (origin && !accepted.includes(origin)) return c.json({ error: 'invalid_origin' }, 403);
     }
     await next();
@@ -150,7 +147,7 @@ export function createConnectionsRouter(): Hono {
       ? await verifyUser(body.username.trim(), body.password) : null;
     if (!user) return c.json({ error: 'invalid_credentials' }, 401);
     setCookie(c, cookieName, await createLoginSession(user.username), {
-      httpOnly: true, sameSite: 'Lax', secure: issuer.startsWith('https://'), path: '/', maxAge: 7 * 24 * 3600,
+      httpOnly: true, sameSite: 'Lax', secure: authIssuer().startsWith('https://'), path: '/', maxAge: 7 * 24 * 3600,
     });
     return c.json({ authenticated: true, username: user.username, role: user.role });
   });

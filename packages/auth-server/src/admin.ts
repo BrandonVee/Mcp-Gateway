@@ -8,10 +8,11 @@ import type { Context as HonoContext } from 'hono';
 import { and, count, desc, eq, lt } from 'drizzle-orm';
 import { auditEvents, authCodes, loginSessions, mcpServerInstances, mcpServers, refreshTokens, userMcpCredentials, userServerAccess, users } from './schema.js';
 import { randomUUID } from 'node:crypto';
-import { loadPlatformConfig, normalizeUpstreamEndpoint } from '@mcp/shared';
+import { normalizeUpstreamEndpoint, gatewayPublicUrl, adminWebUrl, databaseSettingsEnabled, systemConfigured, bootstrapOriginAllowed, normalizeSystemSettings, allowedUpstreamHosts } from '@mcp/shared';
 import { encryptCredential } from './credential-crypto.js';
 import { limitLoginAccount } from './rate-limit.js';
 import { trustedAdminBearerClient } from './admin-bearer.js';
+import { currentSystemSettings, saveSystemSettings } from './system-settings.js';
 
 export interface AdminDeps {
   keys: SigningKeys;
@@ -20,8 +21,6 @@ export interface AdminDeps {
 
 const SERVER_NAME_RE = /^[a-zA-Z0-9._-]{1,64}$/;
 const SESSION_COOKIE = 'auth_session';
-const GATEWAY_PUBLIC_URL = new URL(loadPlatformConfig().gateway.resourceBaseUrl);
-const ADMIN_WEB_URL = process.env.ADMIN_WEB_URL ?? 'http://localhost:5173';
 
 function normalizeMcpEndpoint(value: string): string | null {
   try {
@@ -30,7 +29,8 @@ function normalizeMcpEndpoint(value: string): string | null {
     const url = new URL(normalized);
     // A Gateway route is a client-facing URL, never an upstream instance.
     // Accepting it here creates a proxy loop and repeated OAuth challenges.
-    if (url.origin === GATEWAY_PUBLIC_URL.origin && /^\/mcp(?:\/|$)/.test(url.pathname)) return null;
+    const publicUrl = gatewayPublicUrl();
+    if (publicUrl && url.origin === new URL(publicUrl).origin && /^\/mcp(?:\/|$)/.test(url.pathname)) return null;
     return normalized;
   } catch {
     return null;
@@ -184,8 +184,10 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   router.use('/admin/*', async (c, next) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
       const origin = c.req.header('origin');
-      const allowedOrigins = [new URL(deps.issuer).origin, new URL(ADMIN_WEB_URL).origin];
-      if (origin && !allowedOrigins.includes(origin)) return jsonError(c, 'invalid_origin', 403);
+      const allowed = !origin || (!systemConfigured()
+        ? bootstrapOriginAllowed(origin, c.req.header('host'))
+        : [deps.issuer, adminWebUrl()].map((url) => new URL(url).origin).includes(origin));
+      if (!allowed) return jsonError(c, 'invalid_origin', 403);
     }
     if (c.req.path === '/admin' || c.req.path === '/admin/session') {
       await next();
@@ -225,7 +227,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     setCookie(c, SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: 'Lax',
-      secure: deps.issuer.startsWith('https://'),
+      secure: process.env.NODE_ENV === 'production' || deps.issuer.startsWith('https://'),
       path: '/',
       maxAge: 7 * 24 * 3600,
     });
@@ -240,6 +242,19 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     deleteCookie(c, SESSION_COOKIE, { path: '/' });
     if (actor) await recordAudit(c, actor, 200);
     return c.json({ authenticated: false });
+  });
+
+  router.get('/admin/system-settings', (c) => {
+    c.header('Cache-Control', 'no-store');
+    return c.json({ managed: process.env.SYSTEM_CONFIG_MODE !== 'file', configured: systemConfigured(),
+      ...(databaseSettingsEnabled() ? currentSystemSettings() : { public_url: deps.issuer, upstream_hosts: [...allowedUpstreamHosts()] }) });
+  });
+  router.put('/admin/system-settings', async (c) => {
+    if (process.env.SYSTEM_CONFIG_MODE === 'file') return c.json({ error: 'system_settings_managed_by_environment' }, 409);
+    const settings = normalizeSystemSettings(await c.req.json().catch(() => null));
+    if (!settings) return c.json({ error: 'invalid_system_settings' }, 400);
+    await saveSystemSettings(settings);
+    return c.json({ managed: true, configured: true, ...settings });
   });
 
   /** Paginated, metadata-only admin audit stream. No request bodies or secrets. */
@@ -650,7 +665,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   });
 
   // Keep a single admin entry point. The React application owns login and UI rendering.
-  router.get('/admin', (c) => c.redirect(ADMIN_WEB_URL, 302));
+  router.get('/admin', (c) => c.redirect(adminWebUrl(), 302));
 
   return router;
 }

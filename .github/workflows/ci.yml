@@ -21,6 +21,33 @@ jobs:
       - run: pnpm build:runtime
       - run: pnpm audit --prod --audit-level high
 
+  single-host:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT_NAME: mcp-setup-ci
+      MCP_DEPLOY_DIR: /tmp/mcp-single-host
+      MCP_HTTP_PORT: '18080'
+      ADMIN_PASSWORD: ci-system-admin-password-123456
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy without a public URL or database configuration
+        run: ./scripts/deploy.sh
+      - name: Verify setup, OAuth and persistent settings
+        run: pnpm exec tsx scripts/smoke-system-settings.ts
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose --env-file "$MCP_DEPLOY_DIR/runtime.env" -f deploy/compose.single-host.yml logs --no-color || true
+      - name: Remove disposable deployment
+        if: always()
+        run: docker compose --env-file "$MCP_DEPLOY_DIR/runtime.env" -f deploy/compose.single-host.yml down -v
+
   smoke:
     needs: verify
     runs-on: ubuntu-latest

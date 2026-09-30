@@ -1,4 +1,4 @@
-import type { AdminConnection, AdminUser, AuditEventPage, AuthHealth, ConnectionServer, CreateServerInput, GatewayHealth, McpServer, ServerAuthInput } from "./types";
+import type { SystemSettings, AdminConnection, AdminUser, AuditEventPage, AuthHealth, ConnectionServer, CreateServerInput, GatewayHealth, McpServer, ServerAuthInput } from "./types";
 import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from "./i18n";
 
 /** Present stable, localized UI errors instead of leaking English backend strings. */
@@ -9,6 +9,7 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     invalid_admin_credentials: "api.invalidCredentials",
     invalid_credentials: "api.invalidCredentials",
     invalid_origin: "api.invalidOrigin",
+    invalid_system_settings: "settings.invalid",
     "username already exists": "api.usernameExists",
   };
   const statusKey: Record<number, MessageKey> = {
@@ -59,6 +60,10 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  systemSettings: () => request<SystemSettings>("/api/admin/system-settings"),
+  saveSystemSettings: (body: { public_url: string; upstream_hosts: string[] }) => request<SystemSettings>("/api/admin/system-settings", {
+    method: "PUT", body: JSON.stringify(body),
+  }),
   session: () => request<{ authenticated: boolean }>("/api/admin/session"),
   login: (username: string, password: string) =>
     request<{ authenticated: boolean; username: string }>(

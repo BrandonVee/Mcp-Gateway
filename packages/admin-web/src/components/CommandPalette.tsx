@@ -1,4 +1,5 @@
 import {
+  SettingOutlined,
   CloudServerOutlined,
   DashboardOutlined,
   RightOutlined,
@@ -21,6 +22,7 @@ const commands: Array<{
   icon: ReactNode;
   shortcut: string;
 }> = [
+  { view: "settings", title: "settings.title", description: "settings.description", keywords: "settings config 系统 设置", icon: <SettingOutlined />, shortcut: "G P" },
   {
     view: "overview",
     title: "nav.overview.title",

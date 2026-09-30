@@ -9,8 +9,9 @@ import { authorizeRouter } from './authorize.js';
 import { createTokenRouter } from './token.js';
 import { createMetadataRouter } from './metadata.js';
 import { createAdminRouter } from './admin.js';
-import { loadPlatformConfig, validateProductionRuntime } from '@mcp/shared';
+import { loadPlatformConfig, validateProductionRuntime, authIssuer, systemConfigured } from '@mcp/shared';
 import { users } from './schema.js';
+import { refreshSystemSettings } from './system-settings.js';
 import { createRegistryRouter } from './registry.js';
 import { createConnectionsRouter } from './connections.js';
 import { limitRequest, rateLimitHealthy } from './rate-limit.js';
@@ -18,7 +19,6 @@ import { limitRequest, rateLimitHealthy } from './rate-limit.js';
 const config = loadPlatformConfig();
 validateProductionRuntime(config, 'auth');
 const PORT = config.auth.port;
-const ISSUER = config.auth.issuer;
 const ACCESS_TOKEN_TTL = config.auth.accessTokenTtlSeconds;
 // RFC 8707 resource indicators become JWT audience; fallback audience if the
 // client does not send a `resource` parameter.
@@ -26,6 +26,7 @@ const DEFAULT_AUDIENCE = config.auth.defaultAudience;
 
 // Database bootstrap: schema and the initial administrator only.
 await initializeDatabase();
+await refreshSystemSettings();
 await assertNoDevelopmentFixtures();
 await bootstrapAdmin();
 startExpirySweep();
@@ -60,6 +61,14 @@ app.use('*', async (c, next) => {
       }));
     }
   }
+});
+app.use('*', async (c, next) => {
+  if (!['/live', '/health'].includes(c.req.path)) {
+    try { await refreshSystemSettings(); } catch { return c.json({ error: 'system_settings_unavailable' }, 503); }
+    if (!systemConfigured() && (/^\/(authorize(?:\/|$)|token$|register$|me(?:\/|$)|oauth(?:\/|$))/.test(c.req.path)
+      || c.req.path.startsWith('/.well-known/'))) return c.json({ error: 'system_not_configured' }, 503);
+  }
+  await next();
 });
 app.use('*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'payload_too_large' }, 413) }));
 app.use('*', cors({ allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowHeaders: ['content-type', 'authorization'], credentials: true }));
@@ -107,14 +116,14 @@ app.get('/health', async (c) => {
 });
 
 app.route('/', authorizeRouter);
-app.route('/', createTokenRouter({ keys, issuer: ISSUER, accessTokenTtlSeconds: ACCESS_TOKEN_TTL, defaultAudience: DEFAULT_AUDIENCE }));
-app.route('/', createMetadataRouter(keys, ISSUER));
-app.route('/', createAdminRouter({ keys, issuer: ISSUER }));
+app.route('/', createTokenRouter({ keys, get issuer() { return authIssuer(); }, accessTokenTtlSeconds: ACCESS_TOKEN_TTL, defaultAudience: DEFAULT_AUDIENCE }));
+app.route('/', createMetadataRouter(keys, authIssuer));
+app.route('/', createAdminRouter({ keys, get issuer() { return authIssuer(); } }));
 app.route('/', createRegistryRouter());
 app.route('/', createConnectionsRouter());
 
 serve({ fetch: app.fetch, port: PORT, hostname: '0.0.0.0' }, () => {
-  console.log(`[auth-server] listening on :${PORT} (issuer: ${ISSUER})`);
-  console.log(`[auth-server] metadata: ${ISSUER}/.well-known/oauth-authorization-server`);
-  console.log(`[auth-server] admin UI:   ${ISSUER}/admin`);
+  console.log(`[auth-server] listening on :${PORT} (issuer: ${authIssuer() || "setup pending"})`);
+  console.log(`[auth-server] metadata: ${authIssuer() || "setup pending"}/.well-known/oauth-authorization-server`);
+  console.log(`[auth-server] admin UI:   ${authIssuer() || "setup pending"}/admin`);
 });

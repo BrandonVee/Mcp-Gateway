@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  SettingOutlined,
   AppstoreOutlined,
   ClockCircleOutlined,
   CloudServerOutlined,
@@ -37,6 +38,7 @@ const titles: Record<
   View,
   { eyebrow: MessageKey; title: MessageKey; description: MessageKey }
 > = {
+  settings: { eyebrow: "settings.eyebrow", title: "settings.title", description: "settings.description" },
   overview: {
     eyebrow: "nav.overview.eyebrow",
     title: "nav.overview.title",
@@ -92,6 +94,7 @@ export function AppShell({
   const current = titles[currentView];
 
   const menuItems = [
+    { key: "settings", icon: <SettingOutlined />, label: t("settings.title") },
     { key: "overview", icon: <DashboardOutlined />, label: t("nav.overview.label") },
     {
       key: "users",

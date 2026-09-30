@@ -1,4 +1,4 @@
-import { loadPlatformConfig, normalizeUpstreamEndpoint, validateProductionRuntime, type McpServerConfig } from '@mcp/shared';
+import { loadPlatformConfig, normalizeUpstreamEndpoint, validateProductionRuntime, authIssuer, gatewayPublicUrl, adminWebUrl, databaseSettingsEnabled, applySystemSettings, normalizeSystemSettings, type SystemSettings, type McpServerConfig } from '@mcp/shared';
 
 const config = loadPlatformConfig();
 validateProductionRuntime(config, 'gateway');
@@ -6,17 +6,17 @@ validateProductionRuntime(config, 'gateway');
 export const env = {
   port: config.gateway.port,
   redisUrl: process.env.REDIS_URL ?? config.gateway.redisUrl,
-  authIssuer: config.auth.issuer,
+  get authIssuer() { return authIssuer(); },
   authJwksUrl: config.gateway.authJwksUrl,
   jwtAudience: config.gateway.jwtAudience,
   // External base URL of this gateway (used in RFC 9728 metadata).
-  resourceBaseUrl: config.gateway.resourceBaseUrl,
+  get resourceBaseUrl() { return gatewayPublicUrl(); },
   sessionTtlSeconds: config.gateway.sessionTtlSeconds,
   registryUrl: config.gateway.registryUrl,
   credentialUrl: new URL('/internal/connector-credential', config.gateway.registryUrl).toString(),
   accessCheckUrl: new URL('/internal/mcp-access', config.gateway.registryUrl).toString(),
   credentialBrokerToken: process.env.CREDENTIAL_BROKER_TOKEN,
-  connectionsWebUrl: process.env.CONNECTIONS_WEB_URL ?? 'http://localhost:5173/connections',
+  get connectionsWebUrl() { return databaseSettingsEnabled() ? `${adminWebUrl()}/connections` : process.env.CONNECTIONS_WEB_URL ?? 'http://localhost:5173/connections'; },
   registryRefreshSeconds: config.gateway.registryRefreshSeconds,
   internalApiToken: process.env.INTERNAL_API_TOKEN ?? config.auth.internalApiToken,
 };
@@ -44,8 +44,16 @@ export async function refreshServerConfigs(): Promise<void> {
     });
     if (!response.ok) throw new Error(`registry returned HTTP ${response.status}`);
     const body = (await response.json()) as {
+      system_settings?: SystemSettings;
       servers?: Array<{ name: string; authMode?: 'none' | 'api_key' | 'oauth'; instances: Array<{ id: string; url: string }> }>;
     };
+    if (databaseSettingsEnabled() || body.system_settings) {
+      if (!body.system_settings) throw new Error('registry has no system settings');
+      const settings = body.system_settings.public_url === null
+        ? { public_url: null, upstream_hosts: [] } : normalizeSystemSettings(body.system_settings);
+      if (!settings) throw new Error('registry has invalid system settings');
+      applySystemSettings(settings);
+    }
     if (!Array.isArray(body.servers)) throw new Error('registry response has no servers array');
     const next = new Map<string, McpServerConfig>();
     for (const server of body.servers) {

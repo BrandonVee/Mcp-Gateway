@@ -15,7 +15,7 @@ export interface TokenRouteDeps {
 
 export function createTokenRouter(deps: TokenRouteDeps): Hono {
   const router = new Hono();
-  const { keys, issuer, defaultAudience } = deps;
+  const { keys, defaultAudience } = deps;
   const ttl = Number.isFinite(deps.accessTokenTtlSeconds) && deps.accessTokenTtlSeconds > 0 ? deps.accessTokenTtlSeconds : 3600;
 
   async function issueAccessToken(sub: string, scope: string, clientId: string, resource?: string): Promise<string> {
@@ -24,7 +24,7 @@ export function createTokenRouter(deps: TokenRouteDeps): Hono {
     const mcpServers = authorization.role === 'admin' ? ['*'] : authorization.servers;
     return new SignJWT({ scope, client_id: clientId, uid: authorization.id, role: authorization.role, mcp_servers: mcpServers })
       .setProtectedHeader({ alg: 'RS256', kid: keys.kid, typ: 'JWT' })
-      .setIssuer(issuer)
+      .setIssuer(deps.issuer)
       .setAudience(resource ?? defaultAudience)
       .setSubject(sub)
       .setIssuedAt()

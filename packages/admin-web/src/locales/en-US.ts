@@ -1,5 +1,21 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
+  "settings.eyebrow": "Control plane / System settings",
+  "settings.title": "System settings",
+  "settings.description": "Manage public access and trusted upstreams without editing deployment files.",
+  "settings.publicUrl": "Public URL",
+  "settings.publicUrlHelp": "Enter the external HTTPS origin served by Nginx. OAuth, MCP endpoints, and personal connections share this address.",
+  "settings.upstreamHosts": "Trusted upstream hosts",
+  "settings.upstreamHelp": "One hostname per line, or comma-separated, without a scheme, port, or path. Add a service host before registering it.",
+  "settings.setupRequired": "Complete system setup",
+  "settings.setupDetail": "Save a public URL to enable OAuth and MCP access.",
+  "settings.environmentManaged": "This deployment manages URLs through configuration files. One-command deployments can save settings here.",
+  "settings.save": "Save settings",
+  "settings.saved": "System settings saved",
+  "settings.invalid": "Enter a valid HTTPS origin and upstream hostnames without schemes, ports, or paths.",
+  "settings.addressRequired": "Enter a public URL",
+  "settings.reauthorize": "Changing the public URL requires existing MCP clients to authorize again. Settings persist in the database across restarts.",
+
   "common.operationFailed": "Operation failed",
   "common.dataRefreshed": "Data refreshed",
   "common.refreshFailed": "Refresh failed",

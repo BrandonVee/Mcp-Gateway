@@ -104,13 +104,15 @@ export function validateProductionRuntime(
 
   if (!env.CONFIG_FILE) fail('CONFIG_FILE must select a deployment-specific configuration file');
   const upstreamHosts = allowedUpstreamHosts(env);
-  if (upstreamHosts.size === 0 || [...upstreamHosts].some((host) => !/^[a-z0-9][a-z0-9.-]*$/.test(host) || host.includes('..'))) {
+  if ((!databaseSettingsEnabled(env) && upstreamHosts.size === 0) || [...upstreamHosts].some((host) => !/^[a-z0-9][a-z0-9.-]*$/.test(host) || host.includes('..'))) {
     fail('MCP_UPSTREAM_ALLOWED_HOSTS must list trusted upstream hostnames');
   }
-  requireHttps('auth.issuer', config.auth.issuer);
-  requireHttps('gateway.resourceBaseUrl', config.gateway.resourceBaseUrl);
-  if (new URL(config.auth.issuer).origin !== config.auth.issuer.replace(/\/$/, '')) fail('auth.issuer must be an HTTPS origin without a path');
-  if (new URL(config.gateway.resourceBaseUrl).origin !== config.gateway.resourceBaseUrl.replace(/\/$/, '')) fail('gateway.resourceBaseUrl must be an HTTPS origin without a path');
+  if (!databaseSettingsEnabled(env)) {
+    requireHttps('auth.issuer', config.auth.issuer);
+    requireHttps('gateway.resourceBaseUrl', config.gateway.resourceBaseUrl);
+    if (new URL(config.auth.issuer).origin !== config.auth.issuer.replace(/\/$/, '')) fail('auth.issuer must be an HTTPS origin without a path');
+    if (new URL(config.gateway.resourceBaseUrl).origin !== config.gateway.resourceBaseUrl.replace(/\/$/, '')) fail('gateway.resourceBaseUrl must be an HTTPS origin without a path');
+  }
   const internalToken = requireSecret('INTERNAL_API_TOKEN');
   const brokerToken = requireSecret('CREDENTIAL_BROKER_TOKEN');
   if (internalToken === brokerToken) fail('INTERNAL_API_TOKEN and CREDENTIAL_BROKER_TOKEN must differ');
@@ -123,12 +125,60 @@ export function validateProductionRuntime(
     if (decodeURIComponent(databaseUrl.password) === 'mcp-dev-password') fail('DATABASE_URL still contains the development password');
     if (!/^[0-9a-fA-F]{64}$/.test(env.CREDENTIAL_ENCRYPT_KEY ?? '')) fail('CREDENTIAL_ENCRYPT_KEY must be a 32-byte hex key');
     if (env.CREDENTIAL_ENCRYPT_KEY === developmentEncryptionKey) fail('CREDENTIAL_ENCRYPT_KEY must not use the development default');
-    requireHttps('ADMIN_WEB_URL', env.ADMIN_WEB_URL);
+    if (!databaseSettingsEnabled(env)) requireHttps('ADMIN_WEB_URL', env.ADMIN_WEB_URL);
   } else {
     if (!env.REDIS_URL) fail('REDIS_URL must be supplied via the environment');
-    requireHttps('CONNECTIONS_WEB_URL', env.CONNECTIONS_WEB_URL);
+    if (!databaseSettingsEnabled(env)) requireHttps('CONNECTIONS_WEB_URL', env.CONNECTIONS_WEB_URL);
   }
   let redisUrl: URL;
   try { redisUrl = new URL(env.REDIS_URL ?? ''); } catch { return fail('REDIS_URL must be a Redis URL'); }
   if (!['redis:', 'rediss:'].includes(redisUrl.protocol) || !redisUrl.hostname) fail('REDIS_URL must be a Redis URL');
+}
+
+export interface SystemSettings {
+  public_url: string | null;
+  upstream_hosts: string[];
+}
+let storedSettingsActive = false;
+let systemSettings: SystemSettings = { public_url: null, upstream_hosts: [] };
+export function databaseSettingsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.SYSTEM_CONFIG_MODE === 'database' || (env === process.env && env.SYSTEM_CONFIG_MODE !== 'file' && storedSettingsActive);
+}
+export function currentSystemSettings(): SystemSettings { return systemSettings; }
+export function applySystemSettings(value: SystemSettings): void {
+  storedSettingsActive = Boolean(value.public_url);
+  systemSettings = value;
+  if (databaseSettingsEnabled()) process.env.MCP_UPSTREAM_ALLOWED_HOSTS = value.upstream_hosts.join(',');
+}
+export function systemConfigured(): boolean { return !databaseSettingsEnabled() || Boolean(systemSettings.public_url); }
+export function authIssuer(): string {
+  return databaseSettingsEnabled() ? systemSettings.public_url ?? '' : loadPlatformConfig().auth.issuer;
+}
+export function gatewayPublicUrl(): string {
+  return databaseSettingsEnabled() ? systemSettings.public_url ?? '' : loadPlatformConfig().gateway.resourceBaseUrl;
+}
+export function adminWebUrl(): string {
+  return databaseSettingsEnabled() ? systemSettings.public_url ?? '/' : process.env.ADMIN_WEB_URL ?? 'http://localhost:5173';
+}
+export function normalizeSystemSettings(value: unknown, production = process.env.NODE_ENV === 'production'): SystemSettings | null {
+  if (!value || typeof value !== 'object') return null;
+  const input = value as Record<string, unknown>;
+  if (typeof input.public_url !== 'string' || !Array.isArray(input.upstream_hosts)) return null;
+  try {
+    const url = new URL(input.public_url.trim());
+    if ((production ? url.protocol !== 'https:' : !['http:', 'https:'].includes(url.protocol))
+      || url.username || url.password || url.search || url.hash || url.pathname !== '/') return null;
+    if (input.upstream_hosts.length > 200 || !input.upstream_hosts.every((host) => typeof host === 'string'
+      && host.length <= 253 && /^[a-z0-9][a-z0-9.-]*$/i.test(host) && !host.includes('..'))) return null;
+    return { public_url: url.origin, upstream_hosts: [...new Set((input.upstream_hosts as string[]).map((host) => host.toLowerCase()))].sort() };
+  } catch { return null; }
+}
+
+/** Before initial setup, accept only the browser origin of the requested host. */
+export function bootstrapOriginAllowed(origin: string, host: string | undefined, production = process.env.NODE_ENV === 'production'): boolean {
+  try {
+    const url = new URL(origin);
+    return Boolean(host && url.host.toLowerCase() === host.toLowerCase() && url.origin === origin
+      && (production ? url.protocol === 'https:' : ['http:', 'https:'].includes(url.protocol)));
+  } catch { return false; }
 }

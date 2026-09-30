@@ -3,7 +3,7 @@ import { getCookie, setCookie } from 'hono/cookie';
 import { getClient, isRedirectUriAllowed } from './clients.js';
 import { verifyUser, createLoginSession, getSessionUser } from './db.js';
 import { saveAuthCode } from './stores.js';
-import { loadPlatformConfig } from '@mcp/shared';
+import { authIssuer } from '@mcp/shared';
 import { limitLoginAccount } from './rate-limit.js';
 
 /**
@@ -16,7 +16,6 @@ export const authorizeRouter = new Hono();
 
 const SCOPE_RE = /^[\x21\x23-\x5B\x5D-\x7E\s]*$/;
 const SESSION_COOKIE = 'auth_session';
-const SECURE_COOKIE = loadPlatformConfig().auth.issuer.startsWith('https://');
 type AuthPageLanguage = 'zh-CN' | 'en-US';
 type LoginError = 'missingCredentials' | 'invalidCredentials';
 
@@ -109,7 +108,7 @@ authorizeRouter.post('/authorize/submit', async (c: Context) => {
     setCookie(c, SESSION_COOKIE, await createLoginSession(sub), {
       httpOnly: true,
       sameSite: 'Lax',
-      secure: SECURE_COOKIE,
+      secure: authIssuer().startsWith('https://'),
       path: '/',
       maxAge: 7 * 24 * 3600,
     });

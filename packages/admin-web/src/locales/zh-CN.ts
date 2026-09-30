@@ -1,5 +1,21 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
+  "settings.eyebrow": "控制平面 / 系统设置",
+  "settings.title": "系统设置",
+  "settings.description": "设置系统对外访问地址与可信上游，无需修改部署文件。",
+  "settings.publicUrl": "对外访问地址",
+  "settings.publicUrlHelp": "填写 Nginx 对外提供的 HTTPS 根地址。OAuth、MCP 入口和个人连接中心会统一使用这个地址。",
+  "settings.upstreamHosts": "可信上游主机",
+  "settings.upstreamHelp": "每行一个主机名，也可用逗号分隔，不带协议、端口或路径。接入服务前将其主机名加入此列表。",
+  "settings.setupRequired": "请先完成系统设置",
+  "settings.setupDetail": "保存对外访问地址后，OAuth 登录与 MCP 接入才会启用。",
+  "settings.environmentManaged": "当前部署使用配置文件管理访问地址；一键部署模式支持在此保存系统配置。",
+  "settings.save": "保存设置",
+  "settings.saved": "系统设置已保存",
+  "settings.invalid": "请填写有效的 HTTPS 根地址，以及不含协议、端口或路径的上游主机名。",
+  "settings.addressRequired": "请输入对外访问地址",
+  "settings.reauthorize": "更换访问地址后，已有 MCP 客户端需要重新授权。配置保存在数据库中，重启后仍然有效。",
+
   "common.operationFailed": "操作失败",
   "common.dataRefreshed": "数据已刷新",
   "common.refreshFailed": "刷新失败",

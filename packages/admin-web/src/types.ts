@@ -67,7 +67,7 @@ export interface AdminConnection {
   updated_at: number;
 }
 
-export type View = "overview" | "users" | "servers" | "credentials" | "monitoring";
+export type View = "overview" | "users" | "servers" | "credentials" | "monitoring" | "settings";
 
 export type DialogState =
   | { type: null }
@@ -115,4 +115,11 @@ export interface ConnectionServer {
 export interface AddInstanceInput {
   id?: string;
   url: string;
+}
+
+export interface SystemSettings {
+  managed: boolean;
+  configured: boolean;
+  public_url: string | null;
+  upstream_hosts: string[];
 }
