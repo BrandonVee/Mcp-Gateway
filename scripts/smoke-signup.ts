@@ -59,7 +59,8 @@ async function main() {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ client_name: 'WorkBuddy', redirect_uris: [redirectUri] }),
     });
-    assert.equal(clientResponse.status, 201);
+    assert.equal(clientResponse.status, 201,
+      clientResponse.status === 201 ? undefined : await clientResponse.text());
     const client = await clientResponse.json();
     const verifier = randomBytes(32).toString('base64url');
     const q = new URLSearchParams({
