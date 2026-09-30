@@ -1,0 +1,253 @@
+<div id="mcp-monitor-design">
+  <style>
+    #mcp-monitor-design{color-scheme:light dark;--mg-bg:light-dark(#f4f7fb,#070b13);--mg-panel:light-dark(#ffffff,#0d1422);--mg-text:light-dark(#19293e,#e4edf8);--mg-muted:light-dark(#52677f,#9aaec8);--mg-border:light-dark(#dce4ef,#23324a);--mg-blue:light-dark(#176bd4,#54a5ff);--mg-soft:light-dark(#eaf3ff,#152940);--mg-green:light-dark(#187947,#65d5a0);--mg-red:light-dark(#ba3246,#ff8795);--mg-amber:light-dark(#946208,#efc274);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;color:var(--mg-text)}
+    #mcp-monitor-design *{box-sizing:border-box}
+    #mcp-monitor-design .mg-window{display:grid;grid-template-columns:155px minmax(0,1fr);background:var(--mg-bg);border:1px solid var(--mg-border);border-radius:12px;overflow:hidden}
+    #mcp-monitor-design .mg-sidebar{background:var(--mg-panel);border-right:1px solid var(--mg-border);padding:20px 12px;display:flex;flex-direction:column;gap:8px}
+    #mcp-monitor-design .mg-brand{font-size:17px;font-weight:600;padding:0 8px 20px;display:flex;align-items:center;gap:8px}
+    #mcp-monitor-design .mg-nav{display:flex;align-items:center;gap:9px;padding:10px;border-radius:7px;color:var(--mg-muted)}
+    #mcp-monitor-design .mg-current{background:var(--mg-soft);color:var(--mg-blue)}
+    #mcp-monitor-design .mg-bottom{margin-top:auto;padding-top:40px}
+    #mcp-monitor-design .mg-main{min-width:0;padding:23px}
+    #mcp-monitor-design .mg-header,#mcp-monitor-design .mg-toolbar,#mcp-monitor-design .mg-health,#mcp-monitor-design .mg-panel-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+    #mcp-monitor-design h2{font-size:21px;margin:0;font-weight:600}
+    #mcp-monitor-design h3{font-size:14px;margin:0;font-weight:500}
+    #mcp-monitor-design .mg-muted{color:var(--mg-muted);font-size:12px}
+    #mcp-monitor-design .mg-preview{font-size:12px;color:var(--mg-amber);border:1px solid var(--mg-border);padding:4px 8px;border-radius:5px}
+    #mcp-monitor-design .mg-health{justify-content:flex-start;gap:15px;padding:14px 0;font-size:12px;color:var(--mg-muted)}
+    #mcp-monitor-design .mg-health span{display:flex;align-items:center;gap:5px}
+    #mcp-monitor-design .mg-dot{width:6px;height:6px;border-radius:50%;background:var(--mg-green)}
+    #mcp-monitor-design .mg-toolbar{margin:4px 0 14px;justify-content:flex-end}
+    #mcp-monitor-design label{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--mg-muted)}
+    #mcp-monitor-design select,#mcp-monitor-design button{font:inherit;color:var(--mg-text);background:var(--mg-panel);border:1px solid var(--mg-border);border-radius:6px;padding:6px 10px}
+    #mcp-monitor-design select{max-width:100%}
+    #mcp-monitor-design .mg-tabs{display:flex;gap:20px;flex-wrap:wrap;border-bottom:1px solid var(--mg-border);margin-bottom:18px}
+    #mcp-monitor-design .mg-tabs button{border:0;border-radius:0;background:transparent;padding:8px 0 11px;color:var(--mg-muted);border-bottom:2px solid transparent}
+    #mcp-monitor-design .mg-tabs button[aria-selected="true"]{color:var(--mg-blue);border-bottom-color:var(--mg-blue)}
+    #mcp-monitor-design .mg-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+    #mcp-monitor-design .mg-metric,#mcp-monitor-design .mg-panel{background:var(--mg-panel);border:1px solid var(--mg-border);border-radius:8px;padding:14px}
+    #mcp-monitor-design .mg-metric strong{display:block;font-size:25px;font-weight:500;letter-spacing:-.5px;margin:6px 0;font-variant-numeric:tabular-nums}
+    #mcp-monitor-design .mg-metric small{font-size:11px;color:var(--mg-muted)}
+    #mcp-monitor-design .mg-panel{margin-top:14px}
+    #mcp-monitor-design .mg-chart{width:100%;height:190px;margin-top:10px}
+    #mcp-monitor-design .mg-chart svg{display:block;width:100%;height:190px}
+    #mcp-monitor-design .mg-chart text{fill:var(--mg-muted);font-size:11px;font-family:inherit}
+    #mcp-monitor-design .mg-chart .mg-mark{fill:var(--mg-blue);transition:y .25s ease,height .25s ease}
+    #mcp-monitor-design .mg-chart .mg-grid{stroke:var(--mg-border);stroke-width:1}
+    #mcp-monitor-design .mg-split{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px}
+    #mcp-monitor-design .mg-rank-row{display:grid;grid-template-columns:90px minmax(0,1fr) 55px;gap:10px;align-items:center;margin-top:16px;font-size:12px}
+    #mcp-monitor-design .mg-track{height:6px;background:var(--mg-soft);border-radius:3px;overflow:hidden}
+    #mcp-monitor-design .mg-track span{display:block;background:var(--mg-blue);height:100%;transition:width .25s}
+    #mcp-monitor-design .mg-number{text-align:right;font-variant-numeric:tabular-nums}
+    #mcp-monitor-design .mg-alert-line{margin-top:14px;font-size:12px;display:flex;gap:8px;align-items:flex-start}
+    #mcp-monitor-design .mg-warn{color:var(--mg-amber)}
+    #mcp-monitor-design .mg-table-wrap{overflow-x:auto}
+    #mcp-monitor-design table{width:100%;border-collapse:collapse;font-size:12px}
+    #mcp-monitor-design th{font-weight:400;color:var(--mg-muted);text-align:left;padding:11px 8px;background:var(--mg-panel)}
+    #mcp-monitor-design td{border-top:1px solid var(--mg-border);padding:11px 8px;vertical-align:top}
+    #mcp-monitor-design .mg-table-wrap table{min-width:560px}
+    #mcp-monitor-design .mg-status{color:var(--mg-green)}
+    #mcp-monitor-design .mg-failed{color:var(--mg-red)}
+    #mcp-monitor-design .mg-pending{color:var(--mg-amber)}
+    #mcp-monitor-design .mg-link{border:0;background:transparent;color:var(--mg-blue);padding:0;font-size:12px;text-align:left}
+    #mcp-monitor-design .mg-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:12px;font-size:12px}
+    #mcp-monitor-design .mg-detail-grid strong{display:block;font-weight:400;overflow-wrap:anywhere;margin-top:3px}
+    #mcp-monitor-design .mg-footnote{font-size:11px;color:var(--mg-muted);margin-top:13px}
+    #mcp-monitor-design .mg-title-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+    #mcp-monitor-design .mg-empty{padding:24px;text-align:center;color:var(--mg-muted)}
+    #mcp-monitor-design [hidden]{display:none!important}
+    #mcp-monitor-design .mg-icons{width:16px;height:16px;flex-shrink:0}
+    @media(prefers-reduced-motion:reduce){#mcp-monitor-design .mg-mark,#mcp-monitor-design .mg-track span{transition:none}}
+    @media(max-width:760px){#mcp-monitor-design .mg-window{grid-template-columns:1fr}#mcp-monitor-design .mg-sidebar{flex-direction:row;align-items:center;border-right:0;border-bottom:1px solid var(--mg-border);padding:10px 15px}#mcp-monitor-design .mg-brand{padding:0;font-size:15px}#mcp-monitor-design .mg-sidebar .mg-nav{display:none}#mcp-monitor-design .mg-sidebar .mg-current{display:flex;margin-left:auto}#mcp-monitor-design .mg-bottom{display:none}#mcp-monitor-design .mg-main{padding:16px}#mcp-monitor-design .mg-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#mcp-monitor-design .mg-split{grid-template-columns:1fr}#mcp-monitor-design .mg-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:420px){#mcp-monitor-design .mg-toolbar{justify-content:flex-start}#mcp-monitor-design .mg-tabs{gap:14px}#mcp-monitor-design .mg-health{gap:9px}#mcp-monitor-design .mg-metric{padding:11px}#mcp-monitor-design .mg-metric strong{font-size:23px}#mcp-monitor-design .mg-detail-grid{grid-template-columns:1fr}}
+    @media(pointer:coarse){#mcp-monitor-design select,#mcp-monitor-design button{min-height:44px}#mcp-monitor-design select{font-size:16px}}
+  </style>
+  <div class="mg-window">
+    <aside class="mg-sidebar" aria-label="应用导航示意">
+      <div class="mg-brand"><i data-lucide="blocks" class="mg-icons" aria-hidden="true"></i>MCP Gateway</div>
+      <span class="mg-nav"><i data-lucide="server" class="mg-icons" aria-hidden="true"></i>服务管理</span>
+      <span class="mg-nav"><i data-lucide="users" class="mg-icons" aria-hidden="true"></i>用户管理</span>
+      <span class="mg-nav"><i data-lucide="key-round" class="mg-icons" aria-hidden="true"></i>访问凭证</span>
+      <span class="mg-nav mg-current"><i data-lucide="activity" class="mg-icons" aria-hidden="true"></i>监控</span>
+      <div class="mg-bottom"><span class="mg-nav"><i data-lucide="settings" class="mg-icons" aria-hidden="true"></i>系统设置</span></div>
+    </aside>
+    <main class="mg-main">
+      <div class="mg-header"><div><h2>监控</h2><div class="mg-muted">调用统计与运行状态</div></div><span class="mg-preview">设计预览 · 示例数据</span></div>
+      <div class="mg-health"><span><b class="mg-dot"></b>网关正常</span><span><b class="mg-dot"></b>数据库正常</span><span><b class="mg-dot"></b>Redis 正常</span><span>采集延迟 2 秒</span></div>
+      <div class="mg-toolbar">
+        <label>服务<select id="mg-service" class="cursor-interaction"><option value="all">全部服务</option><option value="hscode">hscode</option></select></label>
+        <label>时间<select id="mg-range" class="cursor-interaction"><option value="day">最近 24 小时</option><option value="week">最近 7 天</option></select></label>
+      </div>
+      <div class="mg-tabs" role="tablist" aria-label="监控内容">
+        <button id="mg-tab-overview" type="button" role="tab" aria-controls="mg-overview" aria-selected="true" data-tab="overview" class="cursor-interaction">总览</button>
+        <button id="mg-tab-logs" type="button" role="tab" aria-controls="mg-logs" aria-selected="false" data-tab="logs" class="cursor-interaction">调用日志</button>
+        <button id="mg-tab-stats" type="button" role="tab" aria-controls="mg-stats" aria-selected="false" data-tab="stats" class="cursor-interaction">使用统计</button>
+        <button id="mg-tab-alerts" type="button" role="tab" aria-controls="mg-alerts" aria-selected="false" data-tab="alerts" class="cursor-interaction">告警</button>
+        <button id="mg-tab-audit" type="button" role="tab" aria-controls="mg-audit" aria-selected="false" data-tab="audit" class="cursor-interaction">操作审计</button>
+      </div>
+      <section id="mg-overview" role="tabpanel" aria-labelledby="mg-tab-overview">
+        <div class="mg-metrics" aria-live="polite">
+          <div class="mg-metric"><span class="mg-muted">工具调用次数</span><strong id="mg-total">12,480</strong><small>按逻辑调用计数</small></div>
+          <div class="mg-metric"><span class="mg-muted">已完成调用成功率</span><strong>98.6%</strong><small>包含工具执行结果</small></div>
+          <div class="mg-metric"><span class="mg-muted">P95 工具耗时</span><strong id="mg-p95">420 ms</strong><small>已识别完成结果的调用</small></div>
+          <div class="mg-metric"><span class="mg-muted">活跃用户</span><strong id="mg-users">43</strong><small>区间内去重</small></div>
+        </div>
+        <div class="mg-panel"><div class="mg-panel-head"><h3>工具调用趋势</h3><span id="mg-trend-unit" class="mg-muted">按小时汇总 · 次</span></div><div id="mg-chart" class="mg-chart"></div></div>
+        <div class="mg-split">
+          <div class="mg-panel"><div class="mg-panel-head"><h3>服务调用分布</h3><button type="button" class="mg-link cursor-interaction" data-open="stats">查看统计</button></div><div id="mg-ranks"></div></div>
+          <div class="mg-panel"><div class="mg-panel-head"><h3>需要关注</h3><button type="button" class="mg-link cursor-interaction" data-open="alerts">查看告警</button></div><div class="mg-alert-line"><i data-lucide="triangle-alert" class="mg-icons mg-warn" aria-hidden="true"></i><span>hscode 上游错误率升高<br><span class="mg-muted">最近 5 分钟 · 8 / 100 次失败</span></span></div><div class="mg-alert-line"><i data-lucide="radio" class="mg-icons" aria-hidden="true"></i><span>当前连接 12 · 工具执行中 3<br><span class="mg-muted">长连接与工具耗时分别统计</span></span></div></div>
+        </div>
+      </section>
+      <section id="mg-logs" role="tabpanel" aria-labelledby="mg-tab-logs" hidden>
+        <div class="mg-panel-head"><h3>最近工具调用</h3><label>结果<select id="mg-outcome" class="cursor-interaction"><option value="all">全部结果</option><option value="failed">失败</option><option value="success">成功</option><option value="pending">执行中</option></select></label></div>
+        <div class="mg-panel mg-table-wrap"><table><thead><tr><th>时间</th><th>用户 / 客户端</th><th>服务 / 工具</th><th>结果</th><th>耗时</th><th>请求</th></tr></thead><tbody id="mg-log-rows"></tbody></table></div>
+        <div id="mg-log-detail" class="mg-panel" hidden><div class="mg-title-row"><h3>调用详情</h3><button type="button" id="mg-close-detail" class="mg-link cursor-interaction">关闭</button></div><div id="mg-detail-fields" class="mg-detail-grid"></div><div class="mg-footnote">默认仅记录元数据，不记录工具参数、返回内容和访问凭证。</div></div>
+        <div class="mg-footnote">最新 6 条示例 · 时间显示为 Asia/Shanghai · 失败详情可查看上游尝试记录</div>
+      </section>
+      <section id="mg-stats" role="tabpanel" aria-labelledby="mg-tab-stats" hidden>
+        <div class="mg-panel-head"><h3>调用排行</h3><label>统计维度<select id="mg-dimension" class="cursor-interaction"><option value="service">服务</option><option value="tool">工具</option><option value="user">用户</option></select></label></div>
+        <div class="mg-panel mg-table-wrap"><table><thead><tr><th id="mg-dimension-name">服务</th><th class="mg-number">调用次数</th><th class="mg-number">失败次数</th><th class="mg-number">P95 耗时</th><th class="mg-number">占比</th></tr></thead><tbody id="mg-stats-rows"></tbody></table></div>
+        <div class="mg-footnote">用户统计仅管理员可见 · 工具名称来自请求元数据 · 此处名称均为示例</div>
+      </section>
+      <section id="mg-alerts" role="tabpanel" aria-labelledby="mg-tab-alerts" hidden>
+        <div class="mg-panel-head"><h3>告警事件</h3><span class="mg-muted">规则按服务配置 · 同类告警合并</span></div>
+        <div class="mg-panel"><div class="mg-panel-head"><div><span class="mg-warn">● 待处理</span> hscode 上游错误率升高</div><button id="mg-ack" type="button" class="cursor-interaction">标记已知晓</button></div><div class="mg-detail-grid"><div><span class="mg-muted">触发条件</span><strong>5 分钟失败率 &gt; 5%</strong></div><div><span class="mg-muted">最低样本量</span><strong>20 次调用</strong></div><div><span class="mg-muted">当前观测</span><strong>8 / 100 次失败</strong></div></div><div id="mg-ack-state" class="mg-footnote" aria-live="polite">首次触发 14:26 · 最近触发 14:31</div></div>
+        <div class="mg-panel mg-table-wrap"><table><thead><tr><th>规则</th><th>条件</th><th>状态</th></tr></thead><tbody><tr><td>上游不可用</td><td>连续 3 次健康探测失败</td><td class="mg-status">正常</td></tr><tr><td>工具调用慢</td><td>5 分钟 P95 超过服务阈值</td><td class="mg-status">正常</td></tr><tr><td>采集异常</td><td>队列积压 / 事件丢失</td><td class="mg-status">正常</td></tr></tbody></table></div>
+      </section>
+      <section id="mg-audit" role="tabpanel" aria-labelledby="mg-tab-audit" hidden>
+        <div class="mg-panel-head"><h3>管理员操作记录</h3><span class="mg-muted">保留现有审计功能</span></div>
+        <div class="mg-panel mg-table-wrap"><table><thead><tr><th>时间</th><th>管理员</th><th>操作</th><th>对象</th></tr></thead><tbody><tr><td>14:20:16</td><td>admin</td><td>修改服务访问权限</td><td>hscode</td></tr><tr><td>10:04:32</td><td>admin</td><td>更新系统设置</td><td>系统配置</td></tr></tbody></table></div>
+      </section>
+      <div class="mg-footnote">统计刷新间隔 10 秒 · 明细建议保留 14 天 · 汇总建议保留 1 年</div>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('mcp-monitor-design');
+      const $ = id => root.querySelector('#' + id);
+      const validTabs = ['overview', 'logs', 'stats', 'alerts', 'audit'];
+      const state = { tab: 'overview', service: 'all', range: 'day', outcome: 'all', dimension: 'service', acknowledged: false };
+      const hourly = [180,120,96,72,60,96,240,600,840,960,780,660,600,720,840,1260,1080,840,720,540,420,300,240,216];
+      const daily = [10020,11100,10560,13200,12540,11880,hourly.reduce((a,b) => a+b,0)];
+      const logs = [
+        {id:'demo-6f92',time:'14:31:08',user:'lin',client:'WorkBuddy',service:'hscode',tool:'query_hscode',outcome:'failed',duration:'1,205 ms',http:'200',error:'工具执行错误',attempts:'1 次',result:'result.isError = true'},
+        {id:'demo-5a31',time:'14:31:06',user:'chen',client:'Claude',service:'hscode',tool:'query_hscode',outcome:'success',duration:'186 ms',http:'200',error:'—',attempts:'1 次',result:'工具执行成功'},
+        {id:'demo-92bc',time:'14:31:05',user:'lin',client:'WorkBuddy',service:'weather',tool:'get_weather',outcome:'success',duration:'302 ms',http:'200',error:'—',attempts:'1 次',result:'工具执行成功'},
+        {id:'demo-44de',time:'14:31:03',user:'wang',client:'Cursor',service:'hscode',tool:'get_details',outcome:'pending',duration:'—',http:'200',error:'—',attempts:'1 次',result:'等待工具完成结果'},
+        {id:'demo-c807',time:'14:31:01',user:'chen',client:'Claude',service:'docs',tool:'search_docs',outcome:'failed',duration:'15,002 ms',http:'—',error:'上游响应头超时',attempts:'1 次',result:'未收到工具结果'},
+        {id:'demo-7d14',time:'14:30:58',user:'wang',client:'Cursor',service:'hscode',tool:'get_details',outcome:'success',duration:'94 ms',http:'200',error:'—',attempts:'1 次',result:'工具执行成功'}
+      ];
+      const format = value => Math.round(value).toLocaleString('en-US');
+      function persist() {
+        if (window.openai && window.openai.setWidgetState) window.openai.setWidgetState({modelContent:{monitoringDesign:{tab:state.tab,service:state.service,range:state.range,dimension:state.dimension}},privateContent:{...state}}).catch(() => {});
+      }
+      function showTab(tab, save=true) {
+        state.tab = validTabs.includes(tab) ? tab : 'overview';
+        validTabs.forEach(name => {
+          $('mg-' + name).hidden = name !== state.tab;
+          $('mg-tab-' + name).setAttribute('aria-selected', String(name === state.tab));
+        });
+        if (state.tab === 'overview') drawChart();
+        if (save) persist();
+      }
+      function values() { return (state.range === 'day' ? hourly : daily).map(v => Math.round(v * (state.service === 'hscode' ? .7 : 1))); }
+      function total() { return values().reduce((a,b) => a+b,0); }
+      function rankings() {
+        if (state.dimension === 'user') return [['lin',.28,470],['chen',.22,380],['wang',.16,320],['其他用户',.34,430]];
+        if (state.dimension === 'tool') return state.service === 'hscode' ? [['query_hscode',.65,460],['get_details',.35,240]] : [['hscode / query_hscode',.455,460],['hscode / get_details',.245,240],['weather / get_weather',.2,680],['docs / search_docs',.1,920]];
+        return state.service === 'hscode' ? [['hscode',1,420]] : [['hscode',.7,420],['weather',.2,680],['docs',.1,920]];
+      }
+      function render() {
+        $('mg-service').value = state.service;
+        $('mg-range').value = state.range;
+        $('mg-outcome').value = state.outcome;
+        $('mg-dimension').value = state.dimension;
+        $('mg-total').textContent = format(total());
+        $('mg-p95').textContent = state.service === 'hscode' ? '420 ms' : '680 ms';
+        $('mg-users').textContent = String(state.range === 'week' ? (state.service === 'all' ? 89 : 61) : (state.service === 'all' ? 43 : 31));
+        $('mg-trend-unit').textContent = state.range === 'day' ? '按小时汇总 · 次' : '按天汇总 · 次';
+        const serviceRows = state.service === 'all' ? [['hscode',.7],['weather',.2],['docs',.1]] : [['hscode',1]];
+        $('mg-ranks').innerHTML = serviceRows.map(([name,share]) => '<div class="mg-rank-row"><span>' + name + '</span><div class="mg-track"><span style="width:' + share*100 + '%"></span></div><span class="mg-number">' + format(total()*share) + '</span></div>').join('');
+        $('mg-dimension-name').textContent = {service:'服务',tool:'工具',user:'用户'}[state.dimension];
+        $('mg-stats-rows').innerHTML = rankings().map(([name,share,p95]) => '<tr><td>' + name + '</td><td class="mg-number">' + format(total()*share) + '</td><td class="mg-number">' + format(total()*share*.014) + '</td><td class="mg-number">' + p95 + ' ms</td><td class="mg-number">' + (share*100).toFixed(1) + '%</td></tr>').join('');
+        const filtered = logs.filter(log => (state.service === 'all' || log.service === state.service) && (state.outcome === 'all' || log.outcome === state.outcome));
+        const names = {success:'成功',failed:'失败',pending:'执行中'};
+        $('mg-log-rows').innerHTML = filtered.map(log => '<tr><td>' + log.time + '</td><td>' + log.user + '<br><span class="mg-muted">' + log.client + '</span></td><td>' + log.service + '<br><span class="mg-muted">' + log.tool + '</span></td><td class="mg-' + (log.outcome === 'success' ? 'status' : log.outcome) + '">' + names[log.outcome] + '</td><td class="mg-number">' + log.duration + '</td><td><button type="button" class="mg-link cursor-interaction" data-request="' + log.id + '">' + log.id + '</button></td></tr>').join('') || '<tr><td colspan="6" class="mg-empty">暂无匹配的示例</td></tr>';
+        $('mg-ack').textContent = state.acknowledged ? '已知晓' : '标记已知晓';
+        $('mg-ack').disabled = state.acknowledged;
+        $('mg-ack-state').textContent = state.acknowledged ? '已知晓 · 示例交互，未修改服务器数据' : '首次触发 14:26 · 最近触发 14:31';
+        drawChart();
+      }
+      function drawChart() {
+        const container = $('mg-chart');
+        const width = container.clientWidth;
+        if (!width) return;
+        const data = values();
+        const height = 190, left = 48, right = 12, top = 22, bottom = 34;
+        const plotWidth = width-left-right, plotHeight = height-top-bottom;
+        const ceiling = Math.ceil(Math.max(...data)*1.1/100)*100;
+        const barWidth = plotWidth/data.length;
+        let svg = container.querySelector('svg');
+        if (!svg || svg.querySelectorAll('.mg-mark').length !== data.length) {
+          container.innerHTML = '<svg role="img" aria-label="示例工具调用次数趋势"><title>工具调用次数趋势，示例数据</title><g class="mg-chart-grid"></g><g class="mg-chart-bars"></g><g class="mg-chart-labels"></g></svg>';
+          svg = container.querySelector('svg');
+          const bars = svg.querySelector('.mg-chart-bars');
+          data.forEach(() => {
+            const bar = document.createElementNS('http://www.w3.org/2000/svg','rect');
+            bar.setAttribute('class','mg-mark');
+            bars.appendChild(bar);
+          });
+        }
+        svg.setAttribute('viewBox','0 0 '+width+' '+height);
+        svg.querySelector('.mg-chart-grid').innerHTML = [0,.5,1].map(t => {
+          const y = top+plotHeight*(1-t);
+          return '<line class="mg-grid" x1="'+left+'" x2="'+(width-right)+'" y1="'+y+'" y2="'+y+'"/><text x="'+(left-7)+'" y="'+(y+4)+'" text-anchor="end">'+format(ceiling*t)+'</text>';
+        }).join('');
+        const labels = state.range === 'day' ? ['00:00','08:00','16:00','23:00'] : ['09/24','09/26','09/28','09/30'];
+        const indices = state.range === 'day' ? [0,8,16,23] : [0,2,4,6];
+        svg.querySelector('.mg-chart-labels').innerHTML = labels.map((label,index) => '<text x="'+(left+barWidth*(indices[index]+.5))+'" y="'+(height-15)+'" text-anchor="'+(index===0?'start':index===3?'end':'middle')+'">'+label+'</text>').join('') + '<text class="axis-title" data-axis="y" x="0" y="12">调用 / 次</text><text class="axis-title" data-axis="x" x="'+(width-right)+'" y="12" text-anchor="end">'+(state.range==='day'?'时间 / 小时':'日期 / 天')+'</text>';
+        svg.querySelectorAll('.mg-mark').forEach((bar,index) => {
+          const h = data[index]/ceiling*plotHeight;
+          bar.setAttribute('x',left+index*barWidth+barWidth*.15);
+          bar.setAttribute('width',barWidth*.7);
+          bar.setAttribute('y',top+plotHeight-h);
+          bar.setAttribute('height',h);
+          const label = state.range==='day' ? String(index).padStart(2,'0')+':00' : '09/'+(24+index);
+          bar.setAttribute('data-tooltip',label+' · '+format(data[index])+' 次工具调用');
+        });
+      }
+      function restore(saved) {
+        if (!saved || !saved.privateContent) return;
+        const data = saved.privateContent;
+        if (validTabs.includes(data.tab)) state.tab=data.tab;
+        if (['all','hscode'].includes(data.service)) state.service=data.service;
+        if (['day','week'].includes(data.range)) state.range=data.range;
+        if (['all','success','failed','pending'].includes(data.outcome)) state.outcome=data.outcome;
+        if (['service','tool','user'].includes(data.dimension)) state.dimension=data.dimension;
+        state.acknowledged = data.acknowledged === true;
+      }
+      root.addEventListener('click', event => {
+        const tab = event.target.closest('[data-tab]');
+        const open = event.target.closest('[data-open]');
+        const request = event.target.closest('[data-request]');
+        if (tab) showTab(tab.dataset.tab);
+        if (open) showTab(open.dataset.open);
+        if (request) {
+          const log = logs.find(item => item.id === request.dataset.request);
+          if (!log) return;
+          const fields = [['请求 ID',log.id],['身份',log.user+' / '+log.client],['上游实例',log.service+' / instance-1'],['HTTP 状态',log.http],['工具结果',log.result],['错误分类',log.error],['上游尝试',log.attempts],['总耗时',log.duration],['协议方法','tools/call']];
+          $('mg-detail-fields').innerHTML = fields.map(([name,value]) => '<div><span class="mg-muted">'+name+'</span><strong>'+value+'</strong></div>').join('');
+          $('mg-log-detail').hidden=false;
+        }
+      });
+      [['mg-service','service'],['mg-range','range'],['mg-outcome','outcome'],['mg-dimension','dimension']].forEach(([id,key]) => $(id).addEventListener('change',event => {state[key]=event.target.value;$('mg-log-detail').hidden=true;render();persist();}));
+      $('mg-close-detail').addEventListener('click',() => {$('mg-log-detail').hidden=true;});
+      $('mg-ack').addEventListener('click',() => {state.acknowledged=true;render();persist();});
+      restore(window.openai && window.openai.widgetState);
+      render();
+      showTab(state.tab,false);
+      if (typeof ResizeObserver !== 'undefined') new ResizeObserver(drawChart).observe($('mg-chart'));
+      window.addEventListener('openai:set_globals',event => {const globals=event.detail && event.detail.globals;if(globals && globals.widgetState){restore(globals.widgetState);render();showTab(state.tab,false);}});
+    })();
+  </script>
+</div>
