@@ -38,7 +38,7 @@ jobs:
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - name: Deploy without a public URL or database configuration
-        run: ./scripts/deploy.sh
+        run: ./scripts/deploy.sh --yes
       - name: Verify setup, OAuth and persistent settings
         run: pnpm exec tsx scripts/smoke-system-settings.ts
       - name: Show service logs on failure

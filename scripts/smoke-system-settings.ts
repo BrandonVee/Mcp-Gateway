@@ -1,16 +1,16 @@
 /** Exercise the one-command deployment against a disposable Compose project. */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { getAccessToken } from './oauth-token.js';
+import { readDeploymentEnvironment } from './deploy-env.js';
 
 async function main() {
   const directory = process.env.MCP_DEPLOY_DIR;
   if (!directory) throw new Error('Set MCP_DEPLOY_DIR to the disposable deployment directory');
   const envFile = resolve(directory, 'runtime.env');
-  const readEnv = () => Object.fromEntries(readFileSync(envFile, 'utf8').trim().split('\n').map((line) => line.split('=')));
+  const readEnv = () => readDeploymentEnvironment(envFile);
   const saved = readEnv();
   const base = `http://127.0.0.1:${saved.MCP_HTTP_PORT}`;
   const originalUrl = 'https://setup.example.test';
@@ -91,7 +91,7 @@ async function main() {
   }
   assert.ok(restored, 'system URL persists across container restarts');
   assert.equal((await request('/api/admin/system-settings', 'GET', undefined, updatedUrl)).data.public_url, updatedUrl);
-  execFileSync('bash', ['scripts/deploy.sh', '--prepare-only'], { stdio: 'pipe' });
+  execFileSync('bash', ['scripts/deploy.sh', '--yes', '--prepare-only'], { stdio: 'pipe' });
   const after = readEnv();
   for (const key of ['POSTGRES_PASSWORD', 'REDIS_PASSWORD', 'INTERNAL_API_TOKEN', 'CREDENTIAL_BROKER_TOKEN', 'CREDENTIAL_ENCRYPT_KEY', 'ADMIN_PASSWORD']) {
     assert.ok(after[key] === saved[key], `${key} persists across repeat deployment`);

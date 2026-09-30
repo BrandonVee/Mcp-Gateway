@@ -26,7 +26,23 @@ cd mcp-gateway
 ./scripts/deploy.sh
 ```
 
-脚本会自动生成并保存数据库密码、内部令牌、凭据加密密钥和初始管理员密码，启动 PostgreSQL、Redis、Auth Server、Gateway 和管理前端。默认仅暴露 `127.0.0.1:8080`，不需要手写环境文件或配置数据库。首次执行会构建生产镜像；管理员用户名为 `admin`，初始密码会在终端显示一次。
+在终端运行时，脚本会引导填写以下参数，回车保留默认值：
+
+- **HTTP 端口**：默认 `8080`，仅监听 `127.0.0.1`，供你自己的 Nginx 转发。
+- **镜像来源**：默认本机构建；选择拉取已发布镜像时，再输入镜像仓库前缀和版本。
+- **首次管理员密码**：用户名固定为 `admin`；密码至少 16 个字符，隐藏输入并再次确认，留空则自动生成。已有部署会保留密码，不重复询问。
+
+脚本会显示配置摘要，确认后保存并启动 PostgreSQL、Redis、Auth Server、Gateway 和管理前端。数据库密码、内部令牌和凭据加密密钥自动生成，不需要手写环境文件；取消或输入中断不会保存本次配置。自动生成的管理员密码会在本次执行结束时显示，手动输入的密码不会输出。
+
+需要显式进入交互、先准备配置，或用于自动化部署时：
+
+```bash
+./scripts/deploy.sh --interactive                 # 交互安装
+./scripts/deploy.sh --interactive --prepare-only  # 只保存配置，不启动服务
+./scripts/deploy.sh --yes                         # 使用环境变量、已有配置或默认值，跳过提示
+```
+
+非终端环境默认跳过提示，CI 使用 `--yes`。配置保存在 `deploy/single-host/`；升级时以已有参数作为交互默认值。对外访问地址与可信上游统一在管理后台设置。
 
 ### Nginx 转发与首次设置
 
@@ -70,7 +86,7 @@ docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.singl
 
 脚本会保留已生成的密钥和密码；数据库与 Redis 使用命名卷持久化。升级前备份 PostgreSQL 和 `deploy/single-host/`，尤其是 `runtime.env` 中的凭据加密密钥。不要用 `down -v` 停止生产部署，它会删除数据库卷。单机升级可能短暂中断，已有 MCP 会话中断后客户端需重新初始化。
 
-需要改 HTTP 端口时可运行 `MCP_HTTP_PORT=18080 ./scripts/deploy.sh`，随后调整你自己的 Nginx 上游端口。
+需要改 HTTP 端口时，在交互提示中输入新端口，或运行 `MCP_HTTP_PORT=18080 ./scripts/deploy.sh --yes`，随后调整你自己的 Nginx 上游端口。
 
 ### 已发布镜像的部署
 
@@ -78,10 +94,10 @@ docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.singl
 
 ```bash
 # 私有镜像仓库先使用 docker login 登录。
-MCP_IMAGE_PREFIX=ghcr.io/your-lowercase-account/ MCP_VERSION=YOUR_RELEASE_TAG ./scripts/deploy.sh
+MCP_IMAGE_PREFIX=ghcr.io/your-lowercase-account/ MCP_VERSION=YOUR_RELEASE_TAG ./scripts/deploy.sh --yes
 ```
 
-此方式使用相同的一键部署和后台设置流程，跳过服务器源码构建。镜像前缀保留末尾 `/`，版本须与已发布 tag 一致。
+也可直接运行 `./scripts/deploy.sh`，在交互提示中选择“拉取已发布镜像”。此方式使用相同的后台设置流程，跳过服务器源码构建。环境变量方式的镜像前缀保留末尾 `/`，版本须与已发布 tag 一致；交互输入会自动补上末尾 `/`。
 
 镜像发布命令、使用独立数据库的高级部署和回退说明见 [生产部署文档](docs/production.md)。
 
