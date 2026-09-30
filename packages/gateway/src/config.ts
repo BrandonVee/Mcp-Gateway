@@ -50,7 +50,7 @@ export async function refreshServerConfigs(): Promise<void> {
     if (databaseSettingsEnabled() || body.system_settings) {
       if (!body.system_settings) throw new Error('registry has no system settings');
       const settings = body.system_settings.public_url === null
-        ? { public_url: null, upstream_hosts: [] } : normalizeSystemSettings(body.system_settings);
+        ? { public_url: null, upstream_allowlist_enabled: true, upstream_hosts: [] } : normalizeSystemSettings(body.system_settings);
       if (!settings) throw new Error('registry has invalid system settings');
       applySystemSettings(settings);
     }
@@ -58,11 +58,13 @@ export async function refreshServerConfigs(): Promise<void> {
     const next = new Map<string, McpServerConfig>();
     for (const server of body.servers) {
       if (!server.name || !Array.isArray(server.instances) || !server.instances.length) continue;
-      const instances = server.instances.map((instance) => {
+      const instances = server.instances.flatMap((instance) => {
         const url = normalizeUpstreamEndpoint(instance.url);
-        if (!url) throw new Error(`unapproved upstream URL for ${server.name}`);
-        return url;
+        // A policy change must remove blocked routes rather than preserve the
+        // previous routing table by failing the entire registry refresh.
+        return url ? [url] : [];
       });
+      if (!instances.length) continue;
       if (server.authMode && !['none', 'api_key', 'oauth'].includes(server.authMode)) throw new Error(`invalid auth mode for ${server.name}`);
       next.set(server.name, { name: server.name, authMode: server.authMode ?? 'none', instances });
     }

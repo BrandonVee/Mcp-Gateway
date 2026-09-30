@@ -65,7 +65,7 @@ location / {
 通过你的 HTTPS 地址打开后台，使用初始管理员登录。系统会引导进入**系统设置**：
 
 1. **对外访问地址**：填写 Nginx 对外的 HTTPS 根地址，例如 `https://mcp.example.com`。OAuth 登录、MCP 入口与个人连接中心统一使用此地址，部署时无需配置 `PUBLIC_URL`。
-2. **可信上游主机**：填写计划接入的 MCP 服务主机名，每行一个，不带协议、端口或路径；以后新增主机时也在此更新。
+2. **启用上游白名单**：默认开启。开启时在**可信上游主机**填写计划接入的 MCP 服务主机名或 IP，每行一个，不带协议、端口或路径；名单为空时拒绝所有上游。关闭后允许管理员接入任意合法的上游地址，已填写的名单仍会保留。
 3. 保存后注册实际 MCP 服务、创建用户并分配访问权限。客户端入口为 `https://mcp.example.com/mcp/{SERVER_NAME}`。
 
 系统设置持久化在 PostgreSQL 中，重启后继续生效。未设置访问地址时，管理后台可用，OAuth 与 MCP 接入返回 `503 system_not_configured`；生产环境的访问地址需使用 HTTPS。更换地址后，已有 MCP 客户端需重新授权。
@@ -176,7 +176,7 @@ http://localhost:8000/mcp/external-search
 ```
 
 外部地址支持 HTTP/HTTPS 和自定义路径；如果只填写主机根地址，系统会自动补全 `/mcp`。
-生产环境必须通过 `MCP_UPSTREAM_ALLOWED_HOSTS` 指定可信上游主机名（逗号分隔），Auth Server 注册时与 Gateway 同步路由时均会校验。Gateway 还会拒绝不在 `MCP_ALLOWED_ORIGINS` 中的浏览器 MCP Origin，并用 `UPSTREAM_MAX_ACTIVE_REQUESTS`（默认 100，每进程）限制同时上游请求数；部署配置和网络隔离要求见 [生产部署与上线检查](docs/production.md)。
+上游白名单可在后台“系统设置”中启用或关闭，默认开启；旧配置也按开启处理。开启时 Auth Server 注册与 Gateway 同步路由均会校验可信上游主机，名单为空时拒绝所有上游；关闭时仍校验 URL 的合法性，注册时仍拒绝网关自引用。保存后 Auth Server 立即生效，Gateway 在下一次路由同步时生效（默认 15 秒）。配置文件模式通过 `MCP_UPSTREAM_ALLOWLIST_ENABLED`（默认 `true`）控制开关，通过 `MCP_UPSTREAM_ALLOWED_HOSTS` 指定主机名单（逗号分隔）。Gateway 还会拒绝不在 `MCP_ALLOWED_ORIGINS` 中的浏览器 MCP Origin，并用 `UPSTREAM_MAX_ACTIVE_REQUESTS`（默认 100，每进程）限制同时上游请求数；部署配置和网络隔离要求见 [生产部署与上线检查](docs/production.md)。
 
 ## 外部服务的用户级认证
 

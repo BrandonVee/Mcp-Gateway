@@ -6,7 +6,7 @@ import { meta } from './schema.js';
 export async function refreshSystemSettings(): Promise<void> {
   if (process.env.SYSTEM_CONFIG_MODE === 'file') return;
   const [row] = await db.select({ value: meta.value }).from(meta).where(eq(meta.key, 'system_settings')).limit(1);
-  if (!row) { applySystemSettings({ public_url: null, upstream_hosts: [] }); return; }
+  if (!row) { applySystemSettings({ public_url: null, upstream_allowlist_enabled: true, upstream_hosts: [] }); return; }
   const settings = normalizeSystemSettings(JSON.parse(row.value));
   if (!settings) throw new Error('Invalid stored system settings');
   applySystemSettings(settings);

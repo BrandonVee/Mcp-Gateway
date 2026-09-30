@@ -46,7 +46,7 @@
 
 Auth 和 Gateway 的 `INTERNAL_API_TOKEN`、`CREDENTIAL_BROKER_TOKEN` 必须一致，两个令牌彼此不同；加密密钥只授予 Auth。不要复用开发 Compose 内的默认值，也不要将 `.env.local` 放进镜像；`.dockerignore` 已排除它。PostgreSQL、Redis 和 Auth 的 `/internal/*` 应留在受限网络。
 
-`MCP_UPSTREAM_ALLOWED_HOSTS` 在 Auth 和 Gateway 中必须配置为相同的、逗号分隔的上游主机名。该名单只校验主机名；还须用防火墙或容器网络策略限制 Gateway 的实际出口，防止 DNS 变化导致越界访问。浏览器 MCP 客户端如从其他源发起请求，将完整 Origin 加到 `MCP_ALLOWED_ORIGINS`。`UPSTREAM_MAX_ACTIVE_REQUESTS` 是每个 Gateway 进程允许的同时上游请求数，默认 100；长时间 SSE 连接也占用名额，超出时返回 503。按实际连接数压测后调整。
+`MCP_UPSTREAM_ALLOWLIST_ENABLED` 控制上游白名单，默认 `true`；设为 `false` 时允许任意合法的上游 URL。开启时必须提供非空的 `MCP_UPSTREAM_ALLOWED_HOSTS`，填写逗号分隔的主机名或 IP。Auth 和 Gateway 中的开关及名单必须相同。数据库配置模式通过后台“系统设置”保存开关和名单；已有配置缺少开关时按开启处理。该名单只校验主机名；还须用防火墙或容器网络策略限制 Gateway 的实际出口，防止 DNS 变化导致越界访问。浏览器 MCP 客户端如从其他源发起请求，将完整 Origin 加到 `MCP_ALLOWED_ORIGINS`。`UPSTREAM_MAX_ACTIVE_REQUESTS` 是每个 Gateway 进程允许的同时上游请求数，默认 100；长时间 SSE 连接也占用名额，超出时返回 503。按实际连接数压测后调整。
 
 部署迁移前备份 PostgreSQL 和 `CREDENTIAL_ENCRYPT_KEY`。恢复时数据库、签名密钥记录和加密密钥必须一起恢复；丢失加密密钥将使已保存的用户连接凭据失效。
 

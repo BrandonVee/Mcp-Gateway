@@ -61,7 +61,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   systemSettings: () => request<SystemSettings>("/api/admin/system-settings"),
-  saveSystemSettings: (body: { public_url: string; upstream_hosts: string[] }) => request<SystemSettings>("/api/admin/system-settings", {
+  saveSystemSettings: (body: { public_url: string; upstream_allowlist_enabled: boolean; upstream_hosts: string[] }) => request<SystemSettings>("/api/admin/system-settings", {
     method: "PUT", body: JSON.stringify(body),
   }),
   session: () => request<{ authenticated: boolean }>("/api/admin/session"),

@@ -94,7 +94,6 @@ export function AppShell({
   const current = titles[currentView];
 
   const menuItems = [
-    { key: "settings", icon: <SettingOutlined />, label: t("settings.title") },
     { key: "overview", icon: <DashboardOutlined />, label: t("nav.overview.label") },
     {
       key: "users",
@@ -110,6 +109,7 @@ export function AppShell({
     },
     { key: "credentials", icon: <KeyOutlined />, label: t("nav.connections.title") },
     { key: "monitoring", icon: <MonitorOutlined />, label: t("nav.monitoring.title") },
+    { key: "settings", icon: <SettingOutlined />, label: t("settings.title") },
   ];
 
   return (

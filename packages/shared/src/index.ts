@@ -13,13 +13,16 @@ export function allowedUpstreamHosts(env: NodeJS.ProcessEnv = process.env): Set<
   return new Set((env.MCP_UPSTREAM_ALLOWED_HOSTS ?? '').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean));
 }
 
+export function upstreamAllowlistEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.MCP_UPSTREAM_ALLOWLIST_ENABLED !== undefined) return env.MCP_UPSTREAM_ALLOWLIST_ENABLED !== 'false';
+  return env.NODE_ENV === 'production' || allowedUpstreamHosts(env).size > 0;
+}
+
 export function normalizeUpstreamEndpoint(value: string, env: NodeJS.ProcessEnv = process.env): string | null {
   try {
     const url = new URL(value);
     if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.hash) return null;
-    const allowed = allowedUpstreamHosts(env);
-    if (allowed.size > 0 && !allowed.has(url.hostname.toLowerCase())) return null;
-    if (env.NODE_ENV === 'production' && allowed.size === 0) return null;
+    if (upstreamAllowlistEnabled(env) && !allowedUpstreamHosts(env).has(url.hostname.toLowerCase())) return null;
     if (url.pathname === '/' || !url.pathname) url.pathname = '/mcp';
     return url.toString().replace(/\/$/, '');
   } catch {
@@ -103,8 +106,11 @@ export function validateProductionRuntime(
   };
 
   if (!env.CONFIG_FILE) fail('CONFIG_FILE must select a deployment-specific configuration file');
+  if (env.MCP_UPSTREAM_ALLOWLIST_ENABLED !== undefined && !['true', 'false'].includes(env.MCP_UPSTREAM_ALLOWLIST_ENABLED)) {
+    fail('MCP_UPSTREAM_ALLOWLIST_ENABLED must be true or false');
+  }
   const upstreamHosts = allowedUpstreamHosts(env);
-  if ((!databaseSettingsEnabled(env) && upstreamHosts.size === 0) || [...upstreamHosts].some((host) => !/^[a-z0-9][a-z0-9.-]*$/.test(host) || host.includes('..'))) {
+  if ((!databaseSettingsEnabled(env) && upstreamAllowlistEnabled(env) && upstreamHosts.size === 0) || [...upstreamHosts].some((host) => !/^[a-z0-9][a-z0-9.-]*$/.test(host) || host.includes('..'))) {
     fail('MCP_UPSTREAM_ALLOWED_HOSTS must list trusted upstream hostnames');
   }
   if (!databaseSettingsEnabled(env)) {
@@ -137,10 +143,11 @@ export function validateProductionRuntime(
 
 export interface SystemSettings {
   public_url: string | null;
+  upstream_allowlist_enabled: boolean;
   upstream_hosts: string[];
 }
 let storedSettingsActive = false;
-let systemSettings: SystemSettings = { public_url: null, upstream_hosts: [] };
+let systemSettings: SystemSettings = { public_url: null, upstream_allowlist_enabled: true, upstream_hosts: [] };
 export function databaseSettingsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.SYSTEM_CONFIG_MODE === 'database' || (env === process.env && env.SYSTEM_CONFIG_MODE !== 'file' && storedSettingsActive);
 }
@@ -148,7 +155,10 @@ export function currentSystemSettings(): SystemSettings { return systemSettings;
 export function applySystemSettings(value: SystemSettings): void {
   storedSettingsActive = Boolean(value.public_url);
   systemSettings = value;
-  if (databaseSettingsEnabled()) process.env.MCP_UPSTREAM_ALLOWED_HOSTS = value.upstream_hosts.join(',');
+  if (databaseSettingsEnabled()) {
+    process.env.MCP_UPSTREAM_ALLOWED_HOSTS = value.upstream_hosts.join(',');
+    process.env.MCP_UPSTREAM_ALLOWLIST_ENABLED = String(value.upstream_allowlist_enabled);
+  }
 }
 export function systemConfigured(): boolean { return !databaseSettingsEnabled() || Boolean(systemSettings.public_url); }
 export function authIssuer(): string {
@@ -164,13 +174,15 @@ export function normalizeSystemSettings(value: unknown, production = process.env
   if (!value || typeof value !== 'object') return null;
   const input = value as Record<string, unknown>;
   if (typeof input.public_url !== 'string' || !Array.isArray(input.upstream_hosts)) return null;
+  if (input.upstream_allowlist_enabled !== undefined && typeof input.upstream_allowlist_enabled !== 'boolean') return null;
   try {
     const url = new URL(input.public_url.trim());
     if ((production ? url.protocol !== 'https:' : !['http:', 'https:'].includes(url.protocol))
       || url.username || url.password || url.search || url.hash || url.pathname !== '/') return null;
     if (input.upstream_hosts.length > 200 || !input.upstream_hosts.every((host) => typeof host === 'string'
       && host.length <= 253 && /^[a-z0-9][a-z0-9.-]*$/i.test(host) && !host.includes('..'))) return null;
-    return { public_url: url.origin, upstream_hosts: [...new Set((input.upstream_hosts as string[]).map((host) => host.toLowerCase()))].sort() };
+    return { public_url: url.origin, upstream_allowlist_enabled: input.upstream_allowlist_enabled ?? true,
+      upstream_hosts: [...new Set((input.upstream_hosts as string[]).map((host) => host.toLowerCase()))].sort() };
   } catch { return null; }
 }
 

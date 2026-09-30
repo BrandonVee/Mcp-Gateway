@@ -8,7 +8,7 @@ import type { Context as HonoContext } from 'hono';
 import { and, count, desc, eq, lt } from 'drizzle-orm';
 import { auditEvents, authCodes, loginSessions, mcpServerInstances, mcpServers, refreshTokens, userMcpCredentials, userServerAccess, users } from './schema.js';
 import { randomUUID } from 'node:crypto';
-import { normalizeUpstreamEndpoint, gatewayPublicUrl, adminWebUrl, databaseSettingsEnabled, systemConfigured, bootstrapOriginAllowed, normalizeSystemSettings, allowedUpstreamHosts } from '@mcp/shared';
+import { normalizeUpstreamEndpoint, gatewayPublicUrl, adminWebUrl, databaseSettingsEnabled, systemConfigured, bootstrapOriginAllowed, normalizeSystemSettings, allowedUpstreamHosts, upstreamAllowlistEnabled } from '@mcp/shared';
 import { encryptCredential } from './credential-crypto.js';
 import { limitLoginAccount } from './rate-limit.js';
 import { trustedAdminBearerClient } from './admin-bearer.js';
@@ -247,7 +247,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   router.get('/admin/system-settings', (c) => {
     c.header('Cache-Control', 'no-store');
     return c.json({ managed: process.env.SYSTEM_CONFIG_MODE !== 'file', configured: systemConfigured(),
-      ...(databaseSettingsEnabled() ? currentSystemSettings() : { public_url: deps.issuer, upstream_hosts: [...allowedUpstreamHosts()] }) });
+      ...(databaseSettingsEnabled() ? currentSystemSettings() : { public_url: deps.issuer,
+        upstream_allowlist_enabled: upstreamAllowlistEnabled(), upstream_hosts: [...allowedUpstreamHosts()] }) });
   });
   router.put('/admin/system-settings', async (c) => {
     if (process.env.SYSTEM_CONFIG_MODE === 'file') return c.json({ error: 'system_settings_managed_by_environment' }, 409);

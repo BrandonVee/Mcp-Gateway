@@ -40,6 +40,9 @@ test('production runtime rejects development defaults and missing secrets', () =
   assert.throws(() => validateProductionRuntime(productionConfig, 'gateway', { ...productionEnv, REDIS_URL: '' }), /REDIS_URL/);
   assert.throws(() => validateProductionRuntime(productionConfig, 'gateway', { ...productionEnv, MCP_UPSTREAM_ALLOWED_HOSTS: '' }), /MCP_UPSTREAM_ALLOWED_HOSTS/);
   assert.throws(() => validateProductionRuntime(productionConfig, 'gateway', { ...productionEnv, MCP_UPSTREAM_ALLOWED_HOSTS: 'https://mcp.example.test' }), /MCP_UPSTREAM_ALLOWED_HOSTS/);
+  assert.doesNotThrow(() => validateProductionRuntime(productionConfig, 'gateway', { ...productionEnv, MCP_UPSTREAM_ALLOWLIST_ENABLED: 'false', MCP_UPSTREAM_ALLOWED_HOSTS: '' }));
+  assert.doesNotThrow(() => validateProductionRuntime(productionConfig, 'auth', { ...productionEnv, MCP_UPSTREAM_ALLOWLIST_ENABLED: 'false', MCP_UPSTREAM_ALLOWED_HOSTS: '' }));
+  assert.throws(() => validateProductionRuntime(productionConfig, 'gateway', { ...productionEnv, MCP_UPSTREAM_ALLOWLIST_ENABLED: 'invalid' }), /MCP_UPSTREAM_ALLOWLIST_ENABLED/);
 });
 
 test('upstream endpoints require approved hosts in production and reject URL credentials', () => {

@@ -121,5 +121,6 @@ export interface SystemSettings {
   managed: boolean;
   configured: boolean;
   public_url: string | null;
+  upstream_allowlist_enabled: boolean;
   upstream_hosts: string[];
 }

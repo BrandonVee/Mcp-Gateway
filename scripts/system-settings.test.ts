@@ -5,13 +5,26 @@ import { bootstrapOriginAllowed, normalizeSystemSettings, validateProductionRunt
 
 test('system settings accept a canonical HTTPS origin and exact upstream hosts', () => {
   assert.deepEqual(normalizeSystemSettings({ public_url: 'https://MCP.example.com:443/', upstream_hosts: ['Search.example.com', 'search.example.com'] }, true), {
-    public_url: 'https://mcp.example.com', upstream_hosts: ['search.example.com'],
+    public_url: 'https://mcp.example.com', upstream_allowlist_enabled: true, upstream_hosts: ['search.example.com'],
   });
   for (const public_url of ['http://mcp.example.com', 'https://user:password@mcp.example.com', 'https://mcp.example.com/path', 'https://mcp.example.com?token=secret', 'https://mcp.example.com#fragment']) {
     assert.equal(normalizeSystemSettings({ public_url, upstream_hosts: [] }, true), null);
   }
   for (const host of ['*', 'https://search.example.com', 'search.example.com:443', 'search.example.com/path', 'search..example.com']) {
     assert.equal(normalizeSystemSettings({ public_url: 'https://mcp.example.com', upstream_hosts: [host] }, true), null);
+  }
+});
+
+test('system settings retain the explicit allowlist switch and reject non-boolean values', () => {
+  const settings = { public_url: 'https://mcp.example.com', upstream_hosts: ['38.58.57.4'] };
+  for (const upstream_allowlist_enabled of [true, false]) {
+    const normalized = normalizeSystemSettings({ ...settings, upstream_allowlist_enabled }, true);
+    assert.deepEqual(normalized, { ...settings, upstream_allowlist_enabled });
+    assert.deepEqual(normalizeSystemSettings(JSON.parse(JSON.stringify(normalized)), true), normalized);
+    assert.equal(normalizeSystemSettings({ ...settings, upstream_hosts: [], upstream_allowlist_enabled }, true)?.upstream_allowlist_enabled, upstream_allowlist_enabled);
+  }
+  for (const upstream_allowlist_enabled of ['false', 'true', 0, 1, null, {}, []]) {
+    assert.equal(normalizeSystemSettings({ ...settings, upstream_allowlist_enabled }, true), null);
   }
 });
 
