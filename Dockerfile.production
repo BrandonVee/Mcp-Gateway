@@ -4,19 +4,23 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages ./packages
 COPY scripts/build-runtime.mjs ./scripts/build-runtime.mjs
+COPY tests ./tests
 COPY config ./config
 RUN pnpm install --frozen-lockfile
 RUN pnpm build:runtime && pnpm build:admin
+
+# Smoke-test upstreams are isolated from the production runtime target.
+FROM builder AS test-upstream
+CMD ["pnpm", "--filter", "@mcp/test-upstream", "start"]
 
 FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS runtime
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages ./packages
-RUN pnpm install --prod --frozen-lockfile --filter @mcp/auth-server --filter @mcp/gateway --filter @mcp/mcp-server
+RUN pnpm install --prod --frozen-lockfile --filter @mcp/auth-server --filter @mcp/gateway
 COPY --from=builder /app/packages/auth-server/dist ./packages/auth-server/dist
 COPY --from=builder /app/packages/gateway/dist ./packages/gateway/dist
-COPY --from=builder /app/packages/mcp-server/dist ./packages/mcp-server/dist
 USER node
 
 FROM nginx:stable-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94 AS admin-web

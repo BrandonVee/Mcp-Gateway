@@ -1,4 +1,6 @@
-# MCP 统一认证与多入口网关
+# MCP Gateway
+
+MCP 统一认证与多入口网关，集中管理服务接入、访问权限和用户连接。
 
 管理前端：**http://localhost:5173**（默认管理员账号见 `config/default.json` / `config/docker.json`）。
 
@@ -7,10 +9,9 @@
 这个项目把认证、授权和 MCP 实例路由拆成三层：
 
 ```text
-                       ┌─ /mcp/demo    ──> demo-a / demo-b
+                       ┌─ /mcp/search    ──> 外部搜索服务实例池
 MCP Client ── OAuth ──>│  Gateway
-                       ├─ /mcp/reports ──> reports-a
-                       └─ /mcp/knowledge ──> knowledge-a
+                       └─ /mcp/knowledge ──> 外部知识库服务
                               │
                               └─ 校验统一 Auth Server 签发的 JWT
 ```
@@ -23,7 +24,7 @@ MCP Client ── OAuth ──>│  Gateway
 - Access Token 的 `mcp_servers` claim 是签发时的授权快照，例如：
 
   ```json
-  { "sub": "alice", "mcp_servers": ["demo", "reports"] }
+  { "sub": "alice", "mcp_servers": ["search", "knowledge"] }
   ```
 
 - Gateway 先验证 JWT 和令牌内的 Server 范围，再向 Auth Server 复核用户是否启用、当前 Server 授权是否仍有效，最后转发到对应实例池。
@@ -57,20 +58,14 @@ pnpm --filter @mcp/auth-server db:studio
 
 逻辑 Server 与实例池保存在 PostgreSQL 的 `mcp_servers`、`mcp_server_instances` 表中。管理 API/界面修改数据库后，Gateway 从 Auth Server 的注册表刷新路由；普通服务启动不会再从配置文件重建或覆盖这些记录。
 
-仅在**首次准备演示数据**时运行 `pnpm db:seed:dev`。它从 `scripts/dev-fixtures.json` 导入示例 Server、实例、演示用户和 OAuth 客户端；再次运行默认保留已有记录和实例 URL。该文件只用于演示数据导入和本地示例进程启动，不参与 Gateway 路由。删除过的示例数据只有再次显式运行导入命令才会重建。
+项目不内置 MCP Server，也不会在启动时导入演示服务。新数据库的服务列表为空；管理员通过管理界面或管理 API 注册实际 MCP Endpoint，并为用户分配访问权限。
 
-对应入口：
-
-- `http://localhost:8000/mcp/demo`
-- `http://localhost:8000/mcp/reports`
-- `http://localhost:8000/mcp/knowledge`
-
-`knowledge` 是一个可直接测试的简单知识库 MCP，提供 `knowledge_list`、`knowledge_search`、`knowledge_get` 和 `server_info` 工具。
+注册后，客户端使用 `http://localhost:8000/mcp/{SERVER_NAME}` 访问对应服务。上游 MCP Server 由其提供方独立部署和运行。
 
 同一个逻辑 server 可以有多个实例。Gateway 通过 Redis 保存 MCP session 与实例的粘性绑定。
 Gateway 每 15 秒对已注册实例做一次 TCP/TLS 连通性探测，并在连接失败或上游返回 502/503/504 时暂时避开该实例；`/health` 会报告不可用实例数量。尚未建立 session 的 `initialize` 请求可在实例失败时尝试同一逻辑 Server 的其他实例。已有 session 始终发送到原实例，不会错误地切换到不认识该 session 的实例；原实例故障时客户端需重新初始化。探测只验证传输层连通性，不等同于 MCP 工具可用性检查。
 
-Gateway 只读取数据库注册表；注册表在启动时不可用会导致 Gateway 启动失败，不会回退到旧的静态路由。MCP 进程仅通过 `MCP_SERVER_NAME`、`MCP_INSTANCE_ID`、`MCP_PORT` 确定自己的名称和监听端口。
+Gateway 只读取数据库注册表；注册表在启动时不可用会导致 Gateway 启动失败，不会回退到旧的静态路由。
 
 ## 注册外部 MCP Server
 
@@ -173,7 +168,7 @@ GET   /admin/audit-events
 curl -X PUT http://localhost:9001/admin/users/USER_ID/servers \
   -H "Authorization: Bearer ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"servers":["demo","reports"]}'
+  -d '{"servers":["search","knowledge"]}'
 ```
 
 也可以通过 `PUT /admin/servers/:name/users` 提交 `{"user_ids":[USER_ID]}`，从 Server 视角替换普通用户的指定授权。通配符用户不在单个 Server 的授权列表中编辑；管理员账号默认具有全部 Server 的访问权限。
@@ -207,7 +202,7 @@ Vite 开发服务器会把 `/api/*` 转发至 Auth Server，把 `/gateway/*` 转
 
 ## 日志与监控
 
-- Auth Server 以 JSON 行输出请求日志，包含请求 ID、方法、路径、状态码和耗时；Gateway 使用 Fastify 结构化日志。两者都不记录 URL 查询字符串，避免 OAuth 回调码进入日志。MCP 实例继续向标准输出记录启动、会话和错误。命令行开发时在 `pnpm dev:local` 的终端查看；容器模式使用 `docker compose logs -f auth gateway mcp-a`。
+- Auth Server 以 JSON 行输出请求日志，包含请求 ID、方法、路径、状态码和耗时；Gateway 使用 Fastify 结构化日志。两者都不记录 URL 查询字符串，避免 OAuth 回调码进入日志。上游 MCP Server 的运行日志由服务提供方采集。命令行开发时在 `pnpm dev:local` 的终端查看；容器模式使用 `docker compose logs -f auth gateway`。
 - 管理 API 和个人连接中心对带 `Origin` 的浏览器写请求进行来源校验；显式提供无效 Bearer Token 时不会回退到 Cookie 会话。Gateway 转发上游时移除客户端 Cookie、平台授权头和可伪造的身份头，也不把上游 `Set-Cookie` 写回平台域名。
 - 管理操作和管理员登录会写入 PostgreSQL 的 `audit_events` 表。默认保留 90 天，由 Auth Server 定期清理；可用 `AUDIT_RETENTION_DAYS` 调整。审计写入失败会在服务日志中报错，不会把已完成的管理操作伪装成失败。
 - 管理后台的“日志监控”页每 10 秒检查服务健康状态，并提供审计事件筛选、手动刷新和按 ID 翻页。审计页不是原始服务日志采集器；运行日志仍需从标准输出或容器日志采集。
@@ -219,13 +214,12 @@ Vite 开发服务器会把 `/api/*` 转发至 Auth Server，把 `/gateway/*` 转
 
 ```bash
 pnpm install
-pnpm db:seed:dev  # 仅首次准备演示数据时执行
 pnpm dev:local
 ```
 
-`pnpm dev:local` 会一次启动 Auth Server、Gateway、管理前端，以及 `scripts/dev-fixtures.json` 中的本地示例 MCP 进程；Server 路由仍只来自数据库。需要自定义本地配置时，可先执行 `cp .env.local.example .env.local`（已有 `.env.local` 时不要覆盖）；首次启动会向 `.env.local` 写入生成的凭据加密密钥与内部 Broker Token，并将文件权限设为 `0600`。该文件被 Git 忽略。打开 <http://localhost:5173>，按 `Ctrl+C` 停止这组 Node 进程。PostgreSQL 和 Redis 是独立服务，不随脚本退出。
+`pnpm dev:local` 会一次启动 Auth Server、Gateway、管理前端；Server 路由只来自数据库注册的实际服务。需要自定义本地配置时，可先执行 `cp .env.local.example .env.local`（已有 `.env.local` 时不要覆盖）；首次启动会向 `.env.local` 写入生成的凭据加密密钥与内部 Broker Token，并将文件权限设为 `0600`。该文件被 Git 忽略。打开 <http://localhost:5173>，按 `Ctrl+C` 停止这组 Node 进程。PostgreSQL 和 Redis 是独立服务，不随脚本退出。
 
-默认数据库连接是 `postgres://mcp:mcp-dev-password@localhost:5432/mcp`，Redis 是 `redis://localhost:6379`。可在 `.env.local` 中设置 `DATABASE_URL`、`REDIS_URL`、`CONFIG_FILE` 等覆盖本地配置；重新启动前请保持原有 `CREDENTIAL_ENCRYPT_KEY`，否则已保存的用户连接凭据不能解密。若 5173、8000、9001 或 MCP 实例端口被其他进程占用，脚本会明确报错。
+默认数据库连接是 `postgres://mcp:mcp-dev-password@localhost:5432/mcp`，Redis 是 `redis://localhost:6379`。可在 `.env.local` 中设置 `DATABASE_URL`、`REDIS_URL`、`CONFIG_FILE` 等覆盖本地配置；重新启动前请保持原有 `CREDENTIAL_ENCRYPT_KEY`，否则已保存的用户连接凭据不能解密。若 5173、8000 或 9001 端口被其他进程占用，脚本会明确报错。
 
 若只想把 PostgreSQL 和 Redis 放在容器里，其余服务在宿主机命令行运行：
 
@@ -234,26 +228,34 @@ docker compose up -d postgres redis
 # 在 .env.local 中保留已有密钥，并设置以下数据库与 Redis 地址：
 # DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp
 # REDIS_URL=redis://127.0.0.1:6380
-pnpm db:seed:dev  # 仅首次需要；已有数据库不必重复导入
 pnpm dev:local
 ```
 
-Compose 仅向宿主机回环地址发布 PostgreSQL `5433` 和 Redis `6380`，不会启动 Auth、Gateway、MCP 实例或前端容器。
-
-若此前以 Docker 网络地址导入过示例实例，切回宿主机开发时可**显式**执行 `pnpm db:seed:dev --sync-urls`。此选项只更新示例实例的 URL，不改 Server 的启停和认证设置；未加该选项时不会覆盖管理界面修改的 URL。
+Compose 仅向宿主机回环地址发布 PostgreSQL `5433` 和 Redis `6380`，不会启动 Auth、Gateway 或前端容器。
 
 Docker 启动与验证仍可使用：
 
 ```bash
-docker compose up -d --build postgres redis auth
-docker compose exec -T auth pnpm --filter @mcp/auth-server db:seed:dev --docker  # 仅首次需要
 docker compose up -d --build
 pnpm typecheck
-REPORTS_UPSTREAM_URL=http://mcp-reports:3003 pnpm smoke
+pnpm test:unit
 ```
 
-全容器模式下，冒烟测试注册的示例上游地址须使用 Compose 网络中的服务名，供 Gateway 容器访问；宿主机模式运行 `pnpm smoke` 时可保留默认的 `http://localhost:3003`。
+启动后打开管理前端注册实际服务。宿主机运行和容器运行时，请分别填写对应网络中 Gateway 能够访问的上游地址。
 
-同一数据库从宿主机开发切换到 Compose 全容器模式时，可显式加 `--sync-urls` 将示例实例地址改为 Docker 服务名；切回宿主机时运行不带 `--docker` 的同步命令。此操作不会在正常启动时自动执行。
+## 客户端验证
+
+客户端脚本通过动态注册创建 OAuth 客户端，使用已有用户完成登录，再连接已注册的实际服务：
+
+```bash
+MCP_SERVER_NAME=external-search MCP_USER=alice MCP_PASSWORD='<用户密码>' pnpm client
+MCP_USER=alice MCP_PASSWORD='<用户密码>' pnpm token
+```
+
+`pnpm client` 会列出实际服务提供的工具；`pnpm token` 输出该用户的 Access Token。用户需已被授予对应服务的权限，必要时先在个人连接中心完成上游认证。
+
+## 冒烟测试
+
+测试上游、测试用户与注册数据位于 `tests/fixtures/`，仅用于独立测试数据库，不参与 `pnpm dev:local`、默认 Docker Compose 或生产 runtime 镜像。CI 通过 `.github/compose.ci.yml` 显式启动测试上游并导入测试数据，再运行 `pnpm smoke`。
 
 端到端测试覆盖统一登录、server 列表过滤、未授权入口返回 403、用户授权后进入指定入口，以及同一逻辑 server 的会话粘性与负载分配。

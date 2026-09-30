@@ -89,67 +89,6 @@ services:
         condition: service_healthy
       auth:
         condition: service_healthy
-      mcp-a:
-        condition: service_started
-      mcp-b:
-        condition: service_started
-      mcp-reports:
-        condition: service_started
-      mcp-knowledge:
-        condition: service_started
-
-  mcp-a:
-    build: .
-    command: pnpm --filter @mcp/mcp-server dev
-    environment:
-      MCP_SERVER_NAME: "demo"
-      MCP_INSTANCE_ID: "demo-a"
-      MCP_PORT: "3001"
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./packages/mcp-server/src:/app/packages/mcp-server/src
-      - ./packages/shared/src:/app/packages/shared/src
-
-  mcp-b:
-    build: .
-    command: pnpm --filter @mcp/mcp-server dev
-    environment:
-      MCP_SERVER_NAME: "demo"
-      MCP_INSTANCE_ID: "demo-b"
-      MCP_PORT: "3002"
-    ports:
-      - "3002:3002"
-    volumes:
-      - ./packages/mcp-server/src:/app/packages/mcp-server/src
-      - ./packages/shared/src:/app/packages/shared/src
-
-  mcp-reports:
-    build: .
-    command: pnpm --filter @mcp/mcp-server dev
-    environment:
-      MCP_SERVER_NAME: "reports"
-      MCP_INSTANCE_ID: "reports-a"
-      MCP_PORT: "3003"
-      MCP_DEMO_API_KEY: "smoke-user-key"
-    ports:
-      - "3003:3003"
-    volumes:
-      - ./packages/mcp-server/src:/app/packages/mcp-server/src
-      - ./packages/shared/src:/app/packages/shared/src
-
-  mcp-knowledge:
-    build: .
-    command: pnpm --filter @mcp/mcp-server dev
-    environment:
-      MCP_SERVER_NAME: "knowledge"
-      MCP_INSTANCE_ID: "knowledge-a"
-      MCP_PORT: "3004"
-    ports:
-      - "3004:3004"
-    volumes:
-      - ./packages/mcp-server/src:/app/packages/mcp-server/src
-      - ./packages/shared/src:/app/packages/shared/src
 
 volumes:
   postgres_data:

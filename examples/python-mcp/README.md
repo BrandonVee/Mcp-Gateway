@@ -18,4 +18,4 @@ uv run python register.py  # 输入管理员密码；重复运行会跳过已注
 uv run python verify.py    # 通过 Gateway 列出工具并各调用一次
 ```
 
-也可通过环境变量 `MCP_ADMIN_USERNAME`、`MCP_ADMIN_PASSWORD` 提供管理员凭据。`verify.py` 使用项目已有的 `demo-client` OAuth 客户端；首次准备演示数据时可运行根目录的 `pnpm db:seed:dev`。访问地址分别是 `http://localhost:8000/mcp/python-math`、`/mcp/python-text`、`/mcp/python-utility`。按 `Ctrl+C` 或运行 `uv run python stop_servers.py` 会一起停止三个 Python 服务；已注册的记录会留在 PostgreSQL，可在管理后台删除。
+也可通过环境变量 `MCP_ADMIN_USERNAME`、`MCP_ADMIN_PASSWORD` 提供管理员凭据。`verify.py` 会通过动态注册创建验证所需的 OAuth 客户端，无需导入演示数据。访问地址分别是 `http://localhost:8000/mcp/python-math`、`/mcp/python-text`、`/mcp/python-utility`。按 `Ctrl+C` 或运行 `uv run python stop_servers.py` 会一起停止三个 Python 服务；已注册的记录会留在 PostgreSQL，可在管理后台删除。

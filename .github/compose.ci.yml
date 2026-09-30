@@ -29,22 +29,59 @@ services:
     tmpfs: ["/tmp"]
     volumes: !override ["./config:/app/config:ro"]
   mcp-a:
-    image: mcp-runtime:ci
-    build: !reset null
-    command: ["node", "packages/mcp-server/dist/index.js"]
-    volumes: !reset []
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: test-upstream
+    environment:
+      MCP_SERVER_NAME: "demo"
+      MCP_INSTANCE_ID: "demo-a"
+      MCP_PORT: "3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
   mcp-b:
-    image: mcp-runtime:ci
-    build: !reset null
-    command: ["node", "packages/mcp-server/dist/index.js"]
-    volumes: !reset []
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: test-upstream
+    environment:
+      MCP_SERVER_NAME: "demo"
+      MCP_INSTANCE_ID: "demo-b"
+      MCP_PORT: "3002"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
   mcp-reports:
-    image: mcp-runtime:ci
-    build: !reset null
-    command: ["node", "packages/mcp-server/dist/index.js"]
-    volumes: !reset []
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: test-upstream
+    environment:
+      MCP_SERVER_NAME: "reports"
+      MCP_INSTANCE_ID: "reports-a"
+      MCP_PORT: "3003"
+      MCP_DEMO_API_KEY: "smoke-user-key"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3003/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
   mcp-knowledge:
-    image: mcp-runtime:ci
-    build: !reset null
-    command: ["node", "packages/mcp-server/dist/index.js"]
-    volumes: !reset []
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      target: test-upstream
+    environment:
+      MCP_SERVER_NAME: "knowledge"
+      MCP_INSTANCE_ID: "knowledge-a"
+      MCP_PORT: "3004"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3004/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20

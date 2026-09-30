@@ -9,7 +9,6 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed:dev": "tsx src/seed-dev.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

@@ -10,5 +10,5 @@ COPY config ./config
 RUN pnpm install --frozen-lockfile
 RUN pnpm build:admin
 
-EXPOSE 5173 8000 9001 3001 3002 3003 3004
+EXPOSE 5173 8000 9001
 CMD ["pnpm", "--filter", "@mcp/gateway", "dev"]

@@ -157,7 +157,6 @@ async function main() {
     : join(root, 'config/default.json');
   process.env.CONFIG_FILE = configPath;
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
-  const fixtures = JSON.parse(readFileSync(join(root, 'scripts/dev-fixtures.json'), 'utf8'));
   process.env.ADMIN_WEB_URL ??= 'http://localhost:5173';
   process.env.CONNECTIONS_WEB_URL ??= 'http://localhost:5173/connections';
 
@@ -175,15 +174,10 @@ async function main() {
   await verifyPostgres(postgres.toString());
   await verifyRedis(redis.toString());
 
-  const instances = fixtures.servers.flatMap((server) => server.instances.map((instance) => ({
-    ...instance,
-    serverName: server.name,
-  })));
   const listeners = [
     ['Auth Server', 'localhost', config.auth.port],
     ['Gateway', 'localhost', config.gateway.port],
     ['Admin Web', 'localhost', 5173],
-    ...instances.map((instance) => ['MCP ' + instance.id, 'localhost', instance.port]),
   ];
   for (const [label, host, port] of listeners) {
     if (await tcpOpen(host, port)) {
@@ -196,17 +190,6 @@ async function main() {
 
   start('auth', '@mcp/auth-server');
   await waitFor('Auth Server', `http://localhost:${config.auth.port}/health`);
-  for (const instance of instances) {
-    start(instance.id, '@mcp/mcp-server', {
-      MCP_INSTANCE_ID: instance.id,
-      MCP_SERVER_NAME: instance.serverName,
-      MCP_PORT: String(instance.port),
-      ...(instance.serverName === 'reports' ? { MCP_DEMO_API_KEY: 'smoke-user-key' } : {}),
-    });
-  }
-  await Promise.all(instances.map((instance) => {
-    return waitFor(instance.id, `http://localhost:${instance.port}/health`);
-  }));
   start('gateway', '@mcp/gateway');
   await waitFor('Gateway', `http://localhost:${config.gateway.port}/health`);
   start('admin-web', '@mcp/admin-web');

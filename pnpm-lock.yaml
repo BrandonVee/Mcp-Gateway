@@ -126,11 +126,17 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
-  packages/mcp-server:
-    dependencies:
-      '@mcp/shared':
-        specifier: workspace:*
-        version: link:../shared
+  packages/shared:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.20.4
+        version: 22.20.4
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  tests/fixtures:
+    devDependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.30.0(zod@3.25.76)
@@ -140,7 +146,9 @@ importers:
       zod:
         specifier: ^3.24.1
         version: 3.25.76
-    devDependencies:
+      drizzle-orm:
+        specifier: ^0.45.3
+        version: 0.45.3(@types/pg@8.23.1)(pg@8.23.0)
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25
@@ -150,15 +158,6 @@ importers:
       tsx:
         specifier: ^4.19.2
         version: 4.23.15
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-
-  packages/shared:
-    devDependencies:
-      '@types/node':
-        specifier: ^22.20.4
-        version: 22.20.4
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

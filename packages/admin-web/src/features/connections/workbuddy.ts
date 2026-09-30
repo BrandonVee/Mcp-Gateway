@@ -7,7 +7,7 @@ export function workBuddyConfig(servers: ConnectionServer[], resource: string): 
     throw new Error("Invalid Gateway resource URL");
   }
   const mcpServers = Object.fromEntries(servers.map((server) => [server.name, {
-    type: "http",
+    type: "streamableHttp",
     url: new URL(`/mcp/${encodeURIComponent(server.name)}`, base).toString(),
   }]));
   return JSON.stringify({ mcpServers }, null, 2);

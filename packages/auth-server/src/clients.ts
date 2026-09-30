@@ -25,23 +25,6 @@ function rowToClient(row: typeof clients.$inferSelect): OAuthClient {
   };
 }
 
-// Seed the demo public client so local clients work out of the box.
-export async function seedDemoClient(): Promise<void> {
-  await db
-    .insert(clients)
-    .values({
-      clientId: 'demo-client',
-      clientName: 'Demo Public Client',
-      redirectUris: [
-        'http://localhost:8080/callback',
-        'http://127.0.0.1:8080/callback',
-        'https://claude.ai/api/mcp/auth_callback',
-      ],
-      createdAt: Date.now(),
-    })
-    .onConflictDoNothing({ target: clients.clientId });
-}
-
 export async function getClient(clientId: string): Promise<OAuthClient | undefined> {
   const [row] = await db.select().from(clients).where(eq(clients.clientId, clientId)).limit(1);
   return row ? rowToClient(row) : undefined;

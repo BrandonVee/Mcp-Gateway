@@ -1,5 +1,5 @@
 {
-  "name": "mcp-platform",
+  "name": "mcp-gateway",
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "engines": {
@@ -9,7 +9,6 @@
     "dev": "docker compose up --build",
     "dev:detached": "docker compose up -d --build",
     "dev:local": "node scripts/dev-local.mjs",
-    "db:seed:dev": "pnpm --filter @mcp/auth-server db:seed:dev",
     "dev:down": "docker compose down",
     "dev:logs": "docker compose logs -f",
     "dev:admin": "pnpm --filter @mcp/admin-web dev",
@@ -17,11 +16,10 @@
     "build:runtime": "node scripts/build-runtime.mjs",
     "dev:auth": "pnpm --filter @mcp/auth-server dev",
     "dev:gateway": "pnpm --filter @mcp/gateway dev",
-    "dev:mcp": "pnpm --filter @mcp/mcp-server dev",
     "typecheck": "pnpm -r typecheck",
     "test:unit": "tsx --test scripts/*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "client": "tsx scripts/client-demo.ts",
+    "client": "tsx scripts/client.ts",
     "token": "tsx scripts/get-token.ts"
   },
   "devDependencies": {

@@ -46,7 +46,7 @@ jobs:
           docker compose up -d --wait postgres redis auth mcp-a mcp-b mcp-reports mcp-knowledge
           DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp \
             CONFIG_FILE="$PWD/config/docker.json" \
-            pnpm db:seed:dev --docker
+            pnpm --filter @mcp/test-upstream seed --docker
       - name: Start gateway and admin web
         run: docker compose up -d --wait gateway admin-web
       - name: Run end-to-end smoke test against built images

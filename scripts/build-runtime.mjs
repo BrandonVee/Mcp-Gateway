@@ -18,7 +18,7 @@ const common = {
   }],
 };
 
-for (const service of ['auth-server', 'gateway', 'mcp-server']) {
+for (const service of ['auth-server', 'gateway']) {
   await build({
     ...common,
     entryPoints: [`packages/${service}/src/index.ts`],

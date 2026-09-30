@@ -22,16 +22,16 @@ type LoginError = 'missingCredentials' | 'invalidCredentials';
 
 const pageText = {
   'zh-CN': {
-    signInTitle: 'MCP 认证服务 - 登录', signInHeading: '登录并授权', client: '客户端',
+    signInTitle: 'MCP Gateway - 登录', signInHeading: '登录并授权', client: '客户端',
     username: '用户名', password: '密码', signInSubmit: '登录并授权',
-    consentTitle: 'MCP 认证服务 - 授权', consentHeading: '授权客户端',
+    consentTitle: 'MCP Gateway - 授权', consentHeading: '授权客户端',
     signedInAs: '当前用户：', requestsScope: '请求授权范围：', authorize: '确认授权',
     missingCredentials: '请输入用户名和密码。', invalidCredentials: '用户名或密码错误，或账号已停用。', languageMenu: '切换语言',
   },
   'en-US': {
-    signInTitle: 'MCP Auth Server - Sign in', signInHeading: 'Sign in to authorize', client: 'Client',
+    signInTitle: 'MCP Gateway - Sign in', signInHeading: 'Sign in to authorize', client: 'Client',
     username: 'Username', password: 'Password', signInSubmit: 'Sign in and authorize',
-    consentTitle: 'MCP Auth Server - Authorize', consentHeading: 'Authorize client',
+    consentTitle: 'MCP Gateway - Authorize', consentHeading: 'Authorize client',
     signedInAs: 'Signed in as:', requestsScope: 'requests scope:', authorize: 'Authorize',
     missingCredentials: 'Enter your username and password.', invalidCredentials: 'Invalid username or password, or account disabled.', languageMenu: 'Select language',
   },

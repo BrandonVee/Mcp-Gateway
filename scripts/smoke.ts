@@ -1,5 +1,5 @@
 /**
- * End-to-end smoke test against a running stack (Compose or pnpm dev:local):
+ * End-to-end smoke test against the isolated CI stack with tests/fixtures seeded:
  *
  *   1. discovery: RFC 9728 protected-resource metadata + RFC 8414 auth-server metadata
  *   2. OAuth: use pre-registered "demo-client", do authorization-code + PKCE
@@ -464,7 +464,7 @@ async function main(): Promise<void> {
     headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` },
     body: JSON.stringify({ servers: ['reports', externalServerName, oauthServerName] }),
   });
-  check('admin assigns built-in and external servers', grantRes.status === 200);
+  check('admin assigns test fixtures and external servers', grantRes.status === 200);
 
   // A newly issued JWT carries the updated grants. Existing short-lived JWTs
   // retain their snapshot until expiry.

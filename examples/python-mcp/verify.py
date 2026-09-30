@@ -22,8 +22,13 @@ def access_token(auth_url: str, username: str, password: str) -> str:
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
     redirect_uri = "http://localhost:8080/callback"
     with httpx.Client(base_url=auth_url, timeout=10, follow_redirects=False) as client:
+        registered = client.post("/register", json={
+            "client_name": "Python MCP verification", "redirect_uris": [redirect_uri],
+        })
+        registered.raise_for_status()
+        client_id = registered.json()["client_id"]
         page = client.get("/authorize", params={
-            "response_type": "code", "client_id": "demo-client", "redirect_uri": redirect_uri,
+            "response_type": "code", "client_id": client_id, "redirect_uri": redirect_uri,
             "scope": "mcp", "state": secrets.token_hex(8),
             "code_challenge": challenge, "code_challenge_method": "S256",
         })
@@ -39,7 +44,7 @@ def access_token(auth_url: str, username: str, password: str) -> str:
             raise RuntimeError("OAuth authorization did not return a code")
         token = client.post("/token", data={
             "grant_type": "authorization_code", "code": code, "code_verifier": verifier,
-            "client_id": "demo-client", "redirect_uri": redirect_uri,
+            "client_id": client_id, "redirect_uri": redirect_uri,
         })
         token.raise_for_status()
         return token.json()["access_token"]

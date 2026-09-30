@@ -37,7 +37,7 @@ test("API failures are localized instead of displaying backend English", () => {
 test("HTML entry defaults to Chinese before the app loads", () => {
   const html = readFileSync(new URL("../packages/admin-web/index.html", import.meta.url), "utf8");
   assert.match(html, /<html lang="zh-CN">/);
-  assert.match(html, /<title>MCP 控制台<\/title>/);
+  assert.match(html, /<title>MCP Gateway<\/title>/);
 });
 
 test("frontend JSX has no untranslated display copy", () => {

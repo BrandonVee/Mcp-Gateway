@@ -1,23 +1,15 @@
-/** Explicit, idempotent demo-data import. Never runs during normal startup. */
+/** Fixtures for disposable smoke-test databases only; never used during normal startup. */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { eq } from 'drizzle-orm';
 
-const envPath = fileURLToPath(new URL('../../../.env.local', import.meta.url));
-try {
-  for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-    if (!match || process.env[match[1]] !== undefined) continue;
-    const value = match[2].trim();
-    process.env[match[1]] = /^(['"]).*\1$/.test(value) ? value.slice(1, -1) : value;
-  }
-} catch (error) {
-  if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-}
+if (!process.env.DATABASE_URL) throw new Error('Set DATABASE_URL to a disposable smoke-test database');
+
+if (process.env.NODE_ENV === 'production') throw new Error('Smoke fixtures cannot be seeded in production');
 
 const args = new Set(process.argv.slice(2));
 if ([...args].some((arg) => !['--docker', '--sync-urls'].includes(arg))) {
-  throw new Error('Usage: pnpm db:seed:dev [--docker] [--sync-urls]');
+  throw new Error('Usage: pnpm --filter @mcp/test-upstream seed [--docker] [--sync-urls]');
 }
 const docker = args.has('--docker');
 const syncUrls = args.has('--sync-urls');
@@ -27,21 +19,24 @@ if (docker && !process.env.CONFIG_FILE) {
 
 interface FixtureInstance { id: string; port: number; dockerHost: string }
 interface FixtureServer { name: string; displayName: string; instances: FixtureInstance[] }
-const fixture = JSON.parse(readFileSync(new URL('../../../scripts/dev-fixtures.json', import.meta.url), 'utf8')) as {
+const fixture = JSON.parse(readFileSync(new URL('../servers.json', import.meta.url), 'utf8')) as {
   servers: FixtureServer[];
 };
-const { createUserRow, db, initializeDatabase, pool } = await import('./db.js');
-const { seedDemoClient } = await import('./clients.js');
-const { mcpServerInstances, mcpServers, userServerAccess, users } = await import('./schema.js');
+const { createUserRow, db, initializeDatabase, pool } = await import('../../../packages/auth-server/src/db.js');
+const { clients, mcpServerInstances, mcpServers, userServerAccess, users } = await import('../../../packages/auth-server/src/schema.js');
 
 try {
   await initializeDatabase();
   const [previousDemoUser] = await db.select({ id: users.id }).from(users).where(eq(users.username, 'demo-user')).limit(1);
   if (!previousDemoUser && process.env.SEED_DEMO_USER !== '0') {
     await createUserRow('demo-user', process.env.DEMO_PASSWORD ?? 'demo123', 'user');
-    console.log('[seed-dev] demo account seeded: demo-user (change/remove for production)');
+    console.log('[seed-smoke] demo account seeded: demo-user (change/remove for production)');
   }
-  await seedDemoClient();
+  await db.insert(clients).values({
+    clientId: 'demo-client', clientName: 'Smoke Test Client',
+    redirectUris: ['http://localhost:8080/callback', 'http://127.0.0.1:8080/callback'],
+    createdAt: Date.now(),
+  }).onConflictDoNothing({ target: clients.clientId });
 
   const now = Date.now();
   await db.transaction(async (tx) => {
@@ -77,7 +72,7 @@ try {
       }
     }
   });
-  console.log(`[seed-dev] Imported demo data for ${docker ? 'Docker' : 'local'} networking${syncUrls ? ' (fixture URLs synchronized)' : ' (existing records preserved)'}.`);
+  console.log(`[seed-smoke] Imported demo data for ${docker ? 'Docker' : 'local'} networking${syncUrls ? ' (fixture URLs synchronized)' : ' (existing records preserved)'}.`);
 } finally {
   await pool.end();
 }
