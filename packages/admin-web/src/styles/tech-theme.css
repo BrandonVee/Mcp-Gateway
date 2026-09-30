@@ -16,6 +16,10 @@
   --surface: #0d1422;
 }
 
+.signup-access-setting{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:16px;margin:18px 0;border:1px solid #25354c;border-radius:12px;background:#0b1422}
+.signup-access-setting strong{font-size:14px;color:#edf5ff}
+.signup-access-setting p{margin:6px 0 0;font-size:12px;line-height:1.7;color:#8292aa}
+
 /* Monitoring: dense operational readout, distinct from the editing screens. */
 .monitor-page { gap: 22px; }
 .monitor-overview,

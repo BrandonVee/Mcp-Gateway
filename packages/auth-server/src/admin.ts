@@ -376,18 +376,19 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   /** Server-centric view of the same user <-> server grants. Admins have implicit access. */
   router.get('/admin/servers/:name/users', async (c) => {
     const name = c.req.param('name');
-    const [server] = await db.select({ name: mcpServers.name }).from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
+    const [server] = await db.select({ name: mcpServers.name, signupAccess: mcpServers.signupAccess }).from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
     if (!server) return jsonError(c, 'server not found', 404);
     const grants = await db.select({ userId: userServerAccess.userId }).from(userServerAccess)
       .where(eq(userServerAccess.serverName, name)).orderBy(userServerAccess.userId);
-    return c.json({ server_name: name, user_ids: grants.map((grant) => grant.userId) });
+    return c.json({ server_name: name, signup_access: server.signupAccess, user_ids: grants.map((grant) => grant.userId) });
   });
 
   router.put('/admin/servers/:name/users', async (c) => {
     const name = c.req.param('name');
     const [server] = await db.select({ name: mcpServers.name }).from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
     if (!server) return jsonError(c, 'server not found', 404);
-    const body = (await c.req.json().catch(() => ({}))) as { user_ids?: unknown };
+    const body = (await c.req.json().catch(() => ({}))) as { user_ids?: unknown; signup_access?: unknown };
+    if (body.signup_access !== undefined && typeof body.signup_access !== 'boolean') return jsonError(c, 'signup_access must be a boolean');
     if (!Array.isArray(body.user_ids) || !body.user_ids.every((id) => Number.isSafeInteger(id) && id > 0)) {
       return jsonError(c, 'user_ids must be an array of positive integer IDs');
     }
@@ -396,10 +397,12 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const ordinaryIds = new Set(candidates.filter((user) => user.role === 'user' && !user.allServers).map((user) => user.id));
     if (ids.some((id) => !ordinaryIds.has(id))) return jsonError(c, 'user_ids must refer to ordinary users without wildcard access');
     await db.transaction(async (tx) => {
+      if (typeof body.signup_access === 'boolean') await tx.update(mcpServers)
+        .set({ signupAccess: body.signup_access, updatedAt: Date.now() }).where(eq(mcpServers.name, name));
       await tx.delete(userServerAccess).where(eq(userServerAccess.serverName, name));
       if (ids.length) await tx.insert(userServerAccess).values(ids.map((userId) => ({ userId, serverName: name, createdAt: Date.now() })));
     });
-    return c.json({ server_name: name, user_ids: ids });
+    return c.json({ server_name: name, signup_access: body.signup_access, user_ids: ids });
   });
 
   router.patch('/admin/users/:id', async (c) => {
@@ -486,6 +489,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         name: mcpServers.name,
         displayName: mcpServers.displayName,
         enabled: mcpServers.enabled,
+        signupAccess: mcpServers.signupAccess,
         authMode: mcpServers.authMode,
         apiKeyHeader: mcpServers.apiKeyHeader,
         apiKeyPrefix: mcpServers.apiKeyPrefix,
@@ -513,6 +517,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         name: row.name,
         display_name: row.displayName,
         enabled: row.enabled,
+        signup_access: row.signupAccess,
         auth_mode: row.authMode,
         api_key_header: row.apiKeyHeader,
         api_key_prefix: row.apiKeyPrefix,
@@ -537,6 +542,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const body = (await c.req.json().catch(() => ({}))) as {
       name?: string;
       display_name?: string;
+      signup_access?: boolean;
       instances?: Array<{ id?: string; url?: string }>;
       auth_mode?: string;
       api_key_header?: string;
@@ -555,6 +561,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const [existing] = await db.select({ name: mcpServers.name }).from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
     if (existing) return jsonError(c, 'server already exists', 409);
     const displayName = body.display_name?.trim() || name;
+    if (body.signup_access !== undefined && typeof body.signup_access !== 'boolean') return jsonError(c, 'signup_access must be a boolean');
     const auth = authSettings(body as Record<string, unknown>);
     if (auth.error) return jsonError(c, auth.error);
     const now = Date.now();
@@ -566,7 +573,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       normalizedInstances.push({ id: instance.id?.trim() || randomUUID(), url });
     }
     await db.transaction(async (tx) => {
-      await tx.insert(mcpServers).values({ name, displayName, enabled: true, createdAt: now, updatedAt: now, ...auth.values });
+      await tx.insert(mcpServers).values({ name, displayName, enabled: true, signupAccess: body.signup_access ?? false, createdAt: now, updatedAt: now, ...auth.values });
       if (normalizedInstances.length) {
         await tx.insert(mcpServerInstances).values(
           normalizedInstances.map((instance) => ({
@@ -579,7 +586,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         );
       }
     });
-    return c.json({ name, display_name: displayName, enabled: true, auth_mode: auth.values?.authMode, instances: normalizedInstances }, 201);
+    return c.json({ name, display_name: displayName, enabled: true, signup_access: body.signup_access ?? false, auth_mode: auth.values?.authMode, instances: normalizedInstances }, 201);
   });
 
   router.post('/admin/servers/:name/instances', async (c) => {
@@ -629,7 +636,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const name = c.req.param('name');
     const [existing] = await db.select().from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
     if (!existing) return jsonError(c, 'server not found', 404);
-    const body = (await c.req.json().catch(() => ({}))) as { display_name?: string; enabled?: boolean; auth_mode?: string };
+    const body = (await c.req.json().catch(() => ({}))) as { display_name?: string; enabled?: boolean; auth_mode?: string; signup_access?: boolean };
+    if (body.signup_access !== undefined && typeof body.signup_access !== 'boolean') return jsonError(c, 'signup_access must be a boolean');
     if (body.auth_mode !== undefined) {
       const auth = authSettings(body as Record<string, unknown>, existing);
       if (auth.error) return jsonError(c, auth.error);
@@ -655,6 +663,9 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     }
     if (body.enabled !== undefined) {
       await db.update(mcpServers).set({ enabled: body.enabled, updatedAt: Date.now() }).where(eq(mcpServers.name, name));
+    }
+    if (body.signup_access !== undefined) {
+      await db.update(mcpServers).set({ signupAccess: body.signup_access, updatedAt: Date.now() }).where(eq(mcpServers.name, name));
     }
     return c.json({ ok: true });
   });

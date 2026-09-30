@@ -93,6 +93,8 @@ jobs:
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5173/api/internal/mcp-servers)" = 404
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5173/gateway/mcp/demo)" = 404
           pnpm smoke
+      - name: Verify self-registration and default service grants
+        run: ADMIN_PASSWORD=admin123 SIGNUP_UPSTREAM_HOST=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}') pnpm exec tsx scripts/smoke-signup.ts
       - name: Show service logs on failure
         if: failure()
         run: docker compose logs --no-color || true

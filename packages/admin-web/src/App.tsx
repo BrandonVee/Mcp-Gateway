@@ -300,7 +300,7 @@ function ControlPlane() {
               )
             }
             onConfigureAuth={(server, data) => execute(() => controlPlane.api.updateServer(server.name, data), t("app.authenticationSettingsUpdated"))}
-            onConfigureUsers={(server, userIds) => execute(() => controlPlane.api.setServerUsers(server.name, userIds), t("app.userGrantsUpdated"))}
+            onConfigureUsers={(server, userIds, signupAccess) => execute(() => controlPlane.api.setServerUsers(server.name, userIds, signupAccess), t("app.userGrantsUpdated"))}
           />
         </>
       )}

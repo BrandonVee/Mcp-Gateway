@@ -144,6 +144,7 @@ export function ServersPage(props: ServersPageProps) {
                   <div>
                     <small>{t("servers.accessGrants")}</small>
                     <strong>{t("servers.countUsers", { count: server.user_count })}</strong>
+                    {server.signup_access && <Tag color="blue">{t("servers.signupAccess")}</Tag>}
                   </div>
                   <Button icon={<TeamOutlined />} onClick={() => props.onConfigureUsers(server)}>{t("servers.assignAccess")}</Button>
                 </div>

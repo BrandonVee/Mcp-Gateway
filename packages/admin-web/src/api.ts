@@ -113,7 +113,7 @@ export const api = {
     }),
   updateServer: (
     name: string,
-    body: { display_name?: string; enabled?: boolean } | ServerAuthInput,
+    body: { display_name?: string; enabled?: boolean; signup_access?: boolean } | ServerAuthInput,
   ) =>
     request(`/api/admin/servers/${encodeURIComponent(name)}`, {
       method: "PATCH",
@@ -123,10 +123,10 @@ export const api = {
     request(`/api/admin/servers/${encodeURIComponent(name)}`, {
       method: "DELETE",
     }),
-  setServerUsers: (name: string, userIds: number[]) =>
+  setServerUsers: (name: string, userIds: number[], signupAccess?: boolean) =>
     request(`/api/admin/servers/${encodeURIComponent(name)}/users`, {
       method: "PUT",
-      body: JSON.stringify({ user_ids: userIds }),
+      body: JSON.stringify({ user_ids: userIds, signup_access: signupAccess }),
     }),
   addInstance: (name: string, body: { id?: string; url: string }) =>
     request(`/api/admin/servers/${encodeURIComponent(name)}/instances`, {

@@ -61,6 +61,7 @@ export const mcpServers = pgTable('mcp_servers', {
   name: text('name').primaryKey(),
   displayName: text('display_name').notNull(),
   enabled: boolean('enabled').notNull().default(true),
+  signupAccess: boolean('signup_access').notNull().default(false),
   authMode: text('auth_mode').$type<'none' | 'api_key' | 'oauth'>().notNull().default('none'),
   apiKeyHeader: text('api_key_header').notNull().default('authorization'),
   apiKeyPrefix: text('api_key_prefix').notNull().default('Bearer '),

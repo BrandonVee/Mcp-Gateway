@@ -8,7 +8,7 @@ import {
   SearchOutlined,
   TeamOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Checkbox, Empty, Form, Input, Modal, Segmented, Select } from "antd";
+import { Alert, Button, Checkbox, Empty, Form, Input, Modal, Segmented, Select, Switch } from "antd";
 import { useMemo, useState } from "react";
 import type {
   AddInstanceInput,
@@ -27,12 +27,13 @@ interface ServerDialogsProps {
   onCreate: (data: CreateServerInput) => void;
   onAddInstance: (server: McpServer, data: AddInstanceInput) => void;
   onConfigureAuth: (server: McpServer, data: ServerAuthInput) => void;
-  onConfigureUsers: (server: McpServer, userIds: number[]) => void;
+  onConfigureUsers: (server: McpServer, userIds: number[], signupAccess: boolean) => void;
 }
 
 interface ServerFormValues {
   name: string;
   displayName?: string;
+  signup_access: boolean;
   instanceId?: string;
   url: string;
   auth_mode: "none" | "api_key" | "oauth";
@@ -77,6 +78,7 @@ function CreateServerDialog({
     onCreate({
       name: values.name,
       display_name: values.displayName || values.name,
+      signup_access: values.signup_access,
       instances: [{ id: values.instanceId || undefined, url: values.url }],
       ...authFields(values),
     });
@@ -106,7 +108,7 @@ function CreateServerDialog({
         message={t("serverDialog.useHttpHttpsStreamableMcp")}
         className="dialog-alert"
       />
-      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ auth_mode: "none", api_key_header: "authorization", api_key_prefix: "Bearer " }}>
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ signup_access: false, auth_mode: "none", api_key_header: "authorization", api_key_prefix: "Bearer " }}>
         <Form.Item
           name="name"
           label={t("serverDialog.serverId")}
@@ -126,6 +128,9 @@ function CreateServerDialog({
         </Form.Item>
         <Form.Item name="displayName" label={t("serverDialog.displayName")}>
           <Input placeholder={t("serverDialog.exampleExternalSearch")} />
+        </Form.Item>
+        <Form.Item name="signup_access" label={t("serverDialog.signupAccess")} valuePropName="checked" extra={t("serverDialog.signupAccessHelp")}>
+          <Switch />
         </Form.Item>
         <Form.Item name="instanceId" label={t("serverDialog.instanceIdOptional")}>
           <Input placeholder={t("serverDialog.leaveBlankGenerateUuid")} />
@@ -218,6 +223,7 @@ function ConfigureUsersDialog({ server, users, busy, onClose, onConfigureUsers }
     .filter((user) => user.role === "user" && !user.servers.includes("*") && user.servers.includes(server.name))
     .map((user) => user.id), [server.name, users]);
   const [selectedIds, setSelectedIds] = useState<number[]>(initialIds);
+  const [signupAccess, setSignupAccess] = useState(server.signup_access ?? false);
   const selected = new Set(selectedIds);
   const fixedUsers = users.filter((user) => user.role === "admin" || user.servers.includes("*"));
   const ordinaryUsers = users.filter((user) => user.role === "user" && !user.servers.includes("*"));
@@ -226,7 +232,7 @@ function ConfigureUsersDialog({ server, users, busy, onClose, onConfigureUsers }
     .filter((user) => user.username.toLocaleLowerCase().includes(normalizedKeyword))
     .filter((user) => filter === "all" || (filter === "granted" ? user.role === "admin" || user.servers.includes("*") || selected.has(user.id) : user.role === "user" && !user.servers.includes("*") && !selected.has(user.id)));
   const visibleEditableIds = visibleUsers.filter((user) => user.role === "user" && !user.servers.includes("*")).map((user) => user.id);
-  const changed = selectedIds.length !== initialIds.length || initialIds.some((id) => !selected.has(id));
+  const changed = signupAccess !== (server.signup_access ?? false) || selectedIds.length !== initialIds.length || initialIds.some((id) => !selected.has(id));
 
   const toggleUser = (id: number, checked: boolean) => {
     setSelectedIds((current) => checked ? [...current, id] : current.filter((item) => item !== id));
@@ -246,8 +252,12 @@ function ConfigureUsersDialog({ server, users, busy, onClose, onConfigureUsers }
     okButtonProps={{ disabled: !changed }}
     confirmLoading={busy}
     onCancel={onClose}
-    onOk={() => onConfigureUsers(server, selectedIds)}
+    onOk={() => onConfigureUsers(server, selectedIds, signupAccess)}
   >
+    <div className="signup-access-setting">
+      <div><strong>{t("serverDialog.signupAccess")}</strong><p>{t("serverDialog.signupAccessHelp")}</p></div>
+      <Switch checked={signupAccess} onChange={setSignupAccess} aria-label={t("serverDialog.signupAccess")} />
+    </div>
     <div className="access-summary">
       <div><strong>{selectedIds.length}</strong><span>{t("serverDialog.directGrants")}</span></div>
       <div><strong>{fixedUsers.length}</strong><span>{t("serverDialog.inheritedGrants")}</span></div>

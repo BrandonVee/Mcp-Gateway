@@ -17,6 +17,7 @@ export interface McpServer {
   name: string;
   display_name: string;
   enabled: boolean;
+  signup_access: boolean;
   auth_mode: "none" | "api_key" | "oauth";
   api_key_header: string;
   api_key_prefix: string;
@@ -89,6 +90,7 @@ export interface CreateUserInput {
 export interface CreateServerInput {
   name: string;
   display_name: string;
+  signup_access?: boolean;
   instances: Array<{ id?: string; url: string }>;
   auth_mode: "none" | "api_key" | "oauth";
   api_key_header?: string;

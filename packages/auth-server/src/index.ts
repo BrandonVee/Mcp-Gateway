@@ -75,6 +75,7 @@ app.use('*', cors({ allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPT
 
 const publicPostLimits: Record<string, [number, number]> = {
   '/authorize/submit': [30, 60],
+  '/authorize/signup': [10, 3600],
   '/admin/session': [20, 60],
   '/me/session': [20, 60],
   '/token': [120, 60],
@@ -97,7 +98,7 @@ app.use('*', async (c, next) => {
       }
     }
   }
-  if (['/authorize', '/authorize/submit', '/token', '/admin/session', '/me/session', '/register'].includes(c.req.path)) {
+  if (['/authorize', '/authorize/submit', '/authorize/signup', '/token', '/admin/session', '/me/session', '/register'].includes(c.req.path)) {
     c.header('Cache-Control', 'no-store');
   }
   await next();
