@@ -1,0 +1,111 @@
+# Built unified application image plus disposable test dependencies/upstreams.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mcp
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: mcp-dev-password
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "mcp", "-d", "mcp"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:6380:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+  app:
+    image: mcp-app:ci
+    build:
+      context: ..
+      dockerfile: Dockerfile.production
+      target: app
+    read_only: true
+    tmpfs: ["/tmp"]
+    stop_grace_period: 15s
+    environment:
+      NODE_ENV: development
+      SYSTEM_CONFIG_MODE: ""
+      CONFIG_FILE: /app/config/input.json
+      ADMIN_WEB_URL: http://localhost:5173
+      CONNECTIONS_WEB_URL: http://localhost:5173/connections
+      CREDENTIAL_ENCRYPT_KEY: 9f52ebfcbdfb3f52cfcf214b6196952c486efe7ec2c1d7f7a2144d72428c01fc
+      CREDENTIAL_BROKER_TOKEN: ef23e6d931a69ad96a57d9ba38a39c810d6adb8a61f4e38990a9b14e0bc6a36d
+      # Protocol tests use raw service ports; production keeps these on loopback.
+      AUTH_LISTEN_HOST: 0.0.0.0
+      GATEWAY_LISTEN_HOST: 0.0.0.0
+    volumes: ["../config/docker.json:/app/config/input.json:ro"]
+    ports: ["127.0.0.1:5173:8080", "127.0.0.1:9001:9001", "127.0.0.1:8000:8000"]
+    networks:
+      default:
+        aliases: [auth, gateway]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+  mcp-a:
+    build:
+      context: ..
+      dockerfile: Dockerfile.production
+      target: test-upstream
+    environment:
+      MCP_SERVER_NAME: "demo"
+      MCP_INSTANCE_ID: "demo-a"
+      MCP_PORT: "3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+  mcp-b:
+    build:
+      context: ..
+      dockerfile: Dockerfile.production
+      target: test-upstream
+    environment:
+      MCP_SERVER_NAME: "demo"
+      MCP_INSTANCE_ID: "demo-b"
+      MCP_PORT: "3002"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+  mcp-reports:
+    build:
+      context: ..
+      dockerfile: Dockerfile.production
+      target: test-upstream
+    environment:
+      MCP_SERVER_NAME: "reports"
+      MCP_INSTANCE_ID: "reports-a"
+      MCP_PORT: "3003"
+      MCP_DEMO_API_KEY: "smoke-user-key"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3003/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+  mcp-knowledge:
+    build:
+      context: ..
+      dockerfile: Dockerfile.production
+      target: test-upstream
+    environment:
+      MCP_SERVER_NAME: "knowledge"
+      MCP_INSTANCE_ID: "knowledge-a"
+      MCP_PORT: "3004"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3004/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+
+volumes:
+  postgres_data:

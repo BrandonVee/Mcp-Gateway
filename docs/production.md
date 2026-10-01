@@ -1,10 +1,51 @@
 # 生产部署与上线检查
 
-推荐使用 [README 的一键部署](../README.md#服务器部署推荐)：无需部署域名参数，使用自己的 Nginx 转发一个 HTTP 端口，再在管理后台保存系统访问地址与可信上游。`deploy/compose.single-host.yml` 同时启动数据库和应用；配置保存在 PostgreSQL 的 `meta.system_settings` 中。下面保留独立数据库、分离域名和手动镜像发布的高级部署方式。
+推荐使用 [README 的一键部署](../README.md#服务器部署推荐)：无需部署域名参数，使用自己的 Nginx 转发一个 HTTP 端口，再在管理后台保存系统访问地址与可信上游。`deploy/compose.single-host.yml` 同时启动数据库和应用；配置保存在 PostgreSQL 的 `meta.system_settings` 中。默认应用由单个 `mcp-app` 镜像运行，加 PostgreSQL、Redis 共三个容器。下面提供外部数据库部署，并保留分离域名的高级模式。
 
-根目录 `docker-compose.yml` 使用源码挂载和开发进程，只用于本地验证。生产示例在 `deploy/compose.production.yml`：它构建 Node 运行镜像和 Nginx 静态前端镜像，不包含开发账号、演示数据、PostgreSQL 或 Redis。三个 HTTP 端口只绑定宿主机回环地址，须由同机负载均衡器提供 TLS、公网路由、访问控制和滚动更新。生产镜像的基础镜像按 digest 固定；升级时要同时更新 digest 并重新扫描。
+根目录 `docker-compose.yml` 使用源码挂载和开发进程，只用于本地验证。分离服务生产示例在 `deploy/compose.production.yml`：它构建 Node 运行镜像和 Nginx 静态前端镜像，不包含开发账号、演示数据、PostgreSQL 或 Redis。三个 HTTP 端口只绑定宿主机回环地址，须由同机负载均衡器提供 TLS、公网路由、访问控制和滚动更新。生产镜像的基础镜像按 digest 固定；升级时要同时更新 digest 并重新扫描。
 
-## 部署流程
+## 统一应用镜像
+
+`Dockerfile.production` 的默认最终目标为 `app`，镜像名称为 `mcp-app`。镜像内依次启动 Auth、Gateway、Nginx；进程管理器由 tini 托管，任何子进程异常退出都会关闭其他进程并退出容器，由 Docker 重启策略重新启动。SIGTERM 会传给子进程，超过 8 秒仍未退出的进程会被终止，Compose 停止宽限为 15 秒。健康检查通过 `/healthz` 同时检查 Auth、Gateway（包括数据库/Redis依赖）；Docker 的 unhealthy 状态本身不会触发重启，依赖恢复后探针可恢复健康。
+
+镜像以非 root 用户运行，应用端口为 8080；9001、8000、9002 仅在容器回环地址监听，外部入口拒绝 `/internal/*` 和 `/api/internal/*`。单机 Compose 采用只读文件系统、临时 `/tmp`、移除 capabilities 和禁止提权。应用进程共享容器隔离边界，网页、认证和网关会一起升级、重启。
+
+```bash
+docker build -f Dockerfile.production --target app -t mcp-app:local .
+docker save -o mcp-app-local.tar mcp-app:local
+# 在服务器上导入，然后使用本地已导入的版本启动：
+docker load -i mcp-app-local.tar
+MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
+```
+
+离线示例还需要服务器已有 PostgreSQL、Redis 镜像。`--use-local-image` 会使用已导入的本地版本，并执行相同的配置、代理信任和旧容器迁移步骤。
+
+### 使用外部数据库
+
+复制 `deploy/app.env.example` 为权限 `0600` 的 `deploy/app.env`，填写外部 PostgreSQL/Redis 地址、三组独立随机密钥、初始管理员密码、镜像版本和可信代理。宿主机 Nginx 将统一 HTTPS 域名转发到 8080，系统访问地址和可信上游在后台设置。该方式只启动一个应用容器：
+
+```bash
+docker compose --env-file deploy/app.env -f deploy/compose.app.yml config --quiet
+docker compose --env-file deploy/app.env -f deploy/compose.app.yml build
+docker compose --env-file deploy/app.env -f deploy/compose.app.yml up -d --wait
+curl --fail http://127.0.0.1:8080/healthz
+```
+
+外部数据库的备份与密钥托管由部署方负责，一键部署的备份脚本仅适用于内置 PostgreSQL 服务。
+
+### 从五容器升级
+
+```bash
+git pull --ff-only
+./scripts/backup.sh
+./scripts/deploy.sh   # 选择 1，本机构建
+```
+
+脚本沿用原项目名、端口、密码和密钥，先准备新应用镜像，再停止并移除该 Compose 项目中原 `auth`、`gateway`、`admin-web` 容器。PostgreSQL/Redis 容器及数据卷保持原样。镜像构建或拉取失败时不会停止原应用。恢复旧备份时，启动器会把原 `http://auth:9001` 内部链接转换为回环链接，只生成容器内临时配置，不改写归档。
+
+回退至旧五容器代码时，先用当前 Compose 停止并移除 `app` 容器，然后切换到原提交执行原 `deploy.sh`，让旧脚本重建内网链接；保留数据库卷和密钥。数据库迁移的回退须结合版本兼容性评估，需要恢复时先保存当前备份。
+
+## 分离服务部署（高级）
 
 首次服务器部署见 [README：服务器部署](../README.md#服务器部署推荐)。以下高级示例使用 `SYSTEM_CONFIG_MODE=file`，将独立的 Auth、Gateway 和管理端地址保留在配置文件中，后台系统设置只读。`deploy/production.env.example` 提供环境变量模板，`deploy/nginx-ingress.conf.example` 提供宿主机 Nginx 示例；`MCP_IMAGE_PREFIX` 可为空或指定带末尾 `/` 的镜像仓库命名空间。
 
@@ -44,7 +85,7 @@
 
 ## 网络、密钥与容量
 
-Auth 和 Gateway 的 `INTERNAL_API_TOKEN`、`CREDENTIAL_BROKER_TOKEN` 必须一致，两个令牌彼此不同；加密密钥只授予 Auth。不要复用开发 Compose 内的默认值，也不要将 `.env.local` 放进镜像；`.dockerignore` 已排除它。PostgreSQL、Redis 和 Auth 的 `/internal/*` 应留在受限网络。
+Auth 和 Gateway 的 `INTERNAL_API_TOKEN`、`CREDENTIAL_BROKER_TOKEN` 必须一致，两个令牌彼此不同。统一镜像的启动器只向 Auth 子进程传递加密密钥和数据库凭据；分离模式下加密密钥仅配置给 Auth。不要复用开发 Compose 内的默认值，也不要将 `.env.local` 放进镜像；`.dockerignore` 已排除它。PostgreSQL、Redis 和 Auth 的 `/internal/*` 应留在受限网络。
 
 `MCP_UPSTREAM_ALLOWLIST_ENABLED` 控制上游白名单，默认 `true`；设为 `false` 时允许任意合法的上游 URL。开启时必须提供非空的 `MCP_UPSTREAM_ALLOWED_HOSTS`，填写逗号分隔的主机名或 IP。Auth 和 Gateway 中的开关及名单必须相同。数据库配置模式通过后台“系统设置”保存开关和名单；已有配置缺少开关时按开启处理。该名单只校验主机名；还须用防火墙或容器网络策略限制 Gateway 的实际出口，防止 DNS 变化导致越界访问。浏览器 MCP 客户端如从其他源发起请求，将完整 Origin 加到 `MCP_ALLOWED_ORIGINS`。`UPSTREAM_MAX_ACTIVE_REQUESTS` 是每个 Gateway 进程允许的同时上游请求数，默认 100；长时间 SSE 连接也占用名额，超出时返回 503。按实际连接数压测后调整。
 
@@ -56,7 +97,7 @@ Auth 和 Gateway 的 `INTERNAL_API_TOKEN`、`CREDENTIAL_BROKER_TOKEN` 必须一�
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 在每次推送和拉取请求中运行类型检查、单元测试、前端及 Node 运行包构建和生产依赖审计；通过后以独立的 `mcp-ci` Compose 项目构建生产镜像，检查 Nginx 内的前端产物，并使用 `.github/compose.ci.yml` 从镜像文件启动服务（不挂载源码、不使用 watch 进程）运行端到端 smoke 测试；测试上游使用独立的 `test-upstream` 镜像目标，不包含在生产 runtime 镜像中。Docker 镜像使用锁文件和 `pnpm install --frozen-lockfile`。另有 `single-host` 任务实际执行一键部署，验证首次后台设置、注册总开关、OAuth 地址变更、旧令牌失效、重启持久化、数据库和加密密钥的备份恢复。调用监控测试覆盖 JSON/SSE、HTTP 200 工具错误、未知结果、去重、元数据隐私、排行和采集开关；注册及监控测试先于会故意耗尽动态客户端注册额度的完整 smoke 测试。此流程验证构建与功能，不代替真实域名、真实上游和生产流量验收。在本机复现 CI 时也应设置独立的 `COMPOSE_PROJECT_NAME`；`docker compose down -v` 会删除该项目的 PostgreSQL 卷。
+`.github/workflows/ci.yml` 在每次推送和拉取请求中运行类型检查、单元测试、前端及 Node 运行包构建和生产依赖审计；通过后以独立的 `mcp-ci` Compose 项目构建统一应用镜像，检查 Nginx 内的前端产物，并使用 `.github/compose.app-ci.yml` 从镜像文件启动服务（不挂载源码、不使用 watch 进程）运行端到端 smoke 测试；测试上游使用独立的 `test-upstream` 镜像目标，不包含在生产 runtime 镜像中。Docker 镜像使用锁文件和 `pnpm install --frozen-lockfile`。另有 `single-host` 任务实际执行一键部署，验证首次后台设置、注册总开关、OAuth 地址变更、旧令牌失效、重启持久化、数据库和加密密钥的备份恢复、内部端口隔离、整体健康检查、故障重启、正常停止和五容器迁移。调用监控测试覆盖 JSON/SSE、HTTP 200 工具错误、未知结果、去重、元数据隐私、排行和采集开关；注册及监控测试先于会故意耗尽动态客户端注册额度的完整 smoke 测试。此流程验证构建与功能，不代替真实域名、真实上游和生产流量验收。在本机复现 CI 时也应设置独立的 `COMPOSE_PROJECT_NAME`；`docker compose down -v` 会删除该项目的 PostgreSQL 卷。
 
 ## 备份与恢复
 
@@ -103,7 +144,7 @@ git pull --ff-only
 ./scripts/backup.sh
 ./scripts/deploy.sh   # 镜像来源选择 1，本机构建
 docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml ps
-docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs --tail=100 auth gateway
+docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs --tail=100 app
 curl --fail https://YOUR_DOMAIN/healthz
 curl --fail https://YOUR_DOMAIN/api/health
 curl --fail https://YOUR_DOMAIN/gateway/health
@@ -131,7 +172,7 @@ curl --fail https://YOUR_DOMAIN/gateway/health
 
 ## 手动发布生产镜像
 
-**在构建机器上**，从要发布的代码提交构建两个生产目标。以下以 GHCR 为例，示例命名空间需改为你拥有权限的实际账号或组织：
+**在构建机器上**，从要发布的代码提交构建统一 `app` 目标。以下以 GHCR 为例，示例命名空间需改为你拥有权限的实际账号或组织：
 
 ```bash
 export IMAGE_NAMESPACE=ghcr.io/your-lowercase-account
@@ -144,14 +185,11 @@ docker login ghcr.io -u YOUR_GITHUB_USERNAME
 docker buildx create --name mcp-release --driver docker-container --use
 
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -f Dockerfile.production --target runtime \
-  -t "$IMAGE_NAMESPACE/mcp-runtime:$MCP_VERSION" --push .
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -f Dockerfile.production --target admin-web \
-  -t "$IMAGE_NAMESPACE/mcp-admin-web:$MCP_VERSION" --push .
+  -f Dockerfile.production --target app \
+  -t "$IMAGE_NAMESPACE/mcp-app:$MCP_VERSION" --push .
 ```
 
-这会发布适用于 x86_64 和 ARM64 服务器的镜像；**不要发布 `builder` 或 `test-upstream` 目标**。GHCR 手动登录使用 personal access token (classic)；发布需要 `write:packages`，拉取私有镜像需要 `read:packages`。详见 [GHCR 认证说明](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)和 [Docker 多架构构建](https://docs.docker.com/build/building/multi-platform/)。
+这会发布适用于 x86_64 和 ARM64 服务器的单个应用镜像；**不要发布 `builder` 或 `test-upstream` 目标**。GHCR 手动登录使用 personal access token (classic)；发布需要 `write:packages`，拉取私有镜像需要 `read:packages`。详见 [GHCR 认证说明](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)和 [Docker 多架构构建](https://docs.docker.com/build/building/multi-platform/)。
 
 
-发布完成后使用 README 的 `MCP_IMAGE_PREFIX` / `MCP_VERSION` 一键拉取部署命令。
+发布完成后使用 README 的 `MCP_IMAGE_PREFIX` / `MCP_VERSION` 一键拉取部署命令。分离服务高级模式仍可单独构建 `runtime` 和 `admin-web` 目标，使用原 `mcp-runtime` / `mcp-admin-web` 名称；它们不用于默认单机部署。

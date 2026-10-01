@@ -32,7 +32,7 @@ cd mcp-gateway
 - **镜像来源**：默认本机构建；选择拉取已发布镜像时，再输入镜像仓库前缀和版本。
 - **首次管理员密码**：用户名固定为 `admin`；密码至少 16 个字符，隐藏输入并再次确认，留空则自动生成。已有部署会保留密码，不重复询问。
 
-脚本会显示配置摘要，确认后保存并启动 PostgreSQL、Redis、Auth Server、Gateway 和管理前端。数据库密码、内部令牌和凭据加密密钥自动生成，不需要手写环境文件；取消或输入中断不会保存本次配置。自动生成的管理员密码会在本次执行结束时显示，手动输入的密码不会输出。
+脚本会显示配置摘要，确认后保存并启动 **app、PostgreSQL、Redis 三个容器**。应用镜像 `mcp-app` 包含管理网页、Nginx、Auth Server 和 Gateway，仅提供一个 HTTP 入口。数据库密码、内部令牌和凭据加密密钥自动生成，不需要手写环境文件；取消或输入中断不会保存本次配置。自动生成的管理员密码会在本次执行结束时显示，手动输入的密码不会输出。
 
 需要显式进入交互、先准备配置，或用于自动化部署时：
 
@@ -40,6 +40,7 @@ cd mcp-gateway
 ./scripts/deploy.sh --interactive                 # 交互安装
 ./scripts/deploy.sh --interactive --prepare-only  # 只保存配置，不启动服务
 ./scripts/deploy.sh --yes                         # 使用环境变量、已有配置或默认值，跳过提示
+MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image # 使用已导入的本地镜像
 ```
 
 非终端环境默认跳过提示，CI 使用 `--yes`。配置保存在 `deploy/single-host/`；升级时以已有参数作为交互默认值。对外访问地址与可信上游统一在管理后台设置。
@@ -88,7 +89,7 @@ git pull --ff-only
 
 # 查看容器和日志。
 docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml ps
-docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs --tail=100 auth gateway admin-web
+docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs --tail=100 app
 ```
 
 部署时选择 **1) 本机构建** 即可，无需镜像仓库。脚本会保留已生成的密钥和密码；数据库与 Redis 使用命名卷持久化。备份默认写入 `backups/`，包含 PostgreSQL、配置和凭据加密密钥，权限为 `0600`，默认保留 14 天。定时备份、加密与恢复步骤见 [备份与恢复](docs/production.md#备份与恢复)。不要用 `down -v` 停止生产部署，它会删除数据库卷。单机升级可能短暂中断，已有 MCP 会话中断后客户端需重新初始化。
@@ -97,7 +98,7 @@ docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.singl
 
 ### 已发布镜像的部署
 
-当前 CI 会构建和测试镜像，尚未自动发布到镜像仓库。将 `runtime` 与 `admin-web` 两个生产目标发布为同版本的 `mcp-runtime` 和 `mcp-admin-web` 后，服务器也可直接拉取：
+当前 CI 会构建和测试统一应用镜像，尚未自动发布到镜像仓库。发布 `app` 目标为 `mcp-app` 后，服务器可直接拉取：
 
 ```bash
 # 私有镜像仓库先使用 docker login 登录。
@@ -106,7 +107,17 @@ MCP_IMAGE_PREFIX=ghcr.io/your-lowercase-account/ MCP_VERSION=YOUR_RELEASE_TAG ./
 
 也可直接运行 `./scripts/deploy.sh`，在交互提示中选择“拉取已发布镜像”。此方式使用相同的后台设置流程，跳过服务器源码构建。环境变量方式的镜像前缀保留末尾 `/`，版本须与已发布 tag 一致；交互输入会自动补上末尾 `/`。
 
-镜像发布命令、使用独立数据库的高级部署和回退说明见 [生产部署文档](docs/production.md)。
+也可在构建机上生成一个应用镜像：
+
+```bash
+docker build -f Dockerfile.production --target app -t mcp-app:local .
+# 离线传到服务器时可导出，服务器用 docker load 导入。
+docker save -o mcp-app-local.tar mcp-app:local
+```
+
+数据库与 Redis 仍独立运行。已有五容器部署直接执行同一部署脚本：镜像准备成功后，脚本会移除原 `auth`、`gateway`、`admin-web` 容器并启动 `app`，保留 PostgreSQL/Redis 容器、数据卷和密钥。升级会短暂中断 MCP 会话，客户端需重新初始化。
+
+镜像发布、离线部署、外部数据库和回退步骤见 [生产部署文档](docs/production.md)。
 
 ## 权限模型
 
@@ -297,7 +308,7 @@ Vite 开发服务器会把 `/api/*` 转发至 Auth Server，把 `/gateway/*` 转
 
 ## 日志与监控
 
-- Auth Server 以 JSON 行输出请求日志，包含请求 ID、方法、路径、状态码和耗时；Gateway 使用 Fastify 结构化日志。两者都不记录 URL 查询字符串，避免 OAuth 回调码进入日志。上游 MCP Server 的运行日志由服务提供方采集。命令行开发时在 `pnpm dev:local` 的终端查看；容器模式使用 `docker compose logs -f auth gateway`。
+- Auth Server 以 JSON 行输出请求日志，包含请求 ID、方法、路径、状态码和耗时；Gateway 使用 Fastify 结构化日志。两者都不记录 URL 查询字符串，避免 OAuth 回调码进入日志。上游 MCP Server 的运行日志由服务提供方采集。命令行开发时在 `pnpm dev:local` 的终端查看；推荐部署使用 `docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs -f app`；源码开发使用 `docker compose logs -f auth gateway`。
 - 管理 API 和个人连接中心对带 `Origin` 的浏览器写请求进行来源校验；显式提供无效 Bearer Token 时不会回退到 Cookie 会话。Gateway 转发上游时移除客户端 Cookie、平台授权头和可伪造的身份头，也不把上游 `Set-Cookie` 写回平台域名。
 - 管理操作和管理员登录会写入 PostgreSQL 的 `audit_events` 表。默认保留 90 天，由 Auth Server 定期清理；可用 `AUDIT_RETENTION_DAYS` 调整。审计写入失败会在服务日志中报错，不会把已完成的管理操作伪装成失败。
 - 管理后台的“日志监控”页每 10 秒刷新服务健康和调用统计，支持时间、服务、工具、用户 ID、客户端筛选，以及成功/失败/未知结果的明细分页。加载较早明细后暂停明细自动刷新，手动刷新或更换筛选可回到最新记录。管理员可查看调用次数、成功率、平均耗时、P95 耗时分桶上界、活跃用户、每分钟峰值及四类排行；调用总览仅统计 `tools/call`，协议请求数包括其他 MCP 消息，批量消息逐条计数。
@@ -355,6 +366,6 @@ MCP_USER=alice MCP_PASSWORD='<用户密码>' pnpm token
 
 ## 冒烟测试
 
-测试上游、测试用户与注册数据位于 `tests/fixtures/`，仅用于独立测试数据库，不参与 `pnpm dev:local`、默认 Docker Compose 或生产 runtime 镜像。CI 通过 `.github/compose.ci.yml` 显式启动测试上游并导入测试数据，再运行 `pnpm smoke`。
+测试上游、测试用户与注册数据位于 `tests/fixtures/`，仅用于独立测试数据库，不参与 `pnpm dev:local`、默认 Docker Compose 或生产 runtime 镜像。CI 通过 `.github/compose.app-ci.yml` 显式启动测试上游并导入测试数据，再运行 `pnpm smoke`。
 
 端到端测试覆盖统一登录、server 列表过滤、未授权入口返回 403、用户授权后进入指定入口，以及同一逻辑 server 的会话粘性与负载分配。

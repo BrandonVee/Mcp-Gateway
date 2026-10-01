@@ -3,6 +3,7 @@
 .env
 .env.*
 deploy/production.env
+deploy/app.env
 deploy/production.json
 deploy/single-host/
 node_modules
@@ -12,3 +13,4 @@ node_modules
 *.log
 data
 backups
+mcp-app-*.tar

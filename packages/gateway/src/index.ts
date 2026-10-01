@@ -102,7 +102,7 @@ const start = async (): Promise<void> => {
     };
     void pollUpstreams();
     setInterval(() => void pollUpstreams(), 15_000).unref();
-    await app.listen({ port: env.port, host: '0.0.0.0' });
+    await app.listen({ port: env.port, host: process.env.GATEWAY_LISTEN_HOST ?? '0.0.0.0' });
     app.log.info({ servers: [...serverConfigs.keys()] }, 'gateway routing ready');
   } catch (err) {
     app.log.error(err);

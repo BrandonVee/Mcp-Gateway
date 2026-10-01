@@ -43,7 +43,11 @@ awk -F= 'NR==FNR {if($1 ~ /^(COMPOSE_PROJECT_NAME|MCP_VERSION|MCP_IMAGE_PREFIX|M
 cp "$stage/config.json" "$deployment_dir/config.json.restoring"
 chmod 600 "$deployment_dir/runtime.env.restoring"
 chmod 644 "$deployment_dir/config.json.restoring"
-"${compose[@]}" stop admin-web gateway auth
+project_name=${COMPOSE_PROJECT_NAME:-$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' "$deployment_dir/runtime.env")}
+[[ "$project_name" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo '部署项目名称无效' >&2; exit 1; }
+source "$project_dir/scripts/deployment-containers.sh"
+remove_legacy_apps "$project_name"
+"${compose[@]}" stop app
 if ! "${compose[@]}" exec -T postgres sh -c 'exec pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --no-acl --single-transaction --exit-on-error' < "$stage/database.dump"; then
   echo '恢复失败，数据库事务已回滚；应用保持停止，请检查日志后重新启动。' >&2
   exit 1

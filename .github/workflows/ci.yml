@@ -41,8 +41,12 @@ jobs:
         run: ./scripts/deploy.sh --yes
       - name: Verify setup, OAuth and persistent settings
         run: pnpm exec tsx scripts/smoke-system-settings.ts
+      - name: Verify unified process lifecycle
+        run: pnpm exec tsx scripts/smoke-app-lifecycle.ts
       - name: Rehearse backup and restore
         run: pnpm exec tsx scripts/smoke-backup.ts
+      - name: Rehearse upgrade from split application containers
+        run: pnpm exec tsx scripts/smoke-single-image-upgrade.ts
       - name: Show service logs on failure
         if: failure()
         run: docker compose --env-file "$MCP_DEPLOY_DIR/runtime.env" -f deploy/compose.single-host.yml logs --no-color || true
@@ -56,7 +60,7 @@ jobs:
     timeout-minutes: 25
     env:
       COMPOSE_PROJECT_NAME: mcp-ci
-      COMPOSE_FILE: docker-compose.yml:.github/compose.ci.yml
+      COMPOSE_FILE: .github/compose.app-ci.yml
       # The runner registers this URL; the gateway resolves it inside Compose.
       REPORTS_UPSTREAM_URL: http://mcp-reports:3003
     steps:
@@ -66,18 +70,16 @@ jobs:
           node-version: '22'
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - name: Build application images
+      - name: Build unified application image
         run: docker compose build
       - name: Verify packaged frontend
-        run: docker compose run --rm --no-deps --entrypoint test admin-web -s /usr/share/nginx/html/index.html
+        run: docker compose run --rm --no-deps --entrypoint test app -s /usr/share/nginx/html/index.html
       - name: Start dependencies and seed fixtures
         run: |
-          docker compose up -d --wait postgres redis auth mcp-a mcp-b mcp-reports mcp-knowledge
+          docker compose up -d --wait postgres redis app mcp-a mcp-b mcp-reports mcp-knowledge
           DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp \
             CONFIG_FILE="$PWD/config/docker.json" \
             pnpm --filter @mcp/test-upstream seed --docker
-      - name: Start gateway and admin web
-        run: docker compose up -d --wait gateway admin-web
       - name: Wait for application readiness
         run: |
           for attempt in $(seq 1 30); do

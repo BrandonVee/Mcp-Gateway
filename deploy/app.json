@@ -1,0 +1,14 @@
+{
+  "auth": {
+    "port": 9001, "issuer": "http://localhost:8080", "accessTokenTtlSeconds": 3600,
+    "defaultAudience": "mcp-gateway", "internalApiToken": "provided-via-environment",
+    "postgres": { "url": "postgres://unused:unused@postgres:5432/mcp", "poolMax": 10 },
+    "bootstrap": { "adminUsername": "admin" }
+  },
+  "gateway": {
+    "port": 8000, "resourceBaseUrl": "http://localhost:8080", "redisUrl": "redis://redis:6379",
+    "authJwksUrl": "http://127.0.0.1:9001/jwks.json", "jwtAudience": "mcp-gateway",
+    "sessionTtlSeconds": 3600, "registryUrl": "http://127.0.0.1:9001/internal/mcp-servers",
+    "registryRefreshSeconds": 15
+  }
+}

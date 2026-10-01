@@ -13,6 +13,11 @@ const sql=(query:string)=>execFileSync('docker',[...compose,'exec','-T','postgre
 const backupDir=mkdtempSync(join(tmpdir(),'mcp-backup-rehearsal-'));
 try {
   sql('CREATE TABLE backup_rehearsal(value integer); INSERT INTO backup_rehearsal VALUES(1);');
+  // Backups from the former split containers must remain restorable.
+  const configFile=resolve(directory,'config.json'),config=JSON.parse(readFileSync(configFile,'utf8'));
+  config.gateway.authJwksUrl='http://auth:9001/jwks.json';
+  config.gateway.registryUrl='http://auth:9001/internal/mcp-servers';
+  writeFileSync(configFile,JSON.stringify(config));
   const output=execFileSync('bash',['scripts/backup.sh'],{env:{...process.env,MCP_BACKUP_DIR:backupDir},encoding:'utf8'});
   const archive=output.trim().split('：').at(-1)!;
   assert.equal(statSync(archive).mode&0o777,0o600);
@@ -33,6 +38,7 @@ try {
   assert.equal(sql('SELECT value FROM backup_rehearsal;'),'1');
   assert.equal(readDeploymentEnvironment(envFile).CREDENTIAL_ENCRYPT_KEY,saved.CREDENTIAL_ENCRYPT_KEY);
   assert.equal(readDeploymentEnvironment(envFile).MCP_VERSION,saved.MCP_VERSION);
+  assert.equal(JSON.parse(readFileSync(configFile,'utf8')).gateway.registryUrl,config.gateway.registryUrl);
   sql('DROP TABLE backup_rehearsal;');
   console.log('PASS: backup permissions, invalid archive/checksum rejection, database restore, encryption-key restore and application restart');
 } finally {rmSync(backupDir,{recursive:true,force:true});}

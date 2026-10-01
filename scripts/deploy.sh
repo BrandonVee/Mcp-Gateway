@@ -4,14 +4,16 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 prepare_only=false
+use_local_image=false
 interaction=auto
 usage() {
   cat <<EOF
-用法：$0 [--interactive | --yes] [--prepare-only]
+用法：$0 [--interactive | --yes] [--prepare-only] [--use-local-image]
   默认：终端中交互配置；非终端环境沿用环境变量和已有配置。
   --interactive   显式启用交互配置
   --yes           跳过提示，适用于 CI 和自动部署
   --prepare-only  只保存配置，不启动服务
+  --use-local-image 使用已构建/导入的本地镜像，跳过构建和拉取
   --help          显示帮助
 EOF
 }
@@ -19,6 +21,7 @@ fail() { echo "$*" >&2; exit 1; }
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --prepare-only) prepare_only=true ;;
+    --use-local-image) use_local_image=true ;;
     --interactive|--yes|--non-interactive)
       selected=interactive
       if [[ "$1" != '--interactive' ]]; then selected=yes; fi
@@ -53,6 +56,7 @@ if [[ -f "$env_path" ]]; then
 fi
 export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-mcp-gateway}
 export MCP_IMAGE_PREFIX=${MCP_IMAGE_PREFIX:-}
+if $use_local_image; then export MCP_IMAGE_PREFIX=''; fi
 export MCP_HTTP_PORT=${MCP_HTTP_PORT:-8080}
 export AUTH_TRUSTED_PROXY_IPS=${AUTH_TRUSTED_PROXY_IPS:-}
 
@@ -74,29 +78,31 @@ if $interactive; then
     if valid_port "$candidate"; then export MCP_HTTP_PORT=$((10#$candidate)); break; fi
     echo '端口须为 1–65535 的整数。' >&2
   done
-  mode=1
-  if [[ -n "$MCP_IMAGE_PREFIX" ]]; then mode=2; fi
-  while true; do
-    read_answer "镜像来源：1) 本机构建  2) 拉取已发布镜像 [$mode]："
-    candidate=${answer:-$mode}
-    if [[ "$candidate" == 1 || "$candidate" == 2 ]]; then mode=$candidate; break; fi
-    echo '请输入 1 或 2。' >&2
-  done
-  if [[ "$mode" == 1 ]]; then
-    export MCP_IMAGE_PREFIX=''
-  else
+  if ! $use_local_image; then
+    mode=1
+    if [[ -n "$MCP_IMAGE_PREFIX" ]]; then mode=2; fi
     while true; do
-      read_answer "镜像仓库前缀${MCP_IMAGE_PREFIX:+ [$MCP_IMAGE_PREFIX]}（如 ghcr.io/your-account/）："
-      candidate=${answer:-$MCP_IMAGE_PREFIX}
-      if [[ -n "$candidate" && "$candidate" != */ ]]; then candidate="$candidate/"; fi
-      if valid_prefix "$candidate"; then export MCP_IMAGE_PREFIX=$candidate; break; fi
-      echo '请输入小写的镜像仓库前缀。' >&2
+      read_answer "镜像来源：1) 本机构建  2) 拉取已发布镜像 [$mode]："
+      candidate=${answer:-$mode}
+      if [[ "$candidate" == 1 || "$candidate" == 2 ]]; then mode=$candidate; break; fi
+      echo '请输入 1 或 2。' >&2
     done
+    if [[ "$mode" == 1 ]]; then
+      export MCP_IMAGE_PREFIX=''
+    else
+      while true; do
+        read_answer "镜像仓库前缀${MCP_IMAGE_PREFIX:+ [$MCP_IMAGE_PREFIX]}（如 ghcr.io/your-account/）："
+        candidate=${answer:-$MCP_IMAGE_PREFIX}
+        if [[ -n "$candidate" && "$candidate" != */ ]]; then candidate="$candidate/"; fi
+        if valid_prefix "$candidate"; then export MCP_IMAGE_PREFIX=$candidate; break; fi
+        echo '请输入小写的镜像仓库前缀。' >&2
+      done
+    fi
   fi
 fi
 if [[ -n "$requested_version" ]]; then
   export MCP_VERSION=$requested_version
-elif [[ -z "$MCP_IMAGE_PREFIX" ]]; then
+elif [[ -z "$MCP_IMAGE_PREFIX" ]] && ! $use_local_image; then
   export MCP_VERSION=$(git rev-parse --short=12 HEAD)
 fi
 export MCP_VERSION=${MCP_VERSION:-$(git rev-parse --short=12 HEAD)}
@@ -141,10 +147,12 @@ for key in POSTGRES_PASSWORD REDIS_PASSWORD INTERNAL_API_TOKEN CREDENTIAL_BROKER
 done
 if $interactive; then
   printf '\n配置目录：%s\nHTTP 入口：http://127.0.0.1:%s\n' "$MCP_DEPLOY_DIR" "$MCP_HTTP_PORT" >&2
-  if [[ -z "$MCP_IMAGE_PREFIX" ]]; then
+  if $use_local_image; then
+    echo "镜像：本地现有 mcp-app:$MCP_VERSION" >&2
+  elif [[ -z "$MCP_IMAGE_PREFIX" ]]; then
     echo "镜像：本机构建，版本 $MCP_VERSION" >&2
   else
-    echo "镜像：${MCP_IMAGE_PREFIX}mcp-runtime:$MCP_VERSION 与 mcp-admin-web:$MCP_VERSION" >&2
+    echo "镜像：${MCP_IMAGE_PREFIX}mcp-app:$MCP_VERSION" >&2
   fi
   echo '管理员：admin；已有账号的密码不会因重新部署而修改。' >&2
   action='开始部署'
@@ -187,8 +195,8 @@ EOF
   },
   "gateway": {
     "port": 8000, "resourceBaseUrl": "http://localhost:8080", "redisUrl": "redis://redis:6379",
-    "authJwksUrl": "http://auth:9001/jwks.json", "jwtAudience": "mcp-gateway",
-    "sessionTtlSeconds": 3600, "registryUrl": "http://auth:9001/internal/mcp-servers",
+    "authJwksUrl": "http://127.0.0.1:9001/jwks.json", "jwtAudience": "mcp-gateway",
+    "sessionTtlSeconds": 3600, "registryUrl": "http://127.0.0.1:9001/internal/mcp-servers",
     "registryRefreshSeconds": 15
   }
 }
@@ -208,11 +216,16 @@ compose up -d --wait postgres redis
 subnets=$(docker network inspect "${COMPOSE_PROJECT_NAME}_control" --format '{{range .IPAM.Config}}{{.Subnet}},{{end}}')
 export AUTH_TRUSTED_PROXY_IPS=${subnets%,}
 save_config
-if [[ -z "$MCP_IMAGE_PREFIX" ]]; then
-  compose build auth admin-web
+if $use_local_image; then
+  docker image inspect "mcp-app:$MCP_VERSION" >/dev/null || fail "未找到本地镜像 mcp-app:$MCP_VERSION，请先构建或 docker load 导入。"
+elif [[ -z "$MCP_IMAGE_PREFIX" ]]; then
+  compose build app
 else
-  compose pull auth gateway admin-web
+  compose pull app
 fi
+# Build/pull succeeded; stop only the former application services in this project.
+source "$root/scripts/deployment-containers.sh"
+remove_legacy_apps "$COMPOSE_PROJECT_NAME"
 compose up -d --no-build --pull never --wait
 echo "Ready: proxy your Nginx to http://127.0.0.1:$MCP_HTTP_PORT"
 echo "Log in through your Nginx and set the public URL in System settings."

@@ -17,7 +17,10 @@ FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
-COPY packages ./packages
+COPY packages/auth-server/package.json ./packages/auth-server/package.json
+COPY packages/gateway/package.json ./packages/gateway/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/auth-server/drizzle ./packages/auth-server/drizzle
 RUN pnpm install --prod --frozen-lockfile --filter @mcp/auth-server --filter @mcp/gateway
 COPY --from=builder /app/packages/auth-server/dist ./packages/auth-server/dist
 COPY --from=builder /app/packages/gateway/dist ./packages/gateway/dist
@@ -30,3 +33,19 @@ COPY --from=builder /app/packages/admin-web/dist /usr/share/nginx/html
 USER nginx
 EXPOSE 8080
 ENTRYPOINT ["nginx", "-g", "daemon off;"]
+
+# Default production image: one application container, external PostgreSQL/Redis.
+FROM runtime AS app
+USER root
+RUN apk add --no-cache nginx tini
+COPY --from=builder /app/packages/admin-web/dist /usr/share/nginx/html
+COPY deploy/nginx-app-main.conf /app/deploy/nginx-main.conf
+COPY deploy/nginx-app.conf /app/deploy/nginx-app.conf
+COPY deploy/app.json /app/config/app.json
+COPY scripts/start-app.mjs /app/scripts/start-app.mjs
+USER node
+ENV NODE_ENV=production SYSTEM_CONFIG_MODE=database CONFIG_FILE=/app/config/app.json
+EXPOSE 8080
+HEALTHCHECK --interval=5s --timeout=4s --start-period=120s --retries=12 CMD ["node", "-e", "fetch('http://127.0.0.1:8080/healthz',{signal:AbortSignal.timeout(3000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+ENTRYPOINT ["/sbin/tini", "--", "node", "/app/scripts/start-app.mjs"]
+CMD []

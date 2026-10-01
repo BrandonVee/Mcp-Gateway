@@ -4,6 +4,7 @@ __pycache__/
 .run.pid
 deploy/production.json
 deploy/production.env
+deploy/app.env
 deploy/single-host/
 dist/
 *.tsbuildinfo
@@ -13,3 +14,4 @@ dist/
 .DS_Store
 data/
 backups/
+/mcp-app-*.tar

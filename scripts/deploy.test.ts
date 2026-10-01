@@ -20,6 +20,10 @@ function sandbox() {
     '#!/usr/bin/env bash',
     'printf "%s\\n" "$*" >> "$MOCK_DOCKER_LOG"',
     'if [[ "$1" == network ]]; then echo "172.88.0.0/24,"; fi',
+    'if [[ "$*" == *"build app"* && ${MOCK_BUILD_FAIL:-0} == 1 ]]; then exit 42; fi',
+    'if [[ "$1" == ps && ${MOCK_LEGACY_APPS:-0} == 1 ]]; then',
+    '  for service in auth gateway admin-web; do if [[ "$*" == *"service=$service"* ]]; then echo "legacy-$service"; fi; done',
+    'fi',
     'exit 0',
   ].join('\n'), { mode: 0o700 });
   const env = { ...process.env };
@@ -54,6 +58,8 @@ test('interactive setup validates input and preserves a literal hidden password 
     assert.equal(saved.ADMIN_PASSWORD, password);
     assert.equal(statSync(setup.envFile).mode & 0o777, 0o600);
     assert.equal(saved.PUBLIC_URL, undefined);
+    const config = JSON.parse(readFileSync(join(setup.deployment, 'config.json'), 'utf8'));
+    assert.equal(new URL(config.gateway.registryUrl).hostname, '127.0.0.1');
     assert.equal(setup.run(['--yes', '--prepare-only']).status, 0);
     assert.deepEqual(readDeploymentEnvironment(setup.envFile), saved);
     assert.ok(!setup.commands().includes(' up '));
@@ -71,8 +77,8 @@ test('interactive image deployment selects the repository and tag without printi
     assert.equal(saved.MCP_IMAGE_PREFIX, 'ghcr.io/example/');
     assert.equal(saved.MCP_VERSION, 'v1.2.3');
     assert.equal(saved.AUTH_TRUSTED_PROXY_IPS, '172.88.0.0/24');
-    assert.match(setup.commands(), /pull auth gateway admin-web/);
-    assert.ok(!setup.commands().includes('build auth'));
+    assert.match(setup.commands(), /pull app/);
+    assert.ok(!setup.commands().includes('build app'));
     assert.ok(!result.stdout.includes(password) && !result.stderr.includes(password));
   } finally { setup.cleanup(); }
 });
@@ -120,5 +126,37 @@ test('exhausted interactive input aborts without saving, while help has no side 
     assert.equal(existsSync(setup.deployment), false);
     assert.equal(setup.run(['--help']).status, 0);
     assert.equal(existsSync(setup.deployment), false);
+  } finally { setup.cleanup(); }
+});
+
+test('upgrade prepares the app image before replacing legacy containers and preserves data services', () => {
+  const setup = sandbox();
+  try {
+    const extra = { ADMIN_PASSWORD: 'known-installer-test-password', MOCK_LEGACY_APPS: '1' };
+    assert.equal(setup.run(['--yes'], '', extra).status, 0);
+    const commands = setup.commands();
+    assert.ok(commands.indexOf('build app') < commands.indexOf('stop --time 15 legacy-auth'));
+    assert.ok(commands.indexOf('rm legacy-auth') < commands.indexOf('up -d --no-build'));
+    assert.match(commands, /stop --time 15 legacy-auth legacy-gateway legacy-admin-web/);
+    assert.ok(!commands.includes('down') && !commands.includes('stop postgres'));
+  } finally { setup.cleanup(); }
+  const failed = sandbox();
+  try {
+    const result = failed.run(['--yes'], '', { ADMIN_PASSWORD: 'known-installer-test-password', MOCK_LEGACY_APPS: '1', MOCK_BUILD_FAIL: '1' });
+    assert.equal(result.status, 42);
+    assert.ok(!failed.commands().includes('stop --time'));
+  } finally { failed.cleanup(); }
+});
+
+test('local image deployment skips build/pull and uses the imported tag', () => {
+  const setup = sandbox();
+  try {
+    const result = setup.run(['--yes', '--use-local-image'], '', { ADMIN_PASSWORD: 'known-installer-test-password', MCP_VERSION: 'local', MCP_IMAGE_PREFIX: 'ghcr.io/previous/' });
+    assert.equal(result.status, 0, result.stderr);
+    const saved = readDeploymentEnvironment(setup.envFile);
+    assert.equal(saved.MCP_VERSION, 'local');assert.equal(saved.MCP_IMAGE_PREFIX, '');
+    assert.match(setup.commands(), /image inspect mcp-app:local/);
+    assert.ok(!setup.commands().includes('build app') && !setup.commands().includes('pull app'));
+    assert.match(setup.commands(), /up -d --no-build --pull never --wait/);
   } finally { setup.cleanup(); }
 });

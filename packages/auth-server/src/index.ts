@@ -125,7 +125,7 @@ app.route('/', createAdminRouter({ keys, get issuer() { return authIssuer(); } }
 app.route('/', createRegistryRouter());
 app.route('/', createConnectionsRouter());
 
-serve({ fetch: app.fetch, port: PORT, hostname: '0.0.0.0' }, () => {
+serve({ fetch: app.fetch, port: PORT, hostname: process.env.AUTH_LISTEN_HOST ?? '0.0.0.0' }, () => {
   console.log(`[auth-server] listening on :${PORT} (issuer: ${authIssuer() || "setup pending"})`);
   console.log(`[auth-server] metadata: ${authIssuer() || "setup pending"}/.well-known/oauth-authorization-server`);
   console.log(`[auth-server] admin UI:   ${authIssuer() || "setup pending"}/admin`);
