@@ -29,7 +29,7 @@ services:
       retries: 30
     networks: [control]
 
-  app:
+  mcp-server:
     image: ${MCP_IMAGE_PREFIX:-}${MCP_IMAGE_NAME:-mcp-app}:${MCP_VERSION:?run scripts/deploy.sh first}
     build:
       context: ..

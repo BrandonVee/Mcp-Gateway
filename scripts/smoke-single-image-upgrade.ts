@@ -18,8 +18,8 @@ async function main() {
   assert.ok(pg && redis, 'data containers must exist before the upgrade');
   assert.ok(Number(users) > 0 && signing, 'existing users and signing key must be present');
   sql('CREATE TABLE upgrade_rehearsal(value integer); INSERT INTO upgrade_rehearsal VALUES(987);');
-  const image=docker(['inspect','--format','{{.Config.Image}}',id('app')]);
-  docker([...compose,'stop','app']);docker([...compose,'rm','-f','app']);
+  const image=docker(['inspect','--format','{{.Config.Image}}',id('mcp-server')]);
+  docker([...compose,'stop','mcp-server']);docker([...compose,'rm','-f','mcp-server']);
   const config=JSON.parse(readFileSync(configFile,'utf8'));
   config.gateway.authJwksUrl='http://auth:9001/jwks.json';config.gateway.registryUrl='http://auth:9001/internal/mcp-servers';
   writeFileSync(configFile,JSON.stringify(config));
@@ -52,7 +52,7 @@ async function main() {
     const after=readDeploymentEnvironment(envFile);
     for(const key of ['POSTGRES_PASSWORD','REDIS_PASSWORD','INTERNAL_API_TOKEN','CREDENTIAL_BROKER_TOKEN','CREDENTIAL_ENCRYPT_KEY','ADMIN_PASSWORD']) assert.equal(after[key],before[key]);
     const services=docker([...compose,'ps','--all','--format','{{.Service}}']).split('\n').sort();
-    assert.deepEqual(services,['app','postgres','redis']);
+    assert.deepEqual(services,['mcp-server','postgres','redis']);
     assert.equal((await fetch(`http://127.0.0.1:${before.MCP_HTTP_PORT}/healthz`)).status,200);
     sql('DROP TABLE upgrade_rehearsal;');
     console.log('PASS: five-container upgrade preserves database/Redis containers, users, signing key, data and deployment secrets; only three containers remain');

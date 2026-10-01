@@ -18,7 +18,7 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
-  app:
+  mcp-server:
     image: ${SETUP_TEST_IMAGE:-mcp-app:setup-test}
     read_only: true
     tmpfs: ["/tmp"]

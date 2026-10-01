@@ -44,15 +44,25 @@ function endpoint(input, kind) {
   }
   return url.toString();
 }
+export function connectionCandidate(input, env, kind) {
+  const key = kind === 'postgres' ? 'DATABASE_URL' : 'REDIS_URL';
+  let url;
+  try {
+    url = endpoint(input?.[kind], kind);
+    if (kind === 'postgres' && decodeURIComponent(new URL(url).password) === 'mcp-dev-password') {
+      throw new Error('development password');
+    }
+  } catch { throw new Error(kind === 'postgres' ? 'PostgreSQL 连接参数无效，请使用生产环境密码。' : 'Redis 连接参数无效。'); }
+  if (env[key] && env[key] !== url) throw new Error('容器环境变量 ' + key + ' 已配置且优先，请移除该变量或填写一致的值。');
+  return { [key]: url };
+}
 export function setupCandidate(input, env) {
   if (!input || typeof input !== 'object') throw new Error('请填写连接参数。');
-  let DATABASE_URL, REDIS_URL;
-  try { DATABASE_URL = endpoint(input.postgres, 'postgres'); } catch { throw new Error('PostgreSQL 连接参数无效。'); }
-  try { REDIS_URL = endpoint(input.redis, 'redis'); } catch { throw new Error('Redis 连接参数无效。'); }
-  if (decodeURIComponent(new URL(DATABASE_URL).password) === 'mcp-dev-password') throw new Error('请为 PostgreSQL 设置生产环境密码。');
+  const { DATABASE_URL } = connectionCandidate(input, env, 'postgres');
+  const { REDIS_URL } = connectionCandidate(input, env, 'redis');
   if (typeof input.adminUsername !== 'string' || !/^[a-zA-Z0-9._-]{3,64}$/.test(input.adminUsername)) throw new Error('管理员账号须为 3–64 位字母、数字、点、下划线或连字符。');
   if (typeof input.adminPassword !== 'string' || input.adminPassword.length < 16 || input.adminPassword.length > 1024) throw new Error('管理员密码须为 16–1024 个字符。');
-  for (const [key, value] of Object.entries({ DATABASE_URL, REDIS_URL, ADMIN_USERNAME: input.adminUsername, ADMIN_PASSWORD: input.adminPassword })) {
+  for (const [key, value] of Object.entries({ ADMIN_USERNAME: input.adminUsername, ADMIN_PASSWORD: input.adminPassword })) {
     if (env[key] && env[key] !== value) throw new Error('容器环境变量 ' + key + ' 已配置且优先，请移除该变量或填写一致的值。');
   }
   const value = { DATABASE_URL, REDIS_URL, ADMIN_USERNAME: input.adminUsername, ADMIN_PASSWORD: input.adminPassword,
@@ -62,12 +72,12 @@ export function setupCandidate(input, env) {
   return value;
 }
 
-export async function checkConnections(env) {
+export async function checkPostgres(env) {
   // Resolve from the service's production dependencies, also usable in source checkouts.
   const require = createRequire(new URL('../packages/auth-server/package.json', import.meta.url));
   const { Client } = require('pg');
-  const Redis = require('ioredis');
   const pg = new Client({ connectionString: env.DATABASE_URL, connectionTimeoutMillis: 5000, query_timeout: 5000, statement_timeout: 5000 });
+  pg.on('error', () => {});
   try {
     await pg.connect();
     await pg.query('BEGIN');
@@ -80,6 +90,11 @@ export async function checkConnections(env) {
     await pg.query('ROLLBACK');
   } catch { throw new Error('PostgreSQL 连接失败或缺少建表权限。请检查地址、账号、数据库、TLS 和网络。'); }
   finally { await pg.end().catch(() => {}); }
+}
+
+export async function checkRedis(env) {
+  const require = createRequire(new URL('../packages/auth-server/package.json', import.meta.url));
+  const Redis = require('ioredis');
   const redis = new Redis(env.REDIS_URL, { lazyConnect: true, connectTimeout: 5000, commandTimeout: 5000, retryStrategy: () => null, maxRetriesPerRequest: 0 });
   redis.on('error', () => {});
   const key = 'mcp:setup-check:' + secret();
@@ -92,7 +107,13 @@ export async function checkConnections(env) {
   finally { redis.disconnect(); }
 }
 
-export async function startSetupServer({ directory, env = process.env, port = 8080, host = '0.0.0.0', check = checkConnections, log = console.log }) {
+export async function checkConnections(env) {
+  await checkPostgres(env);
+  await checkRedis(env);
+}
+
+export async function startSetupServer({ directory, env = process.env, port = 8080, host = '0.0.0.0',
+  check = checkConnections, checkPostgres: testPostgres = checkPostgres, checkRedis: testRedis = checkRedis, log = console.log }) {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const tokenFile = join(directory, 'setup-token');
   let token = existsSync(tokenFile) ? readFileSync(tokenFile, 'utf8').trim() : secret();
@@ -116,7 +137,7 @@ export async function startSetupServer({ directory, env = process.env, port = 80
       res.writeHead(200, { 'Content-Type': asset[1] + '; charset=utf-8' });
       return res.end(readFileSync(new URL(asset[0], assets)));
     }
-    if (req.method !== 'POST' || !['/setup/test', '/setup/install'].includes(path)) return json(404, { error: 'not_found' });
+    if (req.method !== 'POST' || !['/setup/verify', '/setup/test-postgres', '/setup/test-redis', '/setup/test', '/setup/install'].includes(path)) return json(404, { error: 'not_found' });
     if (installed) return json(409, { error: '配置已保存，请等待应用启动。' });
     // Browser Origin must match Host; CLI may omit Origin but still needs the secret.
     if (req.headers.origin) {
@@ -136,6 +157,14 @@ export async function startSetupServer({ directory, env = process.env, port = 80
       for await (const chunk of req) { size += chunk.length; if (size > 16384) { json(413, { error: '请求过大。' }); return; } chunks.push(chunk); }
       let input;
       try { input = JSON.parse(Buffer.concat(chunks).toString()); } catch { return json(400, { error: '请求格式无效。' }); }
+      if (path === '/setup/verify') return json(200, { ok: true, message: '部署身份验证通过。' });
+      if (path === '/setup/test-postgres' || path === '/setup/test-redis') {
+        const kind = path === '/setup/test-postgres' ? 'postgres' : 'redis';
+        let connection;
+        try { connection = connectionCandidate(input, env, kind); } catch (error) { return json(400, { error: error.message }); }
+        try { await (kind === 'postgres' ? testPostgres : testRedis)(connection); } catch (error) { return json(422, { error: error.message }); }
+        return json(200, { ok: true, message: kind === 'postgres' ? 'PostgreSQL 连接与建表权限测试通过。' : 'Redis 连接与读写测试通过。' });
+      }
       let candidate;
       try { candidate = setupCandidate(input, env); } catch (error) { return json(400, { error: error.message }); }
       try { await check(candidate); } catch (error) { return json(422, { error: error.message }); }

@@ -229,9 +229,9 @@ save_config
 if $use_local_image; then
   docker image inspect "$MCP_IMAGE_NAME:$MCP_VERSION" >/dev/null || fail "未找到本地镜像 $MCP_IMAGE_NAME:$MCP_VERSION，请先构建或 docker load 导入。"
 elif [[ -z "$MCP_IMAGE_PREFIX" ]]; then
-  compose build app
+  compose build mcp-server
 else
-  compose pull app
+  compose pull mcp-server
 fi
 # Build/pull succeeded; stop only the former application services in this project.
 source "$root/scripts/deployment-containers.sh"

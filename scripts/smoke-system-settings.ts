@@ -91,7 +91,7 @@ async function main() {
   assert.equal((await request('/servers', 'GET', undefined, updatedUrl, tokens.access_token)).response.status, 401);
   assert.equal((await request('/api/admin/system-settings', 'PUT', { public_url: originalUrl, upstream_hosts: [] }, 'https://attacker.example.test')).response.status, 403);
 
-  execFileSync('docker', ['compose', '--env-file', envFile, '-f', 'deploy/compose.single-host.yml', 'restart', 'app'], { stdio: 'pipe' });
+  execFileSync('docker', ['compose', '--env-file', envFile, '-f', 'deploy/compose.single-host.yml', 'restart', 'mcp-server'], { stdio: 'pipe' });
   let restored = false;
   for (let attempt = 0; attempt < 50; attempt++) {
     try {

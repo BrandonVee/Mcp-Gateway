@@ -14,7 +14,7 @@
 ```bash
 docker volume create mcp-gateway-data
 docker run -d \
-  --name mcp-gateway \
+  --name mcp-server \
   --restart unless-stopped \
   --stop-timeout 15 \
   --read-only --tmpfs /tmp \
@@ -23,14 +23,15 @@ docker run -d \
   -v mcp-gateway-data:/app/data \
   brandonvee/mcp-gateway:latest
 
-docker logs mcp-gateway
+docker logs mcp-server
 ```
 
 1. 在日志中找到 `[setup] initialization key:` 后面的初始化密钥。
 2. 在部署机器打开 `http://127.0.0.1:8080`；远程部署可通过 HTTPS 反向代理访问，或在自己的电脑执行 `ssh -L 18080:127.0.0.1:8080 用户@服务器`，再打开 `http://127.0.0.1:18080`。
-3. 输入初始化密钥，填写 PostgreSQL、Redis 的主机、端口、账号与密码，设置至少 16 个字符的管理员密码。可使用高级选项填写完整连接 URL；启用 TLS 时校验服务器证书。
-4. 点击“测试连接”，再点击“保存并启动”。程序会再次校验连接，生成独立的应用密钥，保存配置并自动进入管理页面。
-5. 配置下面的 HTTPS 入口，再登录后台，在“系统设置”填写系统的 HTTPS 访问地址、可信上游、注册与监控选项。
+3. 第一步输入初始化密钥，点击“验证并继续”。
+4. 第二步只填写 PostgreSQL 参数，点击“测试 PostgreSQL 并继续”；第三步只填写 Redis 参数，点击“测试 Redis 并继续”。每一步独立测试，通过后才能进入下一步；可返回上一步修改，已填内容会保留。高级选项可填写完整连接 URL，启用 TLS 时校验服务器证书。
+5. 第四步设置管理员账号与至少 16 个字符的密码，点击“保存并启动”。程序会重新测试两项连接，生成独立的应用密钥，保存配置并自动进入管理页面。刷新页面需要重新填写；前三步不写入持久化配置。
+6. 配置下面的 HTTPS 入口，再登录后台，在“系统设置”填写系统的 HTTPS 访问地址、可信上游、注册与监控选项。
 
 **地址要从容器内可访问。** `127.0.0.1` / `localhost` 指应用容器自身；另一容器应使用同一 Docker 网络中的服务名，已有外部服务应使用其可访问的 IP / DNS。Docker Desktop 可使用 `host.docker.internal`；Linux 连接宿主机服务时，可在上述启动命令加 `--add-host host.docker.internal:host-gateway`，并确保数据库监听地址及防火墙允许 Docker 网络访问。
 
@@ -88,7 +89,7 @@ services:
       interval: 3s
       timeout: 3s
       retries: 30
-  app:
+  mcp-server:
     image: brandonvee/mcp-gateway:${MCP_VERSION:-latest}
     restart: unless-stopped
     stop_grace_period: 15s
@@ -138,16 +139,20 @@ location / {
 }
 ```
 
-调用频次统计与登录限流依赖真实客户端 IP。设置 `AUTH_TRUSTED_PROXY_IPS` 为可信反向代理实际地址或其 Docker 网段，再重建应用；勿信任所有地址 `0.0.0.0/0`。外部代理需正确覆盖转发头。若由宿主机 Nginx 代理，可用 `docker inspect mcp-gateway` 查看容器所在网络，再用 `docker network inspect <网络名>` 确认宿主机网关地址。方式一在 `docker run` 加 `-e AUTH_TRUSTED_PROXY_IPS=<该网关IP>`，方式二在 `.env` 填写后执行 `docker compose up -d`。
+Compose 服务名为 `mcp-server`，实际容器名由项目名自动生成，例如 `mcp-gateway-mcp-server-1`；使用 `docker compose logs mcp-server` 查看日志。上述单容器 `docker run` 命令的容器名固定为 `mcp-server`。
+
+调用频次统计与登录限流依赖真实客户端 IP。设置 `AUTH_TRUSTED_PROXY_IPS` 为可信反向代理实际地址或其 Docker 网段，再重建应用；勿信任所有地址 `0.0.0.0/0`。外部代理需正确覆盖转发头。若由宿主机 Nginx 代理，可用 `docker inspect mcp-server` 查看容器所在网络，再用 `docker network inspect <网络名>` 确认宿主机网关地址。方式一在 `docker run` 加 `-e AUTH_TRUSTED_PROXY_IPS=<该网关IP>`，方式二在 `.env` 填写后执行 `docker compose up -d`。
 
 ## 更新、日志和备份
+
+旧版 Compose 服务名为 `app`。源码的一键部署脚本会在新镜像准备成功后移除当前项目中的旧 `app`，保留数据库、Redis 和数据卷。手动 Compose 部署应先用原 Compose 文件停止并移除旧 `app` 容器，再用新文件启动 `mcp-server`；沿用原项目名和所有数据卷，不要删除 `/app/data` 配置。只改服务名不会改镜像仓库或数据卷名。
 
 Compose 部署：
 
 ```bash
-docker compose pull app
-docker compose up -d --wait app
-docker compose logs --tail 100 app
+docker compose pull mcp-server
+docker compose up -d --wait mcp-server
+docker compose logs --tail 100 mcp-server
 ```
 
 单应用容器：先保留启动参数与 `mcp-gateway-data` 卷，拉取镜像后停止并删除旧应用容器，再用相同参数重建。无需重新初始化。固定版本时将 `latest` 改为已发布的提交号 / 版本。

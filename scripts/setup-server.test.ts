@@ -80,3 +80,37 @@ test('development file configuration bypasses production browser setup without t
   const env = { NODE_ENV: 'development', MCP_DATA_DIR: '/missing/read-only/setup-ci', CONFIG_FILE: '/app/config/input.json' };
   assert.deepEqual(await prepareEnvironment(env), env);
 });
+
+test('each setup connection test works without the other dependency or administrator and never persists a draft', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mcp-setup-steps-'));
+  let pgChecks = 0, redisChecks = 0, finalChecks = 0, failPg = false;
+  const setup = await startSetupServer({ directory, env: {}, port: 0, host: '127.0.0.1', log: () => {},
+    checkPostgres: async (env: Record<string, string>) => { assert.ok(env.DATABASE_URL); assert.equal(env.REDIS_URL, undefined); pgChecks++; if (failPg) throw new Error('PostgreSQL connection failed'); },
+    checkRedis: async (env: Record<string, string>) => { assert.ok(env.REDIS_URL); assert.equal(env.DATABASE_URL, undefined); redisChecks++; },
+    check: async () => { finalChecks++; },
+  });
+  const base = `http://127.0.0.1:${setup.address.port}`;
+  const post = (path: string, body: object, token = setup.token) => fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json', 'x-setup-token': token }, body: JSON.stringify(body) });
+  try {
+    assert.equal((await post('/setup/verify', {}, 'bad')).status, 401);
+    assert.equal((await post('/setup/test-postgres', { postgres: input.postgres }, 'bad')).status, 401);
+    assert.equal((await post('/setup/test-redis', { redis: input.redis }, 'bad')).status, 401);
+    assert.equal((await post('/setup/verify', {})).status, 200);
+    assert.equal(pgChecks + redisChecks + finalChecks, 0);
+    assert.equal((await post('/setup/test-postgres', { postgres: input.postgres })).status, 200);
+    assert.equal(pgChecks, 1); assert.equal(redisChecks, 0);
+    assert.equal((await post('/setup/test-redis', { redis: input.redis })).status, 200);
+    assert.equal(redisChecks, 1);
+    assert.equal((await post('/setup/test-redis', {})).status, 400);
+    failPg = true;
+    assert.equal((await post('/setup/test-postgres', { postgres: input.postgres })).status, 422);
+    failPg = false;
+    assert.equal((await post('/setup/test-postgres', { postgres: input.postgres })).status, 200);
+    assert.equal(existsSync(join(directory, 'bootstrap.json')), false);
+    assert.equal((await post('/setup/install', { postgres: input.postgres })).status, 400);
+    assert.equal(finalChecks, 0);
+    assert.equal((await post('/setup/install', input)).status, 201);
+    await setup.completed;
+    assert.equal(finalChecks, 1, 'Final install must check both dependencies again');
+  } finally { setup.server.closeAllConnections(); await new Promise<void>(done => setup.server.close(() => done())); rmSync(directory, { recursive: true, force: true }); }
+});

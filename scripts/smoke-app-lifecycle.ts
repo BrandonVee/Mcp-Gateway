@@ -11,11 +11,11 @@ const saved = readDeploymentEnvironment(envFile);
 const base = `http://127.0.0.1:${saved.MCP_HTTP_PORT}`;
 const compose = ['compose', '--env-file', envFile, '-f', 'deploy/compose.single-host.yml'];
 const docker = (args: string[]) => execFileSync('docker', args, { encoding: 'utf8', timeout: 60000 }).trim();
-const id = docker([...compose, 'ps', '-q', 'app']);
+const id = docker([...compose, 'ps', '-q', 'mcp-server']);
 assert.ok(id);
 const state = () => JSON.parse(docker(['inspect', '--format', '{{json .State}}', id]));
 const restarts = () => Number(docker(['inspect', '--format', '{{.RestartCount}}', id]));
-const gatewaySignal = (signal: string) => docker([...compose, 'exec', '-T', 'app', 'node', '-e', `
+const gatewaySignal = (signal: string) => docker([...compose, 'exec', '-T', 'mcp-server', 'node', '-e', `
   const fs=require('node:fs');
   for(const pid of fs.readdirSync('/proc').filter(p=>/^\\d+$/.test(p))) {
     let args;try{args=fs.readFileSync('/proc/'+pid+'/cmdline','utf8').split('\\0');}catch{continue;}
@@ -31,9 +31,9 @@ async function waitFor(check: () => Promise<boolean>) {
   assert.fail('Unified application did not reach the expected state');
 }
 async function main() {
-  const bad = spawnSync('docker', [...compose, 'run', '--rm', '--no-deps', '-e', 'CONFIG_FILE=/missing-config.json', 'app'], { encoding: 'utf8', timeout: 20000 });
+  const bad = spawnSync('docker', [...compose, 'run', '--rm', '--no-deps', '-e', 'CONFIG_FILE=/missing-config.json', 'mcp-server'], { encoding: 'utf8', timeout: 20000 });
   assert.equal(bad.status, 1, bad.stderr);
-  docker([...compose, 'exec', '-T', 'app', 'node', '-e', `
+  docker([...compose, 'exec', '-T', 'mcp-server', 'node', '-e', `
     const os=require('node:os');
     const ip=Object.values(os.networkInterfaces()).flat().find(n=>n.family==='IPv4'&&!n.internal).address;
     (async()=>{for(const port of [9001,8000,9002]) {
@@ -48,9 +48,9 @@ async function main() {
   const before = restarts();
   gatewaySignal('SIGTERM');
   await waitFor(async () => restarts() > before && state().Health?.Status === 'healthy');
-  docker([...compose, 'stop', 'app']);
+  docker([...compose, 'stop', 'mcp-server']);
   assert.equal(state().ExitCode, 0, 'Docker stop must complete without a forced kill');
-  docker([...compose, 'up', '-d', '--no-build', '--pull', 'never', '--wait', 'app']);
+  docker([...compose, 'up', '-d', '--no-build', '--pull', 'never', '--wait', 'mcp-server']);
   await waitFor(async () => (await fetch(base+'/healthz')).ok);
   console.log('PASS: startup failure, private internal ports, aggregate readiness, child-failure restart and clean container shutdown');
 }

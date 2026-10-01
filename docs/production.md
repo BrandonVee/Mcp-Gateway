@@ -26,10 +26,10 @@ MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
 
 ```bash
 docker compose -f deploy/compose.setup.yml up -d
-docker compose -f deploy/compose.setup.yml logs app
+docker compose -f deploy/compose.setup.yml logs mcp-server
 ```
 
-首次打开 8080 入口，输入日志中的初始化密钥，填写 PostgreSQL / Redis 连接参数与管理员账号，测试连接后保存。系统会生成密钥并自动启动；重建容器沿用 `app_data` 卷，初始化接口关闭。详细的 HTTPS / SSH 隧道访问、数据库权限、配置备份及纯镜像部署步骤见 [Docker Hub 使用说明](dockerhub.md)。该方式不创建外部数据库，连接前需准备好数据库和账号。
+首次打开 8080 入口，按四步完成配置：输入日志中的初始化密钥、填写并测试 PostgreSQL、填写并测试 Redis、设置管理员并保存。前一步通过后才能继续，可返回修改；最后保存时再次校验两项连接。中间步骤不写入配置，刷新页面需重新填写。系统会生成密钥并自动启动；重建容器沿用 `app_data` 卷，初始化接口关闭。详细的 HTTPS / SSH 隧道访问、数据库权限、配置备份及纯镜像部署步骤见 [Docker Hub 使用说明](dockerhub.md)。该方式不创建外部数据库，连接前需准备好数据库和账号。
 
 `/healthz` 在等待初始化时返回 `mode: setup, ready: false`；已完成初始化后恢复聚合探针。初始化状态健康表示配置页面可用，不代表 MCP 服务已就绪。`/app/data/bootstrap.json` 保存连接密码和凭据加密密钥，文件权限 `0600`，需要和数据库一起备份；显式环境变量优先。不要用空配置卷连接已有业务库。
 
@@ -46,7 +46,7 @@ curl --fail http://127.0.0.1:8080/healthz
 
 外部数据库的备份与密钥托管由部署方负责，一键部署的备份脚本仅适用于内置 PostgreSQL 服务。
 
-### 从五容器升级
+### 从旧版应用容器升级
 
 ```bash
 git pull --ff-only
@@ -54,9 +54,9 @@ git pull --ff-only
 ./scripts/deploy.sh   # 选择 1，本机构建
 ```
 
-脚本沿用原项目名、端口、密码和密钥，先准备新应用镜像，再停止并移除该 Compose 项目中原 `auth`、`gateway`、`admin-web` 容器。PostgreSQL/Redis 容器及数据卷保持原样。镜像构建或拉取失败时不会停止原应用。恢复旧备份时，启动器会把原 `http://auth:9001` 内部链接转换为回环链接，只生成容器内临时配置，不改写归档。
+脚本沿用原项目名、端口、密码和密钥，先准备新应用镜像，再停止并移除该 Compose 项目中原 `auth`、`gateway`、`admin-web` 或旧版统一应用 `app` 容器，启动新的 `mcp-server` 服务。PostgreSQL/Redis 容器及数据卷保持原样。镜像构建或拉取失败时不会停止原应用。手动 Compose 部署的旧 `app` 迁移步骤见 [Docker Hub 使用说明](dockerhub.md#更新日志和备份)。恢复旧备份时，启动器会把原 `http://auth:9001` 内部链接转换为回环链接，只生成容器内临时配置，不改写归档。
 
-回退至旧五容器代码时，先用当前 Compose 停止并移除 `app` 容器，然后切换到原提交执行原 `deploy.sh`，让旧脚本重建内网链接；保留数据库卷和密钥。数据库迁移的回退须结合版本兼容性评估，需要恢复时先保存当前备份。
+回退至旧五容器代码时，先用当前 Compose 停止并移除 `mcp-server` 容器，然后切换到原提交执行原 `deploy.sh`，让旧脚本重建内网链接；保留数据库卷和密钥。数据库迁移的回退须结合版本兼容性评估，需要恢复时先保存当前备份。
 
 ## 分离服务部署（高级）
 
@@ -157,7 +157,7 @@ git pull --ff-only
 ./scripts/backup.sh
 ./scripts/deploy.sh   # 镜像来源选择 1，本机构建
 docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml ps
-docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs --tail=100 app
+docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs --tail=100 mcp-server
 curl --fail https://YOUR_DOMAIN/healthz
 curl --fail https://YOUR_DOMAIN/api/health
 curl --fail https://YOUR_DOMAIN/gateway/health
@@ -213,7 +213,7 @@ git push origin v1.2.3
 MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scripts/deploy.sh --yes
 ```
 
-外部数据库模式在 `deploy/app.env` 中设置 `MCP_IMAGE_PREFIX=brandonvee/`、`MCP_IMAGE_NAME=mcp-gateway`、`MCP_VERSION=latest`，然后执行 `docker compose --env-file deploy/app.env -f deploy/compose.app.yml pull app` 和 `up -d --no-build --wait`。本机构建默认名称仍为 `mcp-app`，保留已有配置兼容性。
+外部数据库模式在 `deploy/app.env` 中设置 `MCP_IMAGE_PREFIX=brandonvee/`、`MCP_IMAGE_NAME=mcp-gateway`、`MCP_VERSION=latest`，然后执行 `docker compose --env-file deploy/app.env -f deploy/compose.app.yml pull mcp-server` 和 `up -d --no-build --wait`。本机构建默认名称仍为 `mcp-app`，保留已有配置兼容性。
 
 ## 手动发布生产镜像
 

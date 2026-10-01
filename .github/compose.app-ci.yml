@@ -21,7 +21,7 @@ services:
       interval: 3s
       timeout: 2s
       retries: 20
-  app:
+  mcp-server:
     image: mcp-app:ci
     build:
       context: ..

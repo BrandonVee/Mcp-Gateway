@@ -79,10 +79,10 @@ jobs:
       - name: Build unified application image
         run: docker compose build
       - name: Verify packaged frontend
-        run: docker compose run --rm --no-deps --entrypoint test app -s /usr/share/nginx/html/index.html
+        run: docker compose run --rm --no-deps --entrypoint test mcp-server -s /usr/share/nginx/html/index.html
       - name: Start dependencies and seed fixtures
         run: |
-          docker compose up -d --wait postgres redis app mcp-a mcp-b mcp-reports mcp-knowledge
+          docker compose up -d --wait postgres redis mcp-server mcp-a mcp-b mcp-reports mcp-knowledge
           DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp \
             CONFIG_FILE="$PWD/config/docker.json" \
             pnpm --filter @mcp/test-upstream seed --docker
