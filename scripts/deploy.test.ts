@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { readDeploymentEnvironment } from './deploy-env.js';
 
 const script = resolve('scripts/deploy.sh');
-const environmentKeys = ['MCP_DEPLOY_DIR', 'MCP_HTTP_PORT', 'MCP_IMAGE_PREFIX', 'MCP_VERSION', 'COMPOSE_PROJECT_NAME',
+const environmentKeys = ['MCP_DEPLOY_DIR', 'MCP_HTTP_PORT', 'MCP_IMAGE_PREFIX', 'MCP_IMAGE_NAME', 'MCP_VERSION', 'COMPOSE_PROJECT_NAME',
   'POSTGRES_PASSWORD', 'REDIS_PASSWORD', 'INTERNAL_API_TOKEN', 'CREDENTIAL_BROKER_TOKEN',
   'CREDENTIAL_ENCRYPT_KEY', 'ADMIN_PASSWORD', 'AUTH_TRUSTED_PROXY_IPS'];
 
@@ -71,7 +71,7 @@ test('interactive image deployment selects the repository and tag without printi
   try {
     const password = 'known-installer-test-password';
     const result = setup.run(['--interactive'], ['18082', '2', 'ghcr.io/example',
-      'invalid/tag', 'v1.2.3', 'y', ''].join('\n'), { ADMIN_PASSWORD: password });
+      'mcp-app', 'invalid/tag', 'v1.2.3', 'y', ''].join('\n'), { ADMIN_PASSWORD: password });
     assert.equal(result.status, 0, result.stderr);
     const saved = readDeploymentEnvironment(setup.envFile);
     assert.equal(saved.MCP_IMAGE_PREFIX, 'ghcr.io/example/');
@@ -159,4 +159,28 @@ test('local image deployment skips build/pull and uses the imported tag', () => 
     assert.ok(!setup.commands().includes('build app') && !setup.commands().includes('pull app'));
     assert.match(setup.commands(), /up -d --no-build --pull never --wait/);
   } finally { setup.cleanup(); }
+});
+
+test('Docker Hub repository selection persists across upgrades and imported images', () => {
+  const setup = sandbox();
+  try {
+    const result = setup.run(['--interactive'], ['18082', '2', 'brandonvee/',
+      'Invalid/Name', 'mcp-gateway', 'latest', 'y', ''].join('\n'), { ADMIN_PASSWORD: 'known-installer-test-password' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /请输入小写的镜像名称/);
+    assert.match(result.stderr, /brandonvee\/mcp-gateway:latest/);
+    const saved = readDeploymentEnvironment(setup.envFile);
+    assert.equal(saved.MCP_IMAGE_PREFIX, 'brandonvee/');
+    assert.equal(saved.MCP_IMAGE_NAME, 'mcp-gateway');
+    assert.equal(saved.MCP_VERSION, 'latest');
+    assert.equal(setup.run(['--yes', '--prepare-only']).status, 0);
+    assert.deepEqual(readDeploymentEnvironment(setup.envFile), saved);
+    assert.equal(setup.run(['--yes', '--use-local-image']).status, 0);
+    assert.match(setup.commands(), /image inspect mcp-gateway:latest/);
+  } finally { setup.cleanup(); }
+  const invalid = sandbox();
+  try {
+    assert.equal(invalid.run(['--yes', '--prepare-only'], '', { MCP_IMAGE_NAME: 'Invalid/Name' }).status, 1);
+    assert.equal(existsSync(invalid.deployment), false);
+  } finally { invalid.cleanup(); }
 });

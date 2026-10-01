@@ -1,7 +1,7 @@
 # Unified application with externally managed PostgreSQL and Redis.
 services:
   app:
-    image: ${MCP_IMAGE_PREFIX:-}mcp-app:${MCP_VERSION:?set MCP_VERSION}
+    image: ${MCP_IMAGE_PREFIX:-}${MCP_IMAGE_NAME:-mcp-app}:${MCP_VERSION:?set MCP_VERSION}
     build:
       context: ..
       dockerfile: Dockerfile.production

@@ -170,26 +170,58 @@ curl --fail https://YOUR_DOMAIN/gateway/health
 
 以上验收项需要结合实际部署拓扑、合规要求和流量规模确定阈值，不能仅凭本地 smoke 测试视为完成。
 
-## 手动发布生产镜像
+## 自动发布到 Docker Hub
 
-**在构建机器上**，从要发布的代码提交构建统一 `app` 目标。以下以 GHCR 为例，示例命名空间需改为你拥有权限的实际账号或组织：
+`.github/workflows/ci.yml` 的 `publish` 任务等待类型检查、单元测试、完整 MCP/OAuth/监控测试和单机升级/备份演练全部通过，再构建 `Dockerfile.production` 的 `app` 目标并推送到 `brandonvee/mcp-gateway`。构建使用 Docker 官方 Actions、Buildx 与 QEMU，同时发布 `linux/amd64`、`linux/arm64`，生成 SBOM 和最小构建来源证明，复用 GitHub Actions 缓存。发布任务串行执行，避免同时覆盖标签。
+
+首次配置：
+
+1. 在 Docker 账号设置的 Personal access tokens 中创建发布专用令牌，授予 Read & Write 权限。不要使用账号密码。见 [Docker 令牌说明](https://docs.docker.com/security/access-tokens/personal-access-tokens/)。
+2. 在 [GitHub Actions secrets](https://github.com/BrandonVee/Mcp-Gateway/settings/secrets/actions) 添加 Repository secret：名称 `DOCKERHUB_TOKEN`，值为上述令牌。用户名固定为 `brandonvee`。
+3. 推送到 `main`，或在 Actions → CI → Run workflow 选择 `main`。密钥缺失时发布任务会明确报错，测试任务仍可执行。
+
+标签规则：
+
+| 触发方式 | 发布标签 |
+| --- | --- |
+| 推送 `main` 或手动运行 `main` | `latest`、12 位提交 SHA |
+| 推送 `v1.2.3` | `v1.2.3`、`1.2.3`、12 位提交 SHA |
+| PR、其他分支 | 仅测试 |
+
+版本标签不会覆盖 `latest`；`latest` 跟随通过所有测试的 `main`。在发布任务的摘要中查看镜像 digest，Docker Hub 的 Tags 页面查看两个架构。
 
 ```bash
-export IMAGE_NAMESPACE=ghcr.io/your-lowercase-account
+# 在当前已验证的提交上发布一个版本：
+git tag v1.2.3
+git push origin v1.2.3
+
+# 服务器从 Docker Hub 拉取（已有部署建议先备份）：
+./scripts/backup.sh
+MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scripts/deploy.sh --yes
+```
+
+外部数据库模式在 `deploy/app.env` 中设置 `MCP_IMAGE_PREFIX=brandonvee/`、`MCP_IMAGE_NAME=mcp-gateway`、`MCP_VERSION=latest`，然后执行 `docker compose --env-file deploy/app.env -f deploy/compose.app.yml pull app` 和 `up -d --no-build --wait`。本机构建默认名称仍为 `mcp-app`，保留已有配置兼容性。
+
+## 手动发布生产镜像
+
+也可在构建机器上，从要发布的代码提交构建统一 `app` 目标，手动发布到同一 Docker Hub 仓库：
+
+```bash
+export IMAGE_NAMESPACE=brandonvee
 export MCP_VERSION=$(git rev-parse --short=12 HEAD)
 
-# 登录提示中输入 GitHub PAT；发布需 write:packages 权限。
-docker login ghcr.io -u YOUR_GITHUB_USERNAME
+# 登录提示中输入允许写入的 Docker Hub 访问令牌。
+docker login -u brandonvee
 
 # 首次创建；已有此 builder 时用 docker buildx use mcp-release。
 docker buildx create --name mcp-release --driver docker-container --use
 
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f Dockerfile.production --target app \
-  -t "$IMAGE_NAMESPACE/mcp-app:$MCP_VERSION" --push .
+  -t "$IMAGE_NAMESPACE/mcp-gateway:$MCP_VERSION" --push .
 ```
 
-这会发布适用于 x86_64 和 ARM64 服务器的单个应用镜像；**不要发布 `builder` 或 `test-upstream` 目标**。GHCR 手动登录使用 personal access token (classic)；发布需要 `write:packages`，拉取私有镜像需要 `read:packages`。详见 [GHCR 认证说明](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)和 [Docker 多架构构建](https://docs.docker.com/build/building/multi-platform/)。
+这会发布适用于 x86_64 和 ARM64 服务器的单个应用镜像；**不要发布 `builder` 或 `test-upstream` 目标**。详见 [Docker 多架构构建](https://docs.docker.com/build/building/multi-platform/)。
 
 
-发布完成后使用 README 的 `MCP_IMAGE_PREFIX` / `MCP_VERSION` 一键拉取部署命令。分离服务高级模式仍可单独构建 `runtime` 和 `admin-web` 目标，使用原 `mcp-runtime` / `mcp-admin-web` 名称；它们不用于默认单机部署。
+发布完成后使用 README 的 `MCP_IMAGE_PREFIX` / `MCP_IMAGE_NAME` / `MCP_VERSION` 一键拉取部署命令。分离服务高级模式仍可单独构建 `runtime` 和 `admin-web` 目标，使用原 `mcp-runtime` / `mcp-admin-web` 名称；它们不用于默认单机部署。

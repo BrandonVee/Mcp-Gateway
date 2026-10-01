@@ -42,7 +42,7 @@ env_path="$MCP_DEPLOY_DIR/runtime.env"
 if [[ -f "$env_path" ]]; then
   while IFS='=' read -r key value; do
     case "$key" in
-      MCP_VERSION|MCP_IMAGE_PREFIX|COMPOSE_PROJECT_NAME|POSTGRES_PASSWORD|REDIS_PASSWORD|INTERNAL_API_TOKEN|CREDENTIAL_BROKER_TOKEN|CREDENTIAL_ENCRYPT_KEY|ADMIN_PASSWORD|AUTH_TRUSTED_PROXY_IPS|MCP_HTTP_PORT)
+      MCP_VERSION|MCP_IMAGE_PREFIX|MCP_IMAGE_NAME|COMPOSE_PROJECT_NAME|POSTGRES_PASSWORD|REDIS_PASSWORD|INTERNAL_API_TOKEN|CREDENTIAL_BROKER_TOKEN|CREDENTIAL_ENCRYPT_KEY|ADMIN_PASSWORD|AUTH_TRUSTED_PROXY_IPS|MCP_HTTP_PORT)
         # Passwords are double-quoted for Compose; decode without evaluating input.
         if [[ "$value" == \"*\" ]]; then
           value=${value:1:${#value}-2}
@@ -56,6 +56,7 @@ if [[ -f "$env_path" ]]; then
 fi
 export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-mcp-gateway}
 export MCP_IMAGE_PREFIX=${MCP_IMAGE_PREFIX:-}
+export MCP_IMAGE_NAME=${MCP_IMAGE_NAME:-mcp-app}
 if $use_local_image; then export MCP_IMAGE_PREFIX=''; fi
 export MCP_HTTP_PORT=${MCP_HTTP_PORT:-8080}
 export AUTH_TRUSTED_PROXY_IPS=${AUTH_TRUSTED_PROXY_IPS:-}
@@ -67,6 +68,7 @@ read_answer() {
 valid_port() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
 valid_password() { [[ ${#1} -ge 16 && ! "$1" =~ [[:cntrl:]] ]]; }
 valid_prefix() { [[ "$1" =~ ^[a-z0-9][a-z0-9._:/-]*/$ ]]; }
+valid_image_name() { [[ ${#1} -le 255 && "$1" =~ ^[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*$ ]]; }
 valid_version() { [[ "$1" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; }
 generated_admin=false
 if $interactive; then
@@ -91,11 +93,17 @@ if $interactive; then
       export MCP_IMAGE_PREFIX=''
     else
       while true; do
-        read_answer "镜像仓库前缀${MCP_IMAGE_PREFIX:+ [$MCP_IMAGE_PREFIX]}（如 ghcr.io/your-account/）："
+        read_answer "镜像仓库前缀${MCP_IMAGE_PREFIX:+ [$MCP_IMAGE_PREFIX]}（如 brandonvee/）："
         candidate=${answer:-$MCP_IMAGE_PREFIX}
         if [[ -n "$candidate" && "$candidate" != */ ]]; then candidate="$candidate/"; fi
         if valid_prefix "$candidate"; then export MCP_IMAGE_PREFIX=$candidate; break; fi
         echo '请输入小写的镜像仓库前缀。' >&2
+      done
+      while true; do
+        read_answer "镜像名称 [$MCP_IMAGE_NAME]（Docker Hub 使用 mcp-gateway）："
+        candidate=${answer:-$MCP_IMAGE_NAME}
+        if valid_image_name "$candidate"; then export MCP_IMAGE_NAME=$candidate; break; fi
+        echo '请输入小写的镜像名称，不含仓库前缀或 tag。' >&2
       done
     fi
   fi
@@ -133,6 +141,7 @@ valid_port "$MCP_HTTP_PORT" || fail 'MCP_HTTP_PORT 须为 1–65535 的整数'
 export MCP_HTTP_PORT=$((10#$MCP_HTTP_PORT))
 [[ "$COMPOSE_PROJECT_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail 'COMPOSE_PROJECT_NAME 须为小写字母、数字、下划线或连字符'
 if [[ -n "$MCP_IMAGE_PREFIX" ]]; then valid_prefix "$MCP_IMAGE_PREFIX" || fail 'MCP_IMAGE_PREFIX 须为小写镜像仓库前缀，以 / 结尾'; fi
+valid_image_name "$MCP_IMAGE_NAME" || fail 'MCP_IMAGE_NAME 须为小写镜像名称，不含仓库前缀或 tag'
 valid_version "$MCP_VERSION" || fail 'MCP_VERSION 不是有效的镜像 tag'
 if [[ -z "${ADMIN_PASSWORD:-}" ]]; then generated_admin=true; fi
 for key in POSTGRES_PASSWORD REDIS_PASSWORD INTERNAL_API_TOKEN CREDENTIAL_BROKER_TOKEN CREDENTIAL_ENCRYPT_KEY ADMIN_PASSWORD; do
@@ -148,11 +157,11 @@ done
 if $interactive; then
   printf '\n配置目录：%s\nHTTP 入口：http://127.0.0.1:%s\n' "$MCP_DEPLOY_DIR" "$MCP_HTTP_PORT" >&2
   if $use_local_image; then
-    echo "镜像：本地现有 mcp-app:$MCP_VERSION" >&2
+    echo "镜像：本地现有 $MCP_IMAGE_NAME:$MCP_VERSION" >&2
   elif [[ -z "$MCP_IMAGE_PREFIX" ]]; then
     echo "镜像：本机构建，版本 $MCP_VERSION" >&2
   else
-    echo "镜像：${MCP_IMAGE_PREFIX}mcp-app:$MCP_VERSION" >&2
+    echo "镜像：${MCP_IMAGE_PREFIX}${MCP_IMAGE_NAME}:$MCP_VERSION" >&2
   fi
   echo '管理员：admin；已有账号的密码不会因重新部署而修改。' >&2
   action='开始部署'
@@ -170,6 +179,7 @@ save_config() {
 COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME
 MCP_VERSION=$MCP_VERSION
 MCP_IMAGE_PREFIX=$MCP_IMAGE_PREFIX
+MCP_IMAGE_NAME=$MCP_IMAGE_NAME
 MCP_HTTP_PORT=$MCP_HTTP_PORT
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 REDIS_PASSWORD=$REDIS_PASSWORD
@@ -217,7 +227,7 @@ subnets=$(docker network inspect "${COMPOSE_PROJECT_NAME}_control" --format '{{r
 export AUTH_TRUSTED_PROXY_IPS=${subnets%,}
 save_config
 if $use_local_image; then
-  docker image inspect "mcp-app:$MCP_VERSION" >/dev/null || fail "未找到本地镜像 mcp-app:$MCP_VERSION，请先构建或 docker load 导入。"
+  docker image inspect "$MCP_IMAGE_NAME:$MCP_VERSION" >/dev/null || fail "未找到本地镜像 $MCP_IMAGE_NAME:$MCP_VERSION，请先构建或 docker load 导入。"
 elif [[ -z "$MCP_IMAGE_PREFIX" ]]; then
   compose build app
 else

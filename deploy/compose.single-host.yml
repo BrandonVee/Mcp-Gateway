@@ -30,7 +30,7 @@ services:
     networks: [control]
 
   app:
-    image: ${MCP_IMAGE_PREFIX:-}mcp-app:${MCP_VERSION:?run scripts/deploy.sh first}
+    image: ${MCP_IMAGE_PREFIX:-}${MCP_IMAGE_NAME:-mcp-app}:${MCP_VERSION:?run scripts/deploy.sh first}
     build:
       context: ..
       dockerfile: Dockerfile.production

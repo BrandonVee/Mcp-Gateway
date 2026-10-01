@@ -39,7 +39,11 @@ while IFS= read -r image; do
   docker image inspect "$image" >/dev/null || { echo '缺少当前版本镜像，请先准备镜像；未修改数据库。' >&2; exit 1; }
 done < <("${compose[@]}" config --images)
 # Keep the current project, image version, HTTP port and proxy configuration.
-awk -F= 'NR==FNR {if($1 ~ /^(COMPOSE_PROJECT_NAME|MCP_VERSION|MCP_IMAGE_PREFIX|MCP_HTTP_PORT|AUTH_TRUSTED_PROXY_IPS)$/) keep[$1]=$0; next} {if($1 in keep) print keep[$1]; else print}' "$deployment_dir/runtime.env" "$stage/runtime.env" > "$deployment_dir/runtime.env.restoring"
+awk -F= '
+  NR==FNR {if($1 ~ /^(COMPOSE_PROJECT_NAME|MCP_VERSION|MCP_IMAGE_PREFIX|MCP_IMAGE_NAME|MCP_HTTP_PORT|AUTH_TRUSTED_PROXY_IPS)$/) keep[$1]=$0; next}
+  {if($1 in keep) {print keep[$1]; seen[$1]=1} else print}
+  END {for(key in keep) if(!(key in seen)) print keep[key]}
+' "$deployment_dir/runtime.env" "$stage/runtime.env" > "$deployment_dir/runtime.env.restoring"
 cp "$stage/config.json" "$deployment_dir/config.json.restoring"
 chmod 600 "$deployment_dir/runtime.env.restoring"
 chmod 644 "$deployment_dir/config.json.restoring"

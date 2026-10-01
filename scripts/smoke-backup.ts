@@ -18,7 +18,14 @@ try {
   config.gateway.authJwksUrl='http://auth:9001/jwks.json';
   config.gateway.registryUrl='http://auth:9001/internal/mcp-servers';
   writeFileSync(configFile,JSON.stringify(config));
-  const output=execFileSync('bash',['scripts/backup.sh'],{env:{...process.env,MCP_BACKUP_DIR:backupDir},encoding:'utf8'});
+  // Earlier backups did not record the image name. Restoring them must retain
+  // the currently selected repository rather than switching back to mcp-app.
+  const originalEnv=readFileSync(envFile,'utf8');
+  let output:string;
+  try {
+    writeFileSync(envFile,originalEnv.replace(/^MCP_IMAGE_NAME=.*\n/m,''));
+    output=execFileSync('bash',['scripts/backup.sh'],{env:{...process.env,MCP_BACKUP_DIR:backupDir},encoding:'utf8'});
+  } finally {writeFileSync(envFile,originalEnv);}
   const archive=output.trim().split('：').at(-1)!;
   assert.equal(statSync(archive).mode&0o777,0o600);
   sql('UPDATE backup_rehearsal SET value=2;');
@@ -38,6 +45,7 @@ try {
   assert.equal(sql('SELECT value FROM backup_rehearsal;'),'1');
   assert.equal(readDeploymentEnvironment(envFile).CREDENTIAL_ENCRYPT_KEY,saved.CREDENTIAL_ENCRYPT_KEY);
   assert.equal(readDeploymentEnvironment(envFile).MCP_VERSION,saved.MCP_VERSION);
+  assert.equal(readDeploymentEnvironment(envFile).MCP_IMAGE_NAME,saved.MCP_IMAGE_NAME);
   assert.equal(JSON.parse(readFileSync(configFile,'utf8')).gateway.registryUrl,config.gateway.registryUrl);
   sql('DROP TABLE backup_rehearsal;');
   console.log('PASS: backup permissions, invalid archive/checksum rejection, database restore, encryption-key restore and application restart');

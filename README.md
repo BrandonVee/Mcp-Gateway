@@ -29,7 +29,7 @@ cd Mcp-Gateway
 在终端运行时，脚本会引导填写以下参数，回车保留默认值：
 
 - **HTTP 端口**：默认 `8080`，仅监听 `127.0.0.1`，供你自己的 Nginx 转发。
-- **镜像来源**：默认本机构建；选择拉取已发布镜像时，再输入镜像仓库前缀和版本。
+- **镜像来源**：默认本机构建；拉取 Docker Hub 镜像时，仓库前缀填写 `brandonvee/`，镜像名称填写 `mcp-gateway`，版本填写 `latest` 或指定版本。
 - **首次管理员密码**：用户名固定为 `admin`；密码至少 16 个字符，隐藏输入并再次确认，留空则自动生成。已有部署会保留密码，不重复询问。
 
 脚本会显示配置摘要，确认后保存并启动 **app、PostgreSQL、Redis 三个容器**。应用镜像 `mcp-app` 包含管理网页、Nginx、Auth Server 和 Gateway，仅提供一个 HTTP 入口。数据库密码、内部令牌和凭据加密密钥自动生成，不需要手写环境文件；取消或输入中断不会保存本次配置。自动生成的管理员密码会在本次执行结束时显示，手动输入的密码不会输出。
@@ -98,14 +98,14 @@ docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.singl
 
 ### 已发布镜像的部署
 
-当前 CI 会构建和测试统一应用镜像，尚未自动发布到镜像仓库。发布 `app` 目标为 `mcp-app` 后，服务器可直接拉取：
+GitHub Actions 在测试全部通过后自动发布统一应用镜像到 [Docker Hub：brandonvee/mcp-gateway](https://hub.docker.com/r/brandonvee/mcp-gateway)，支持 Linux x86_64 和 ARM64。`main` 更新发布 `latest` 与 12 位提交版本；推送 `v*` 标签发布对应 tag，语义版本标签还会发布不含 `v` 的版本。PR 和其他分支仅测试，不发布。首次启用须配置 `DOCKERHUB_TOKEN` 仓库密钥，见 [自动发布配置](docs/production.md#自动发布到-docker-hub)。
 
 ```bash
-# 私有镜像仓库先使用 docker login 登录。
-MCP_IMAGE_PREFIX=ghcr.io/your-lowercase-account/ MCP_VERSION=YOUR_RELEASE_TAG ./scripts/deploy.sh --yes
+# 拉取最新通过测试的 main 版本；已有部署保留数据库和密钥。
+MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scripts/deploy.sh --yes
 ```
 
-也可直接运行 `./scripts/deploy.sh`，在交互提示中选择“拉取已发布镜像”。此方式使用相同的后台设置流程，跳过服务器源码构建。环境变量方式的镜像前缀保留末尾 `/`，版本须与已发布 tag 一致；交互输入会自动补上末尾 `/`。
+也可直接运行 `./scripts/deploy.sh`，在交互提示中选择“拉取已发布镜像”。前缀 `brandonvee/`、名称 `mcp-gateway` 和版本会保存，后续更新直接执行 `./scripts/deploy.sh --yes`。固定到特定版本时，将 `latest` 改为已发布的 12 位提交版本或版本 tag；前缀保留末尾 `/`，交互输入会自动补齐。本机构建和离线镜像默认仍叫 `mcp-app`，可通过 `MCP_IMAGE_NAME` 指定名称。
 
 也可在构建机上生成一个应用镜像：
 
