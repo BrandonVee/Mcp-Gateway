@@ -1,4 +1,4 @@
-# MCP Gateway
+# Mcp-Gateway
 
 MCP 统一认证与多入口网关，集中管理服务接入、访问权限和用户连接。
 
@@ -21,8 +21,8 @@ MCP Client ── OAuth ──>│  Gateway
 服务器只需要 **Docker（含 Compose）和 Git**。应用对外提供一个 HTTP 端口，域名、证书和 HTTPS 由你自己的 Nginx 处理。
 
 ```bash
-git clone https://github.com/BrandonVee/mcp.git mcp-gateway
-cd mcp-gateway
+git clone https://github.com/BrandonVee/Mcp-Gateway.git
+cd Mcp-Gateway
 ./scripts/deploy.sh
 ```
 
