@@ -3,6 +3,7 @@ import { Alert, Badge, Button, Empty, Input, Select, Spin, Tag } from "antd";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { useEffect, useState } from "react";
 import { api } from "../../api";
+import { UsageMonitoring } from './UsageMonitoring';
 import type { AuditEvent, AuthHealth, GatewayHealth } from "../../types";
 
 const PAGE_SIZE = 50;
@@ -97,6 +98,7 @@ export function MonitoringPage() {
         </div>
       </section>
 
+      <UsageMonitoring gateway={gateway} />
       <section className="monitor-audit-panel">
         <div className="monitor-section-heading">
           <div><span className="section-eyebrow">{t("monitoring.auditEyebrow")}</span><h3>{t("monitoring.auditTrail")}</h3></div>

@@ -41,6 +41,8 @@ jobs:
         run: ./scripts/deploy.sh --yes
       - name: Verify setup, OAuth and persistent settings
         run: pnpm exec tsx scripts/smoke-system-settings.ts
+      - name: Rehearse backup and restore
+        run: pnpm exec tsx scripts/smoke-backup.ts
       - name: Show service logs on failure
         if: failure()
         run: docker compose --env-file "$MCP_DEPLOY_DIR/runtime.env" -f deploy/compose.single-host.yml logs --no-color || true
@@ -96,6 +98,8 @@ jobs:
       # limit. Run signup first so its OAuth client registration has quota.
       - name: Verify self-registration and default service grants
         run: ADMIN_PASSWORD=admin123 SIGNUP_UPSTREAM_HOST=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}') pnpm exec tsx scripts/smoke-signup.ts
+      - name: Verify call monitoring and collection switches
+        run: ADMIN_PASSWORD=admin123 DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 SIGNUP_UPSTREAM_HOST=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}') pnpm exec tsx scripts/smoke-monitoring.ts
       - name: Run end-to-end smoke test against built images
         run: pnpm smoke
       - name: Show service logs on failure

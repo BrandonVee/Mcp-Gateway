@@ -16,6 +16,12 @@ export function registerMcpRoutes(app: FastifyInstance): void {
 }
 
 async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  req.monitoring?.parse();
+  try { await proxyRequest(req, reply); }
+  finally { req.monitoring?.finish(reply.raw.statusCode, reply.raw.destroyed && !reply.raw.writableFinished); }
+}
+
+async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const { serverName } = req.params as { serverName: string };
   let cfg = getServerConfig(serverName);
   if (!cfg) {
@@ -138,6 +144,7 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
 
   try {
     for (const targetUrl of attempts) {
+      req.monitoring?.target(targetUrl);
       const upstreamUrl = new URL(targetUrl);
       const upstreamPort = upstreamUrl.port || (upstreamUrl.protocol === 'https:' ? '443' : '80');
       const selfHosts = new Set(['localhost', '127.0.0.1', '::1', 'gateway']);
@@ -154,6 +161,7 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
         headersTimeout: 15_000,
         bodyTimeout: 0, // Streamable HTTP and SSE may keep the body open indefinitely.
       }).catch((error: unknown) => {
+        if (req.monitoring) req.monitoring.error = 'upstream_transport_error';
         upstreamHealth.recordFailure(targetUrl, 'transport');
         req.log.warn({ error: error instanceof Error ? error.name : 'UnknownError', server: serverName }, 'upstream request failed');
         return null;
@@ -184,6 +192,7 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
       }
 
       const resHeaders = { ...filterResponseHeaders(upstream.headers), ...mcpCorsHeaders(req.headers.origin, env.resourceBaseUrl) };
+      if (req.monitoring) { req.monitoring.status = upstream.statusCode; req.monitoring.error = ''; }
 
       // Hand the raw response over so we can stream (SSE-safe).
       reply.hijack();
@@ -195,6 +204,8 @@ async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<v
         return;
       }
       try {
+        const observer = req.monitoring?.observer(String(upstream.headers['content-type'] || ''));
+        if (observer) { upstream.body.on('data', chunk => observer.write(Buffer.from(chunk))); upstream.body.once('end', () => observer.end()); }
         await pipeline(upstream.body, raw); // undici body is already a Node Readable
       } catch (err) {
         // Client aborted or upstream died mid-stream; nothing sensible to send now.

@@ -17,7 +17,7 @@ async function main() {
   const updatedUrl = 'https://changed.example.test';
   let cookie = '';
   const request = async (path: string, method = 'GET', body?: unknown, origin = originalUrl, bearer?: string) => {
-    return await new Promise<{ response: { status: number; headers: Headers }; data: any }>((done, reject) => {
+    return await new Promise<{ response: { status: number; headers: Headers }; data: any; text: string }>((done, reject) => {
       const outgoing = httpRequest(`${base}${path}`, { method, headers: {
         host: new URL(originalUrl).host, origin,
         ...(cookie ? { cookie } : {}), ...(body ? { 'content-type': 'application/json' } : {}),
@@ -32,7 +32,7 @@ async function main() {
           }
           let data: any = {};
           try { data = JSON.parse(Buffer.concat(chunks).toString()); } catch { /* HTML 404 or empty response. */ }
-          done({ response: { status: incoming.statusCode!, headers }, data });
+          done({ response: { status: incoming.statusCode!, headers }, data, text:Buffer.concat(chunks).toString() });
         });
       });
       outgoing.on('error', reject);
@@ -62,6 +62,20 @@ async function main() {
   assert.equal((await request('/.well-known/oauth-protected-resource')).data.resource, originalUrl);
   assert.equal((await request('/internal/mcp-servers')).response.status, 404);
   assert.equal((await request('/api/internal/mcp-servers')).response.status, 404);
+
+  const registration = await request('/register','POST',{redirect_uris:['http://127.0.0.1:55945/oauth/callback']});
+  assert.equal(registration.response.status,201);
+  const signupQuery=new URLSearchParams({response_type:'code',client_id:registration.data.client_id,redirect_uri:'http://127.0.0.1:55945/oauth/callback',code_challenge:'a'.repeat(43),code_challenge_method:'S256'});
+  assert.equal((await request('/api/admin/system-settings','PUT',{public_url:originalUrl,upstream_hosts:[],registration_enabled:false})).response.status,200);
+  const adminCookie=cookie;cookie='';
+  assert.equal((await request('/authorize/signup?'+signupQuery)).response.status,403);
+  assert.equal((await request('/authorize?'+signupQuery)).text.includes('/authorize/signup'),false);
+  const blockedSignup=await fetch(base+'/authorize/signup',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',origin:originalUrl},body:signupQuery});
+  assert.equal(blockedSignup.status,403);
+  cookie=adminCookie;
+  assert.equal((await request('/api/admin/system-settings','PUT',{public_url:originalUrl,upstream_hosts:[],registration_enabled:true})).response.status,200);
+  cookie='';assert.equal((await request('/authorize/signup?'+signupQuery)).response.status,200);cookie=adminCookie;
+  console.log('PASS: registration switch gates GET/POST, hides signup, and preserves existing login');
 
   process.env.AUTH_URL = base;
   process.env.MCP_USER = 'admin';

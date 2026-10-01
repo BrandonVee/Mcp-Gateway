@@ -1,6 +1,8 @@
+import { registrationEnabled } from '@mcp/shared';
+
 export type AuthPageLanguage = 'zh-CN' | 'en-US';
 export type AuthPageError = 'missingCredentials' | 'invalidCredentials' | 'invalidUsername' | 'invalidPassword'
-  | 'passwordMismatch' | 'usernameTaken' | 'invalidForm' | 'tooManyAttempts' | 'serviceUnavailable';
+  | 'passwordMismatch' | 'usernameTaken' | 'invalidForm' | 'tooManyAttempts' | 'serviceUnavailable' | 'registrationDisabled';
 export interface AuthPageDetails { clientName: string; resourceName?: string }
 
 const text = {
@@ -29,6 +31,7 @@ const text = {
     usernameTaken: '该用户名已被使用，请更换用户名或返回登录。',
     invalidForm: '页面已过期，请重新提交表单。', tooManyAttempts: '操作过于频繁，请稍后再试。',
     serviceUnavailable: '暂时无法创建账号，请稍后再试。',
+    registrationDisabled: '自行注册已关闭，请登录已有账号，或联系管理员创建账号。',
   },
   'en-US': {
     signInTitle: 'MCP Gateway - Sign in', signInHeading: 'Sign in to authorize',
@@ -55,6 +58,7 @@ const text = {
     usernameTaken: 'This username is already in use. Choose another or sign in.',
     invalidForm: 'This page has expired. Please submit the form again.', tooManyAttempts: 'Too many attempts. Please try again later.',
     serviceUnavailable: 'Unable to create an account right now. Please try again later.',
+    registrationDisabled: 'Self-registration is closed. Sign in to an existing account or ask an administrator to create one.',
   },
 } as const;
 
@@ -137,7 +141,7 @@ export function loginPage(q: Record<string, string>, language: AuthPageLanguage,
 <div class="field"><label for="username">${copy.username}</label><input id="username" name="username" autocomplete="username" placeholder="${copy.usernamePlaceholder}" value="${esc(username)}" maxlength="64" required></div>
 <div class="field"><label for="password">${copy.password}</label><input id="password" name="password" type="password" autocomplete="current-password" placeholder="${copy.passwordPlaceholder}" required></div>
 <button class="submit" type="submit">${copy.signInSubmit}${ARROW}</button></form>
-<p class="alternate">${copy.noAccount}<a href="${esc(authorizationLink('/authorize/signup', q, language))}">${copy.createAccount}</a></p>`, '/authorize');
+${registrationEnabled() ? `<p class="alternate">${copy.noAccount}<a href="${esc(authorizationLink('/authorize/signup', q, language))}">${copy.createAccount}</a></p>` : ''}`, '/authorize');
 }
 
 export function signupPage(q: Record<string, string>, language: AuthPageLanguage, details: AuthPageDetails, csrfToken: string, error?: AuthPageError, username = ''): string {

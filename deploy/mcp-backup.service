@@ -1,0 +1,11 @@
+[Unit]
+Description=MCP Gateway database and secret backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/mcp
+EnvironmentFile=-/etc/mcp-backup.env
+ExecStart=/root/mcp/scripts/backup.sh
+UMask=0077

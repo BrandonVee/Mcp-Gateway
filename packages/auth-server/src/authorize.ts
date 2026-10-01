@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { getClient, isRedirectUriAllowed } from './clients.js';
 import { verifyUser, createLoginSession, getSessionUser, getUserAuthorization, db } from './db.js';
 import { saveAuthCode } from './stores.js';
-import { authIssuer, gatewayPublicUrl } from '@mcp/shared';
+import { authIssuer, gatewayPublicUrl, registrationEnabled } from '@mcp/shared';
 import { consumeRateLimit, limitLoginAccount } from './rate-limit.js';
 import { createRegisteredUser, validateSignup } from './registration.js';
 import { mcpServers } from './schema.js';
@@ -56,6 +56,7 @@ authorizeRouter.get('/authorize/signup', async (c) => {
   const language = pageLanguage(c.req.query('lang'), c.req.header('accept-language'));
   const invalid = await validateAuthorizeParams(q);
   if (invalid) return c.json(invalid, 400);
+  if (!registrationEnabled()) return c.html(loginPage(q, language, await pageDetails(q), 'registrationDisabled'), 403);
   if (await getSessionFromCookie(c)) return c.redirect(authorizationLink('/authorize', q, language), 302);
   return showSignup(c, q, language);
 });
@@ -67,6 +68,7 @@ authorizeRouter.post('/authorize/signup', async (c) => {
   const language = pageLanguage(str('lang'), c.req.header('accept-language'));
   const invalid = await validateAuthorizeParams(q);
   if (invalid) return c.json(invalid, 400);
+  if (!registrationEnabled()) return c.html(loginPage(q, language, await pageDetails(q), 'registrationDisabled'), 403);
   const username = str('username').trim();
   const submittedToken = str('form_token');
   const cookieToken = getCookie(c, SIGNUP_FORM_COOKIE) ?? '';

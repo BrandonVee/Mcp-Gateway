@@ -72,6 +72,8 @@ location / {
 
 MCP 客户端打开 OAuth 登录页后，没有账号的用户可以选择“创建账号”。注册成功后会自动登录并继续原来的授权，保留客户端、回调地址、PKCE 和 state 参数。注册账号均为普通用户。
 
+系统设置中的**允许自行注册**默认开启；关闭后隐藏注册入口，并拒绝直接访问或提交注册页面，已有账号仍可登录、授权，管理员仍可创建用户。文件配置模式可用 `MCP_REGISTRATION_ENABLED=false` 关闭注册。
+
 管理员可在“注册服务”弹窗或服务的“分配权限”弹窗中开启**新注册用户默认可访问**。自行注册的新用户会自动获得已启用且勾选此项的服务权限；其他服务仍由管理员手动分配。该选项默认关闭，调整后只影响之后的注册，已有用户的权限不变。服务本身需要 API 密钥或 OAuth 连接时，用户仍需在个人连接中心完成对应连接。
 
 这里的 Nginx 运行在同一台宿主机。若你自己的 Nginx 在容器中，需让它能访问应用入口，再调整 `proxy_pass`；`127.0.0.1` 在容器中指的是该 Nginx 容器自身。
@@ -81,6 +83,7 @@ MCP 客户端打开 OAuth 登录页后，没有账号的用户可以选择“创
 ```bash
 # 更新到要部署的代码版本，再执行同一条命令。
 git pull --ff-only
+./scripts/backup.sh                    # 升级前备份数据库、配置和密钥
 ./scripts/deploy.sh
 
 # 查看容器和日志。
@@ -88,7 +91,7 @@ docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.singl
 docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs --tail=100 auth gateway admin-web
 ```
 
-脚本会保留已生成的密钥和密码；数据库与 Redis 使用命名卷持久化。升级前备份 PostgreSQL 和 `deploy/single-host/`，尤其是 `runtime.env` 中的凭据加密密钥。不要用 `down -v` 停止生产部署，它会删除数据库卷。单机升级可能短暂中断，已有 MCP 会话中断后客户端需重新初始化。
+部署时选择 **1) 本机构建** 即可，无需镜像仓库。脚本会保留已生成的密钥和密码；数据库与 Redis 使用命名卷持久化。备份默认写入 `backups/`，包含 PostgreSQL、配置和凭据加密密钥，权限为 `0600`，默认保留 14 天。定时备份、加密与恢复步骤见 [备份与恢复](docs/production.md#备份与恢复)。不要用 `down -v` 停止生产部署，它会删除数据库卷。单机升级可能短暂中断，已有 MCP 会话中断后客户端需重新初始化。
 
 需要改 HTTP 端口时，在交互提示中输入新端口，或运行 `MCP_HTTP_PORT=18080 ./scripts/deploy.sh --yes`，随后调整你自己的 Nginx 上游端口。
 
@@ -278,8 +281,8 @@ curl -X PUT http://localhost:9001/admin/users/USER_ID/servers \
 - 内部/外部 MCP Server 注册、启停和删除；
 - 上游实例添加、启停、删除；
 - Gateway、Redis、动态注册表运行状态总览。
-- 系统设置：维护对外访问地址与可信上游主机，保存后即时生效并持久化。
-- 日志监控：Auth、PostgreSQL、Gateway、Redis、注册表状态，以及可筛选的管理操作审计。
+- 系统设置：维护对外访问地址、可信上游、注册开关、调用采集开关、保留期限和告警阈值。
+- 日志监控：服务健康、调用趋势、服务/工具/用户/客户端排行、调用明细、当前阈值告警，以及可筛选的管理操作审计。
 - 个人连接中心可复制单个或全部已授权 Server 的 WorkBuddy MCP 导入配置；配置只包含 Gateway URL，登录和二次认证仍由各自的 OAuth/连接流程完成。平台动态注册支持 [WorkBuddy 文档](https://open.workbuddy.cn/docs/connector)所述的私有协议 OAuth 回调及本机回环回调。
 - 中文/英文界面切换：登录页、管理台、连接中心共用语言下拉菜单；页面标题、状态、表单、提示和请求错误均来自语义键的 `zh-CN` / `en-US` 资源文件。语言选择保存在浏览器本地存储，变量通过 `t("key", { name })` 传递。OAuth 登录/授权页按 `Accept-Language`（含权重）或 `?lang=zh-CN|en-US` 选择语言，并在表单提交时保持选择。协议名称、产品名称、HTTP 方法和实际标识符保持原文。
 - 界面字体：英文使用 Nunito，简体中文使用随前端打包的 [Resource Han Rounded CN](https://github.com/CyanoHao/Resource-Han-Rounded) 字形子集；字体许可及更新说明见 `packages/admin-web/src/assets/fonts/`。
@@ -297,7 +300,11 @@ Vite 开发服务器会把 `/api/*` 转发至 Auth Server，把 `/gateway/*` 转
 - Auth Server 以 JSON 行输出请求日志，包含请求 ID、方法、路径、状态码和耗时；Gateway 使用 Fastify 结构化日志。两者都不记录 URL 查询字符串，避免 OAuth 回调码进入日志。上游 MCP Server 的运行日志由服务提供方采集。命令行开发时在 `pnpm dev:local` 的终端查看；容器模式使用 `docker compose logs -f auth gateway`。
 - 管理 API 和个人连接中心对带 `Origin` 的浏览器写请求进行来源校验；显式提供无效 Bearer Token 时不会回退到 Cookie 会话。Gateway 转发上游时移除客户端 Cookie、平台授权头和可伪造的身份头，也不把上游 `Set-Cookie` 写回平台域名。
 - 管理操作和管理员登录会写入 PostgreSQL 的 `audit_events` 表。默认保留 90 天，由 Auth Server 定期清理；可用 `AUDIT_RETENTION_DAYS` 调整。审计写入失败会在服务日志中报错，不会把已完成的管理操作伪装成失败。
-- 管理后台的“日志监控”页每 10 秒检查服务健康状态，并提供审计事件筛选、手动刷新和按 ID 翻页。审计页不是原始服务日志采集器；运行日志仍需从标准输出或容器日志采集。
+- 管理后台的“日志监控”页每 10 秒刷新服务健康和调用统计，支持时间、服务、工具、用户 ID、客户端筛选，以及成功/失败/未知结果的明细分页。加载较早明细后暂停明细自动刷新，手动刷新或更换筛选可回到最新记录。管理员可查看调用次数、成功率、平均耗时、P95 耗时分桶上界、活跃用户、每分钟峰值及四类排行；调用总览仅统计 `tools/call`，协议请求数包括其他 MCP 消息，批量消息逐条计数。
+- 调用记录只保存时间、请求 ID、用户/客户端、服务/工具、状态、耗时、错误分类及实例摘要，不保存参数、结果正文、Token、Cookie 或上游完整地址。HTTP 200 内的 JSON-RPC 错误和 `isError` 工具结果均记为失败；无法观察最终结果的异步调用、超过解析上限的响应记为未知，不计入成功率或工具耗时。当前版本不跨 HTTP 连接关联异步结果。
+- Gateway 将调用元数据异步写入有界 Redis Stream，Auth Server 持久化并按事件 ID 去重；队列不可用或积压达到上限时不阻塞 MCP 响应，页面展示队列积压、采集错误和丢弃计数。重启、队列故障或大流量时统计可能缺失，不作为计费凭据。
+- 系统设置可单独关闭调用明细而继续汇总统计，或关闭全部新调用采集。默认明细保留 14 天、分钟汇总保留 365 天，每 10 分钟清理过期数据；去重记录保留 7 天。当前告警在最近 5 分钟至少 20 次已知结果时检查错误率（默认超过 5%），至少 20 次有耗时时检查 P95 分桶上界（默认超过 2000ms），同时显示采集故障及不可用上游。这些是页面当前告警，尚无历史告警、确认流程或外部通知。
+- 管理操作审计支持独立筛选和翻页。运行日志仍需从标准输出或容器日志采集。
 - Auth Server 与 Gateway 的 `/live` 用于进程存活探测；`/health` 用于就绪探测，依赖不可用时返回 HTTP 503。Gateway 会同时检查 Redis 与动态注册表是否及时同步。
 
 ## 本地运行与验证

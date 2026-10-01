@@ -13,6 +13,8 @@ import { encryptCredential } from './credential-crypto.js';
 import { limitLoginAccount } from './rate-limit.js';
 import { trustedAdminBearerClient } from './admin-bearer.js';
 import { currentSystemSettings, saveSystemSettings } from './system-settings.js';
+import { systemOptionDefaults, registrationEnabled } from '@mcp/shared';
+import { registerMonitoringRoutes } from './monitoring-api.js';
 
 export interface AdminDeps {
   keys: SigningKeys;
@@ -201,6 +203,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     }
   });
 
+  registerMonitoringRoutes(router);
+
   router.get('/admin/session', async (c) => {
     const authenticated = Boolean(await getAdminActor(c, deps));
     return c.json({ authenticated }, authenticated ? 200 : 401);
@@ -247,6 +251,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   router.get('/admin/system-settings', (c) => {
     c.header('Cache-Control', 'no-store');
     return c.json({ managed: process.env.SYSTEM_CONFIG_MODE !== 'file', configured: systemConfigured(),
+      ...systemOptionDefaults, registration_enabled: registrationEnabled(),
       ...(databaseSettingsEnabled() ? currentSystemSettings() : { public_url: deps.issuer,
         upstream_allowlist_enabled: upstreamAllowlistEnabled(), upstream_hosts: [...allowedUpstreamHosts()] }) });
   });

@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { loadPlatformConfig, databaseSettingsEnabled, currentSystemSettings } from '@mcp/shared';
+import { loadPlatformConfig, currentSystemSettings } from '@mcp/shared';
 import { db } from './db.js';
 import { mcpServerInstances, mcpServers, userServerAccess, users } from './schema.js';
 
@@ -40,7 +40,7 @@ export function createRegistryRouter(): Hono {
     );
 
     return c.json({ servers: result.filter((server) => server.instances.length > 0),
-      ...(databaseSettingsEnabled() ? { system_settings: currentSystemSettings() } : {}) });
+      ...(process.env.SYSTEM_CONFIG_MODE !== 'file' ? { system_settings: currentSystemSettings() } : {}) });
   });
 
   // Recheck mutable authorization state so disabling a user or removing a grant

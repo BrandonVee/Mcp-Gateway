@@ -1,4 +1,6 @@
 import Fastify from 'fastify';
+import { registerMonitoring, collectionStatus } from './monitoring.js';
+import { activeUpstreamRequests } from './routes/capacity.js';
 import { databaseSettingsEnabled, systemConfigured } from '@mcp/shared';
 import { env, refreshServerConfigs, registryStatus, serverConfigs, startRegistryRefresh } from './config.js';
 import { authHook, hasServerAccess } from './auth.js';
@@ -19,6 +21,7 @@ const app = Fastify({
     },
   },
 });
+registerMonitoring(app);
 
 // Keep the raw body untouched for every content type: JSON-RPC payloads are
 // forwarded byte-for-byte to the upstream instance.
@@ -34,7 +37,7 @@ app.get('/health', async (_req, reply) => {
   const ok = redis && registryReady;
   const upstreamUrls = [...serverConfigs.values()].flatMap((server) => server.instances);
   return reply.code(ok ? 200 : 503).send({
-    ok, service: 'mcp-gateway', redis, registry: registryStatus,
+    ok, service: 'mcp-gateway', redis, registry: registryStatus, monitoring: collectionStatus, active_requests:activeUpstreamRequests(),
     upstreams: { total: new Set(upstreamUrls).size, unavailable: upstreamHealth.unavailableCount(upstreamUrls) },
   });
 });

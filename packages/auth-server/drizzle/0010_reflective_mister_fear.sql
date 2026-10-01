@@ -1,0 +1,1 @@
+CREATE INDEX "idx_mcp_receipts_time" ON "mcp_event_receipts" USING btree ("received_at");

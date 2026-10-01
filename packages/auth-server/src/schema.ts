@@ -156,3 +156,21 @@ export const auditEvents = pgTable('audit_events', {
   index('idx_audit_created_at').on(table.createdAt),
   index('idx_audit_actor_created_at').on(table.actor, table.createdAt),
 ]);
+
+export const mcpEventReceipts = pgTable('mcp_event_receipts', {
+  id: text('id').primaryKey(), receivedAt: epoch('received_at'),
+}, table => [index('idx_mcp_receipts_time').on(table.receivedAt)]);
+export const mcpCallEvents = pgTable('mcp_call_events', {
+  id: text('id').primaryKey(), requestId: text('request_id').notNull(), startedAt: epoch('started_at'), finishedAt: epoch('finished_at'),
+  userId: bigint('user_id', { mode: 'number' }).notNull(), username: text('username').notNull(), clientId: text('client_id').notNull(),
+  server: text('server').notNull(), method: text('method').notNull(), tool: text('tool').notNull(), outcome: text('outcome').notNull(),
+  httpStatus: integer('http_status').notNull(), durationMs: bigint('duration_ms', { mode: 'number' }),
+  error: text('error').notNull(), instance: text('instance').notNull(), attempts: integer('attempts').notNull(),
+}, table => [index('idx_mcp_calls_time').on(table.startedAt), index('idx_mcp_calls_server_time').on(table.server, table.startedAt)]);
+export const mcpCallMetrics = pgTable('mcp_call_metrics', {
+  minute: epoch('minute'), server: text('server').notNull(), method: text('method').notNull(), tool: text('tool').notNull(),
+  userId: bigint('user_id', { mode: 'number' }).notNull(), clientId: text('client_id').notNull(), username: text('username').notNull(),
+  outcome: text('outcome').notNull(), calls: bigint('calls', { mode: 'number' }).notNull(),
+  durationSum: bigint('duration_sum', { mode: 'number' }).notNull(), durationCount: bigint('duration_count', { mode: 'number' }).notNull(),
+  histogram: bigint('histogram', { mode: 'number' }).array().notNull(),
+}, table => [primaryKey({ columns: [table.minute, table.server, table.method, table.tool, table.userId, table.clientId, table.outcome] }), index('idx_mcp_metrics_time').on(table.minute)]);

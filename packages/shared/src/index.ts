@@ -141,10 +141,27 @@ export function validateProductionRuntime(
   if (!['redis:', 'rediss:'].includes(redisUrl.protocol) || !redisUrl.hostname) fail('REDIS_URL must be a Redis URL');
 }
 
+export * from './monitoring.js';
+
 export interface SystemSettings {
   public_url: string | null;
   upstream_allowlist_enabled: boolean;
   upstream_hosts: string[];
+  registration_enabled?: boolean;
+  monitoring_enabled?: boolean;
+  monitoring_logs_enabled?: boolean;
+  monitoring_retention_days?: number;
+  monitoring_summary_days?: number;
+  monitoring_error_rate?: number;
+  monitoring_slow_ms?: number;
+}
+export const systemOptionDefaults = { registration_enabled: true, monitoring_enabled: true, monitoring_logs_enabled: true,
+  monitoring_retention_days: 14, monitoring_summary_days: 365, monitoring_error_rate: 5, monitoring_slow_ms: 2000 };
+export function runtimeSettings() {
+  return { ...systemOptionDefaults, ...currentSystemSettings() };
+}
+export function registrationEnabled(): boolean {
+  return process.env.SYSTEM_CONFIG_MODE === 'file' ? process.env.MCP_REGISTRATION_ENABLED !== 'false' : runtimeSettings().registration_enabled;
 }
 let storedSettingsActive = false;
 let systemSettings: SystemSettings = { public_url: null, upstream_allowlist_enabled: true, upstream_hosts: [] };
@@ -175,6 +192,12 @@ export function normalizeSystemSettings(value: unknown, production = process.env
   const input = value as Record<string, unknown>;
   if (typeof input.public_url !== 'string' || !Array.isArray(input.upstream_hosts)) return null;
   if (input.upstream_allowlist_enabled !== undefined && typeof input.upstream_allowlist_enabled !== 'boolean') return null;
+  for (const key of ['registration_enabled', 'monitoring_enabled', 'monitoring_logs_enabled']) {
+    if (input[key] !== undefined && typeof input[key] !== 'boolean') return null;
+  }
+  for (const [key, max] of [['monitoring_retention_days', 90], ['monitoring_summary_days', 730], ['monitoring_error_rate', 100], ['monitoring_slow_ms', 3600000]] as const) {
+    if (input[key] !== undefined && (!Number.isSafeInteger(input[key]) || Number(input[key]) < 1 || Number(input[key]) > max)) return null;
+  }
   try {
     const url = new URL(input.public_url.trim());
     if ((production ? url.protocol !== 'https:' : !['http:', 'https:'].includes(url.protocol))
@@ -182,7 +205,8 @@ export function normalizeSystemSettings(value: unknown, production = process.env
     if (input.upstream_hosts.length > 200 || !input.upstream_hosts.every((host) => typeof host === 'string'
       && host.length <= 253 && /^[a-z0-9][a-z0-9.-]*$/i.test(host) && !host.includes('..'))) return null;
     return { public_url: url.origin, upstream_allowlist_enabled: input.upstream_allowlist_enabled ?? true,
-      upstream_hosts: [...new Set((input.upstream_hosts as string[]).map((host) => host.toLowerCase()))].sort() };
+      upstream_hosts: [...new Set((input.upstream_hosts as string[]).map((host) => host.toLowerCase()))].sort(),
+      ...Object.fromEntries(Object.keys(systemOptionDefaults).filter(key => input[key] !== undefined).map(key => [key, input[key]])) };
   } catch { return null; }
 }
 

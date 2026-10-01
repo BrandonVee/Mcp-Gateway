@@ -1,4 +1,4 @@
-import type { SystemSettings, AdminConnection, AdminUser, AuditEventPage, AuthHealth, ConnectionServer, CreateServerInput, GatewayHealth, McpServer, ServerAuthInput } from "./types";
+import type { SystemSettings, SystemSettingsInput, UsageFilters, UsageSummary, UsageCall, AdminConnection, AdminUser, AuditEventPage, AuthHealth, ConnectionServer, CreateServerInput, GatewayHealth, McpServer, ServerAuthInput } from "./types";
 import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from "./i18n";
 
 /** Present stable, localized UI errors instead of leaking English backend strings. */
@@ -61,9 +61,13 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   systemSettings: () => request<SystemSettings>("/api/admin/system-settings"),
-  saveSystemSettings: (body: { public_url: string; upstream_allowlist_enabled: boolean; upstream_hosts: string[] }) => request<SystemSettings>("/api/admin/system-settings", {
+  saveSystemSettings: (body: SystemSettingsInput) => request<SystemSettings>("/api/admin/system-settings", {
     method: "PUT", body: JSON.stringify(body),
   }),
+  usageSummary: (filters: UsageFilters, dimension: string) => request<UsageSummary>('/api/admin/monitoring/summary?'+new URLSearchParams(
+    Object.entries({...filters,dimension}).filter(([,value]) => value!==undefined&&value!=='').map(([key,value]) => [key,String(value)]))),
+  usageCalls: (filters: UsageFilters, cursor?: string) => request<{events:UsageCall[];next_cursor:string|null}>('/api/admin/monitoring/calls?'+new URLSearchParams(
+    Object.entries({...filters,cursor}).filter(([,value]) => value!==undefined&&value!=='').map(([key,value]) => [key,String(value)]))),
   session: () => request<{ authenticated: boolean }>("/api/admin/session"),
   login: (username: string, password: string) =>
     request<{ authenticated: boolean; username: string }>(

@@ -12,6 +12,7 @@ import { createAdminRouter } from './admin.js';
 import { loadPlatformConfig, validateProductionRuntime, authIssuer, systemConfigured } from '@mcp/shared';
 import { users } from './schema.js';
 import { refreshSystemSettings } from './system-settings.js';
+import { startMonitoring } from './monitoring.js';
 import { createRegistryRouter } from './registry.js';
 import { createConnectionsRouter } from './connections.js';
 import { limitRequest, rateLimitHealthy } from './rate-limit.js';
@@ -30,6 +31,7 @@ await refreshSystemSettings();
 await assertNoDevelopmentFixtures();
 await bootstrapAdmin();
 startExpirySweep();
+startMonitoring();
 
 const keys = await loadSigningKeys();
 if (!(await rateLimitHealthy())) throw new Error('Redis rate limiter is unavailable');

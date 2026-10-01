@@ -37,6 +37,8 @@ export interface GatewayHealth {
   ok: boolean;
   redis: boolean;
   registry?: { lastSuccessAt?: number; lastError?: string };
+  monitoring?: { dropped: number; lastQueuedAt: number; lastError: string };
+  upstreams?: { total: number; unavailable: number };
 }
 
 export interface AuthHealth {
@@ -125,4 +127,27 @@ export interface SystemSettings {
   public_url: string | null;
   upstream_allowlist_enabled: boolean;
   upstream_hosts: string[];
+  registration_enabled?: boolean;
+  monitoring_enabled?: boolean;
+  monitoring_logs_enabled?: boolean;
+  monitoring_retention_days?: number;
+  monitoring_summary_days?: number;
+  monitoring_error_rate?: number;
+  monitoring_slow_ms?: number;
 }
+export type SystemSettingsInput = Omit<SystemSettings, 'managed' | 'configured' | 'public_url'> & { public_url: string };
+
+export interface UsageFilters { hours: number; server?: string; tool?: string; user_id?: string; client_id?: string; outcome?: string }
+export interface UsageStat { name?: string; calls: number; success: number; failed: number; unknown: number; success_rate: number | null; avg_ms: number | null; p95_ms: number | null }
+export interface UsageSummary {
+  enabled: boolean;
+  summary: UsageStat & { requests: number; active_users: number; peak_per_minute: number };
+  ranking: UsageStat[];
+  trend: { time: number; calls: number; failed: number }[];
+  bucket_ms: number;
+  alerts: { server: string; type: string; value: number; threshold: number }[];
+  collection: { lastProcessedAt: number; lastError: string; queued: number | null; dropped: number | null };
+}
+export interface UsageCall { id:string; request_id:string; started_at:number; finished_at:number; user_id:number; username:string;
+  client_id:string; server:string; method:string; tool:string; outcome:string; http_status:number; duration_ms:number|null;
+  error:string; instance:string; attempts:number }
