@@ -1,0 +1,70 @@
+.connections-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+  align-items: stretch;
+}
+
+.connection-card {
+  min-width: 0;
+  height: 100%;
+}
+
+.connection-card > .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.connection-card h2 {
+  margin-bottom: 20px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.connection-details {
+  display: grid;
+  gap: 18px;
+  margin: 0 0 24px;
+}
+
+.connection-details dt {
+  margin-bottom: 6px;
+  color: #afc0d4;
+  font-size: 12px;
+}
+
+.connection-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.connection-details code {
+  padding: 10px 12px;
+  border: 1px solid #233751;
+  border-radius: 8px;
+  background: #08111f;
+  user-select: text;
+}
+
+.connection-card .connection-bottom {
+  margin-top: auto;
+}
+
+.connection-card .connection-bottom > span {
+  flex-basis: 100%;
+}
+
+@media (max-width: 640px) {
+  .connections-header {
+    flex-wrap: wrap;
+  }
+
+  .connections-user {
+    flex-wrap: wrap;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .connections-intro-actions .ant-btn {
+    flex: 1 1 auto;
+  }
+}

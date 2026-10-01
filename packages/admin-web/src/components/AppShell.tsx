@@ -72,6 +72,7 @@ interface AppShellProps {
   userCount: number;
   serverCount: number;
   refreshing: boolean;
+  loggingOut: boolean;
   lastUpdatedAt: number | null;
   onNavigate: (view: View) => void;
   onRefresh: () => void;
@@ -84,6 +85,7 @@ export function AppShell({
   userCount,
   serverCount,
   refreshing,
+  loggingOut,
   lastUpdatedAt,
   onNavigate,
   onRefresh,
@@ -169,6 +171,7 @@ export function AppShell({
             block
             icon={<LogoutOutlined />}
             className="logout-button"
+            loading={loggingOut}
             onClick={onLogout}
           >
             {!collapsed && t("nav.signOut")}

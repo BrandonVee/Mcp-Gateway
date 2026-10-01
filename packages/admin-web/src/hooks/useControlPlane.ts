@@ -11,6 +11,7 @@ export function useControlPlane() {
   const [connections, setConnections] = useState<AdminConnection[]>([]);
   const [health, setHealth] = useState<GatewayHealth | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
@@ -51,7 +52,7 @@ export function useControlPlane() {
   useEffect(() => {
     api
       .session()
-      .then(() => setAuthenticated(true))
+      .then((session) => setAuthenticated(session.authenticated === true))
       .catch(() => setAuthenticated(false));
   }, []);
 
@@ -110,16 +111,20 @@ export function useControlPlane() {
   };
 
   const logout = async () => {
+    setLoggingOut(true);
     try {
       await api.logout();
-    } finally {
+      // Clear the UI only after the server has revoked the browser session.
       setAuthenticated(false);
+      setSettings(null);
       setUsers([]);
       setServers([]);
       setConnections([]);
       setHealth(null);
       setLoadError(null);
       setLastUpdatedAt(null);
+    } finally {
+      setLoggingOut(false);
     }
   };
 
@@ -132,6 +137,7 @@ export function useControlPlane() {
     connections,
     health,
     busy,
+    loggingOut,
     initializing,
     loadError,
     lastUpdatedAt,

@@ -16,6 +16,7 @@ export interface McpInstance {
 export interface McpServer {
   name: string;
   display_name: string;
+  description?: string;
   enabled: boolean;
   signup_access: boolean;
   auth_mode: "none" | "api_key" | "oauth";
@@ -78,6 +79,8 @@ export type DialogState =
   | { type: "assign-user"; user: AdminUser }
   | { type: "reset-password"; user: AdminUser }
   | { type: "create-server" }
+  | { type: "edit-server"; server: McpServer }
+  | { type: "edit-instance"; server: McpServer; instance: McpInstance }
   | { type: "configure-server-auth"; server: McpServer }
   | { type: "configure-server-users"; server: McpServer }
   | { type: "add-instance"; server: McpServer };
@@ -92,6 +95,7 @@ export interface CreateUserInput {
 export interface CreateServerInput {
   name: string;
   display_name: string;
+  description?: string;
   signup_access?: boolean;
   instances: Array<{ id?: string; url: string }>;
   auth_mode: "none" | "api_key" | "oauth";
@@ -107,11 +111,12 @@ export interface CreateServerInput {
   oauth_client_auth_method?: "none" | "client_secret_basic" | "client_secret_post";
 }
 
-export type ServerAuthInput = Omit<CreateServerInput, "name" | "display_name" | "instances">;
+export type ServerAuthInput = Omit<CreateServerInput, "name" | "display_name" | "description" | "instances">;
 
 export interface ConnectionServer {
   name: string;
   display_name: string;
+  description?: string;
   auth_mode: "none" | "api_key" | "oauth";
   connection_status: "not_required" | "not_connected" | "connected" | "expired";
 }

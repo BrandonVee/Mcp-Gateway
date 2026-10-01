@@ -6,6 +6,7 @@ import { env, refreshServerConfigs, registryStatus, serverConfigs, startRegistry
 import { authHook, hasServerAccess } from './auth.js';
 import { registerMcpRoutes } from './routes/mcp.js';
 import { registerMetadataRoutes } from './routes/metadata.js';
+import { registerDevelopmentOAuthRoutes } from './routes/oauth.js';
 import { redisHealthy } from './lb.js';
 import { isAllowedMcpOrigin, mcpCorsHeaders } from './routes/origin.js';
 import { probeRegisteredUpstreams, upstreamHealth } from './upstream-health.js';
@@ -71,6 +72,11 @@ await app.register(async (instance) => {
 });
 
 registerMetadataRoutes(app);
+registerDevelopmentOAuthRoutes(app, {
+  authUrl: new URL(env.registryUrl).origin,
+  authIssuer: () => env.authIssuer,
+  production: process.env.NODE_ENV === 'production',
+});
 
 const start = async (): Promise<void> => {
   try {

@@ -1,0 +1,79 @@
+.service-description {
+  min-width: 0;
+  margin: 18px 0;
+  padding: 16px 18px;
+  border: 1px solid #20354d;
+  border-left: 3px solid #439dc6;
+  border-radius: 10px;
+  background: linear-gradient(115deg, #13263880, #0b172280);
+}
+
+.service-description-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #9cc5dc;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.service-description p {
+  margin: 0;
+  color: #d4e2ef;
+  font-size: 14px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.service-description p.is-collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+}
+
+.service-description .ant-btn {
+  margin-top: 8px;
+  padding-inline: 0;
+  color: #75c3ec;
+}
+
+.service-description-empty {
+  border-left-color: #40576d;
+  background: #101a2680;
+}
+
+.service-description-empty p {
+  color: #879caf;
+}
+
+.connection-card .service-description {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+.server-route-preview {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.server-route-preview > span {
+  color: #a6bad0;
+  font-size: 12px;
+}
+
+.server-route-preview code {
+  padding: 10px 12px;
+  border: 1px solid #29415a;
+  border-radius: 8px;
+  color: #9bd4f2;
+  background: #091320;
+  overflow-wrap: anywhere;
+}
+
+.server-card .service-description {
+  margin-inline: 20px;
+}

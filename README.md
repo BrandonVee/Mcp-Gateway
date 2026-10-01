@@ -2,9 +2,9 @@
 
 MCP 统一认证与多入口网关，集中管理服务接入、访问权限和用户连接。
 
-本地开发管理前端：**http://localhost:5173**（默认管理员账号见 `config/default.json` / `config/docker.json`）。
+生产部署使用统一应用入口（默认 `127.0.0.1:8080`），经 HTTPS 反向代理访问；本地开发管理前端为 **http://localhost:5173**。公开访问地址在后台“系统设置”中维护。
 
-访问 Auth Server 的 `/admin` 也会跳转到管理端；推荐部署的公开地址在后台“系统设置”中维护。
+快速入口：[服务器部署](#服务器部署推荐) · [已有数据库部署](#接入已有-postgresql--redis) · [本地开发](#本地运行与验证) · [完整生产部署文档](docs/production.md)
 
 这个项目把认证、授权和 MCP 实例路由拆成三层：
 
@@ -18,7 +18,18 @@ MCP Client ── OAuth ──>│  Gateway
 
 ## 服务器部署（推荐）
 
-服务器只需要 **Docker（含 Compose）和 Git**。应用对外提供一个 HTTP 端口，域名、证书和 HTTPS 由你自己的 Nginx 处理。
+除下载项目外，以下命令均在项目根目录执行。服务器需要 **Docker Engine、Docker Compose 插件和 Git**，无需在宿主机安装 Node.js 或 pnpm；另外准备域名、HTTPS 证书和反向代理。
+
+| 使用场景 | 部署入口 | 数据库与 Redis |
+| --- | --- | --- |
+| 从源码构建，包含本地修改 | `./scripts/deploy.sh`，默认本机构建 | 自动启动独立容器 |
+| 使用已发布版本，跳过源码构建 | 下方 Docker Hub 部署命令 | 自动启动独立容器 |
+| 接入已有 PostgreSQL / Redis | [网页初始化部署](#接入已有-postgresql--redis) | 使用已有服务 |
+| 开发与调试 | [本地运行与验证](#本地运行与验证) | 本机服务或开发容器 |
+
+根目录的 `pnpm dev` / `docker compose up --build` 启动开发环境；生产部署使用 `deploy/` 下的 Compose 文件。
+
+### 1. 下载项目并启动
 
 ```bash
 git clone https://github.com/BrandonVee/Mcp-Gateway.git
@@ -26,13 +37,21 @@ cd Mcp-Gateway
 ./scripts/deploy.sh
 ```
 
-在终端运行时，脚本会引导填写以下参数，回车保留默认值：
+使用已发布镜像时，将最后一条命令替换为：
+
+```bash
+MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scripts/deploy.sh --yes
+```
+
+发布镜像为 `brandonvee/mcp-gateway`，支持 `linux/amd64` 和 `linux/arm64`。`main` 通过全部测试并发布镜像后，`github-actions[bot]` 会自动创建版本标签和 GitHub Release；`latest` 跟随该提交。需要固定版本时改为已发布的 12 位提交号或版本标签（如 `vX.Y.Z` / `X.Y.Z`）。无需克隆源码的镜像启动方式见 [Docker Hub 使用说明](docs/dockerhub.md)。
+
+不带 `--yes` 在终端运行时，脚本会引导填写以下参数，回车保留默认值：
 
 - **HTTP 端口**：默认 `8080`，仅监听 `127.0.0.1`，供你自己的 Nginx 转发。
 - **镜像来源**：默认本机构建；拉取 Docker Hub 镜像时，仓库前缀填写 `brandonvee/`，镜像名称填写 `mcp-gateway`，版本填写 `latest` 或指定版本。
 - **首次管理员密码**：用户名固定为 `admin`；密码至少 16 个字符，隐藏输入并再次确认，留空则自动生成。已有部署会保留密码，不重复询问。
 
-脚本会显示配置摘要，确认后保存并启动 **mcp-server、PostgreSQL、Redis 三个容器**。应用镜像 `mcp-app` 包含管理网页、Nginx、Auth Server 和 Gateway，仅提供一个 HTTP 入口。数据库密码、内部令牌和凭据加密密钥自动生成，不需要手写环境文件；取消或输入中断不会保存本次配置。自动生成的管理员密码会在本次执行结束时显示，手动输入的密码不会输出。
+交互模式会显示配置摘要，确认后保存并启动 **mcp-server、PostgreSQL、Redis 三个容器**。统一应用镜像包含管理网页、Nginx、Auth Server 和 Gateway，仅提供一个 HTTP 入口。数据库密码、内部令牌和凭据加密密钥自动生成，不需要手写环境文件；取消或输入中断不会保存本次配置。自动生成的管理员密码会在本次执行结束时显示，手动输入的密码不会输出。
 
 需要显式进入交互、先准备配置，或用于自动化部署时：
 
@@ -40,14 +59,23 @@ cd Mcp-Gateway
 ./scripts/deploy.sh --interactive                 # 交互安装
 ./scripts/deploy.sh --interactive --prepare-only  # 只保存配置，不启动服务
 ./scripts/deploy.sh --yes                         # 使用环境变量、已有配置或默认值，跳过提示
-MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image # 使用已导入的本地镜像
+MCP_IMAGE_NAME=mcp-app MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
 ```
 
-非终端环境默认跳过提示，CI 使用 `--yes`。配置保存在 `deploy/single-host/`；升级时以已有参数作为交互默认值。对外访问地址与可信上游统一在管理后台设置。
+非终端环境默认跳过提示，CI 使用 `--yes`。默认配置保存在 `deploy/single-host/`：`runtime.env` 保存镜像版本、端口、密码和密钥，权限为 `0600`；`config.json` 保存基础配置。可用 `MCP_DEPLOY_DIR` 指定其他目录，后续部署和备份也须使用该目录。升级沿用已有参数，不会重置数据库中已存在的管理员密码。
 
-### Nginx 转发与首次设置
+部署完成后检查容器和应用健康状态（修改过端口时同步替换 `8080`）：
 
-在你已有的 HTTPS `server` 中加入：
+```bash
+docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml ps
+curl --fail http://127.0.0.1:8080/healthz
+```
+
+应用入口仅绑定服务器回环地址，不能直接通过 `服务器IP:8080` 访问；继续配置 HTTPS 代理后登录。生产管理员为 `admin`，初始密码来自交互输入或脚本生成值，也保存在 `runtime.env` 的 `ADMIN_PASSWORD` 中；开发密码 `admin123` 不适用于生产部署。
+
+### 2. 配置 HTTPS 反向代理
+
+在宿主机已有的 HTTPS `server` 中加入以下内容。此片段需要已有域名与证书配置；若部署时修改过 HTTP 端口，请同步调整 `proxy_pass`：
 
 ```nginx
 location / {
@@ -63,11 +91,22 @@ location / {
 }
 ```
 
+```bash
+sudo nginx -t
+sudo systemctl reload nginx              # Linux / systemd 示例
+curl --fail https://mcp.example.com/healthz  # 替换为实际域名
+```
+
+这里的 Nginx 运行在同一台宿主机。若 Nginx 在容器中，需让它能通过容器网络访问应用，并调整 `proxy_pass`；容器内的 `127.0.0.1` 指该容器自身。其他代理拓扑还需核对 `AUTH_TRUSTED_PROXY_IPS`，见 [生产网络配置](docs/production.md#网络密钥与容量)。
+
+### 3. 登录并完成系统设置
+
 通过你的 HTTPS 地址打开后台，使用初始管理员登录。系统会引导进入**系统设置**：
 
 1. **对外访问地址**：填写 Nginx 对外的 HTTPS 根地址，例如 `https://mcp.example.com`。OAuth 登录、MCP 入口与个人连接中心统一使用此地址，部署时无需配置 `PUBLIC_URL`。
 2. **启用上游白名单**：默认开启。开启时在**可信上游主机**填写计划接入的 MCP 服务主机名或 IP，每行一个，不带协议、端口或路径；名单为空时拒绝所有上游。关闭后允许管理员接入任意合法的上游地址，已填写的名单仍会保留。
-3. 保存后注册实际 MCP 服务、创建用户并分配访问权限。客户端入口为 `https://mcp.example.com/mcp/{SERVER_NAME}`。
+3. 按需调整**用户注册**、**调用采集与保留**、**告警阈值**，保存设置。
+4. 注册实际 MCP 服务、创建用户并分配访问权限；新数据库不会导入演示服务。客户端入口为 `https://mcp.example.com/mcp/{SERVER_NAME}`，需要上游凭据时，用户到 `/connections` 完成连接。
 
 系统设置持久化在 PostgreSQL 中，重启后继续生效。未设置访问地址时，管理后台可用，OAuth 与 MCP 接入返回 `503 system_not_configured`；生产环境的访问地址需使用 HTTPS。更换地址后，已有 MCP 客户端需重新授权。
 
@@ -77,49 +116,82 @@ MCP 客户端打开 OAuth 登录页后，没有账号的用户可以选择“创
 
 管理员可在“注册服务”弹窗或服务的“分配权限”弹窗中开启**新注册用户默认可访问**。自行注册的新用户会自动获得已启用且勾选此项的服务权限；其他服务仍由管理员手动分配。该选项默认关闭，调整后只影响之后的注册，已有用户的权限不变。服务本身需要 API 密钥或 OAuth 连接时，用户仍需在个人连接中心完成对应连接。
 
-这里的 Nginx 运行在同一台宿主机。若你自己的 Nginx 在容器中，需让它能访问应用入口，再调整 `proxy_pass`；`127.0.0.1` 在容器中指的是该 Nginx 容器自身。
+服务注册后，可通过“编辑信息”修改显示名称和服务描述，通过实例行的编辑按钮修改上游地址；“编辑信息”也可修改服务标识，实例、访问授权和已保存凭据会同步保留。修改后客户端需重新复制 MCP 配置并登录；OAuth 上游的回调地址也需同步更新。连接中心展示完整服务名称、网关 MCP 地址和描述，“复制 MCP 配置”仅复制 `mcpServers` 下的服务对象，可直接粘贴到客户端的该字段中。已有数据库会在 Auth 启动时自动迁移，补上描述字段。
 
 ### 升级、查看日志与备份
 
+升级前先备份。源码构建会使用更新后的本地代码；镜像部署只使用指定镜像版本，本地代码修改不会进入已发布镜像。
+
 ```bash
-# 更新到要部署的代码版本，再执行同一条命令。
+# 源码构建部署：
 git pull --ff-only
 ./scripts/backup.sh                    # 升级前备份数据库、配置和密钥
 ./scripts/deploy.sh
 
+```
+
+已发布镜像部署：
+
+```bash
+./scripts/backup.sh
+MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scripts/deploy.sh --yes
+```
+
+查看容器和日志：
+
+```bash
 # 查看容器和日志。
 docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml ps
 docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs --tail=100 mcp-server
 ```
 
-部署时选择 **1) 本机构建** 即可，无需镜像仓库。脚本会保留已生成的密钥和密码；数据库与 Redis 使用命名卷持久化。备份默认写入 `backups/`，包含 PostgreSQL、配置和凭据加密密钥，权限为 `0600`，默认保留 14 天。定时备份、加密与恢复步骤见 [备份与恢复](docs/production.md#备份与恢复)。不要用 `down -v` 停止生产部署，它会删除数据库卷。单机升级可能短暂中断，已有 MCP 会话中断后客户端需重新初始化。
+镜像来源、名称和版本会保存，后续可执行 `./scripts/deploy.sh --yes` 沿用配置；若保存的是固定标签，须显式设置新的 `MCP_VERSION` 才会升级。需要切回源码构建时，交互选择 **1) 本机构建**。
+
+脚本保留已生成的密钥和密码，数据库与 Redis 使用命名卷持久化。备份默认写入 `backups/`，包含 PostgreSQL、配置和凭据加密密钥，权限为 `0600`，默认保留 14 天；**不包含 Redis 会话及尚未落库的调用队列**。定时备份、加密与恢复步骤见 [备份与恢复](docs/production.md#备份与恢复)。保留部署配置及原有 `CREDENTIAL_ENCRYPT_KEY`，不要用 `down -v` 停止生产部署，它会删除数据库卷。单机升级可能短暂中断，已有 MCP 会话中断后客户端需重新初始化。
 
 需要改 HTTP 端口时，在交互提示中输入新端口，或运行 `MCP_HTTP_PORT=18080 ./scripts/deploy.sh --yes`，随后调整你自己的 Nginx 上游端口。
 
-### 已发布镜像的部署
+### 接入已有 PostgreSQL / Redis
 
-无需克隆源码的启动说明见 [Docker Hub 使用说明](docs/dockerhub.md)。接入已有 PostgreSQL / Redis 时，可运行 `deploy/compose.setup.yml`，首次打开网页依次完成身份验证、PostgreSQL 连接测试、Redis 连接测试和管理员设置。每一步通过后才能继续，也可返回修改；最后保存时再次检查两项连接，配置保存在 `app_data` 卷。完整环境变量部署会跳过该引导。
-
-GitHub Actions 在测试全部通过后自动发布统一应用镜像到 [Docker Hub：brandonvee/mcp-gateway](https://hub.docker.com/r/brandonvee/mcp-gateway)，支持 Linux x86_64 和 ARM64。`main` 更新发布 `latest` 与 12 位提交版本；推送 `v*` 标签发布对应 tag，语义版本标签还会发布不含 `v` 的版本。PR 和其他分支仅测试，不发布。首次启用须配置 `DOCKERHUB_TOKEN` 仓库密钥，见 [自动发布配置](docs/production.md#自动发布到-docker-hub)。
+此方式只启动应用，不创建数据库或 Redis；先准备好可从应用容器访问的服务、专用数据库及账号。
 
 ```bash
-# 拉取最新通过测试的 main 版本；已有部署保留数据库和密钥。
-MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scripts/deploy.sh --yes
+docker compose -f deploy/compose.setup.yml up -d
+docker compose -f deploy/compose.setup.yml logs mcp-server
 ```
 
-也可直接运行 `./scripts/deploy.sh`，在交互提示中选择“拉取已发布镜像”。前缀 `brandonvee/`、名称 `mcp-gateway` 和版本会保存，后续更新直接执行 `./scripts/deploy.sh --yes`。固定到特定版本时，将 `latest` 改为已发布的 12 位提交版本或版本 tag；前缀保留末尾 `/`，交互输入会自动补齐。本机构建和离线镜像默认仍叫 `mcp-app`，可通过 `MCP_IMAGE_NAME` 指定名称。
+打开应用入口，使用日志中 `[setup] initialization key:` 后的密钥，依次完成身份验证、PostgreSQL 测试、Redis 测试和管理员设置；保存后自动启动应用。远程初始化可用 `ssh -L 18080:127.0.0.1:8080 用户@服务器`，再访问本机 `http://127.0.0.1:18080`。管理员登录仍需上方的 HTTPS 入口。
 
-也可在构建机上生成一个应用镜像：
+容器中的 `localhost` 指应用容器自身，不能用来连接宿主机或其他容器的数据库。配置及加密密钥保存在 `app_data` 卷的 `/app/data/bootstrap.json`，须与外部数据库一起备份；重建容器时沿用原项目名和数据卷。一键部署的 `backup.sh` 不适用于此外部数据库模式。完整连接要求见 [Docker Hub 使用说明](docs/dockerhub.md#方式一首次打开网页连接已有-postgresql-和-redis)，环境变量部署见 [使用外部数据库](docs/production.md#使用外部数据库)。
+
+### 离线镜像与旧版迁移
+
+在联网构建机上生成镜像并导出，再传到相同 CPU 架构的服务器：
 
 ```bash
 docker build -f Dockerfile.production --target app -t mcp-app:local .
 # 离线传到服务器时可导出，服务器用 docker load 导入。
 docker save -o mcp-app-local.tar mcp-app:local
+# 在服务器项目根目录导入并部署：
+docker load -i mcp-app-local.tar
+MCP_IMAGE_NAME=mcp-app MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
 ```
 
-数据库与 Redis 仍独立运行。已有部署直接执行同一部署脚本：镜像准备成功后，脚本会移除原 `auth`、`gateway`、`admin-web` 或旧版 `app` 容器并启动 `mcp-server`，保留 PostgreSQL/Redis 容器、数据卷和密钥。Compose 实际容器名包含项目名前缀，例如 `mcp-gateway-mcp-server-1`。升级会短暂中断 MCP 会话，客户端需重新初始化。
+离线服务器还须预先导入 `postgres:16-alpine` 和 `redis:7-alpine` 镜像。本地镜像默认名为 `mcp-app`，与 Docker Hub 的 `brandonvee/mcp-gateway` 区分。
 
-镜像发布、离线部署、外部数据库和回退步骤见 [生产部署文档](docs/production.md)。
+已有单机部署直接执行同一脚本：镜像准备成功后，脚本会移除当前项目的旧 `auth`、`gateway`、`admin-web` 或 `app` 容器并启动 `mcp-server`，保留数据库、Redis、数据卷和密钥。Compose 实际容器名包含项目名前缀，例如 `mcp-gateway-mcp-server-1`；日志命令使用服务名 `mcp-server`。
+
+镜像发布和回退步骤见 [生产部署文档](docs/production.md)，自动发布配置见 [Docker Hub 发布](docs/production.md#自动发布到-docker-hub)。
+
+### 常见部署问题
+
+| 现象 | 排查与处理 |
+| --- | --- |
+| 无法通过服务器 IP 访问 `8080` | 默认只监听回环地址，使用已配置的 HTTPS 域名；初始化可使用 SSH 隧道。 |
+| 管理员提示凭据无效或无管理员权限 | 核对该部署的管理员账号与密码；已有数据库账号不会因修改 `ADMIN_PASSWORD` 被重置。 |
+| MCP 返回 `503 system_not_configured` | 在“系统设置”保存真实 HTTPS 对外访问地址。 |
+| 无法注册上游服务 | 检查白名单开关、可信上游主机和容器到上游的连通性；默认开启白名单，空名单拒绝所有上游。 |
+| 应用未就绪或容器 unhealthy | 用该部署对应的 Compose 文件查看 `ps` 和应用日志，再检查 PostgreSQL / Redis 连接；`unhealthy` 本身不会触发 Docker 自动重启。 |
 
 ## 权限模型
 
@@ -237,11 +309,13 @@ export CREDENTIAL_BROKER_TOKEN="$(openssl rand -hex 32)"
 
 - `config/default.json`：直接在宿主机启动服务时使用。
 - `config/docker.json`：Docker Compose 使用，包含容器网络地址。
-- `CONFIG_FILE`：选择配置文件；Compose 中统一设置为 `/app/config/docker.json`。
+- `CONFIG_FILE`：选择基础配置文件；根目录开发 Compose 使用 `/app/config/docker.json`，生产一键部署使用生成的 `/app/config/production.json`。
 
 配置文件只管理 Auth Server、PostgreSQL、Gateway、Redis 等服务参数；逻辑 Server、实例地址和用户授权以 PostgreSQL 为准。密钥、数据库密码等生产机密仍可通过环境变量或 Secret 注入覆盖。
 
-生产部署需设置 `NODE_ENV=production` 和独立的 `CONFIG_FILE`。服务会在监听端口前校验公网 HTTPS 地址、独立的内部令牌、凭据加密密钥及数据库/Redis 环境变量，并拒绝仓库内的开发默认凭据与演示用户/客户端。首次创建管理员还需通过 `ADMIN_PASSWORD` 提供至少 16 位密码；已有用户的数据库启动时不依赖此变量。根目录 Compose 文件与 Vite 开发服务仅用于本地开发；生产镜像和部署示例位于 `Dockerfile.production`、`deploy/`。详见 [生产部署与上线检查](docs/production.md)。
+推荐的一键部署和统一应用镜像使用 `SYSTEM_CONFIG_MODE=database`，基础运行配置由部署脚本或网页初始化准备，对外访问地址、可信上游、注册及监控选项在后台保存到 PostgreSQL。高级分离部署使用 `SYSTEM_CONFIG_MODE=file`，需要独立的生产配置文件及 HTTPS 地址，后台系统设置只读。
+
+生产模式会校验独立的内部令牌、凭据加密密钥及数据库/Redis 环境变量，并拒绝仓库内的开发默认凭据与演示用户/客户端。首次创建管理员需提供至少 16 个字符的密码；已有管理员不会在重新部署时被覆盖。生产镜像和部署示例位于 `Dockerfile.production`、`deploy/`，详见 [生产部署与上线检查](docs/production.md)。
 
 ## 管理 API
 
@@ -296,7 +370,7 @@ curl -X PUT http://localhost:9001/admin/users/USER_ID/servers \
 - Gateway、Redis、动态注册表运行状态总览。
 - 系统设置：维护对外访问地址、可信上游、注册开关、调用采集开关、保留期限和告警阈值。
 - 日志监控：服务健康、调用趋势、服务/工具/用户/客户端排行、调用明细、当前阈值告警，以及可筛选的管理操作审计。
-- 个人连接中心可复制单个或全部已授权 Server 的 WorkBuddy MCP 导入配置；配置只包含 Gateway URL，登录和二次认证仍由各自的 OAuth/连接流程完成。平台动态注册支持 [WorkBuddy 文档](https://open.workbuddy.cn/docs/connector)所述的私有协议 OAuth 回调及本机回环回调。
+- 个人连接中心可复制单个或全部已授权 Server 的 WorkBuddy MCP 配置；复制结果是 `mcpServers` 字段的内容，不包含外层 `mcpServers` 包装。配置只包含 Gateway URL（本地开发默认 `http://localhost:8000/mcp/{SERVER_NAME}`），登录和二次认证仍由各自的 OAuth/连接流程完成。平台动态注册支持 [WorkBuddy 文档](https://open.workbuddy.cn/docs/connector)所述的私有协议 OAuth 回调及本机回环回调。
 - 中文/英文界面切换：登录页、管理台、连接中心共用语言下拉菜单；页面标题、状态、表单、提示和请求错误均来自语义键的 `zh-CN` / `en-US` 资源文件。语言选择保存在浏览器本地存储，变量通过 `t("key", { name })` 传递。OAuth 登录/授权页按 `Accept-Language`（含权重）或 `?lang=zh-CN|en-US` 选择语言，并在表单提交时保持选择。协议名称、产品名称、HTTP 方法和实际标识符保持原文。
 - 界面字体：英文使用 Nunito，简体中文使用随前端打包的 [Resource Han Rounded CN](https://github.com/CyanoHao/Resource-Han-Rounded) 字形子集；字体许可及更新说明见 `packages/admin-web/src/assets/fonts/`。
 
@@ -322,33 +396,69 @@ Vite 开发服务器会把 `/api/*` 转发至 Auth Server，把 `/gateway/*` 转
 
 ## 本地运行与验证
 
-不使用 Docker 时，先在本机安装并启动 PostgreSQL 和 Redis，并按 `config/default.json` 创建 PostgreSQL 用户 `mcp`、数据库 `mcp`。这是首次运行的依赖准备；Auth Server 启动时会自动执行表结构迁移。随后在项目根目录执行：
+宿主机运行源码需 **Node.js 20.19+（20.x）或 ≥ 22.12、pnpm 10.33.0**（与 Vite 要求一致），以及可用的 PostgreSQL 和 Redis。以下开发方式任选一种，不要同时启动两组 Auth、Gateway 和管理前端。
+
+### 方式一：容器运行数据库，宿主机运行应用
+
+在项目根目录安装依赖并启动数据库：
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
+docker compose up -d --wait postgres redis
+if [ ! -f .env.local ]; then cp .env.local.example .env.local; fi
+```
+
+编辑 `.env.local` 中的以下两项，保留其他已有配置和密钥：
+
+```env
+DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp
+REDIS_URL=redis://127.0.0.1:6380
+```
+
+再启动应用：
+
+```bash
 pnpm dev:local
 ```
 
-`pnpm dev:local` 会一次启动 Auth Server、Gateway、管理前端；Server 路由只来自数据库注册的实际服务。需要自定义本地配置时，可先执行 `cp .env.local.example .env.local`（已有 `.env.local` 时不要覆盖）；首次启动会向 `.env.local` 写入生成的凭据加密密钥与内部 Broker Token，并将文件权限设为 `0600`。该文件被 Git 忽略。打开 <http://localhost:5173>，按 `Ctrl+C` 停止这组 Node 进程。PostgreSQL 和 Redis 是独立服务，不随脚本退出。
+开发 Compose 把 PostgreSQL 和 Redis 分别映射到宿主机的 `5433`、`6380`，与容器内部的 `5432`、`6379` 区分。上述命令仅启动两个依赖容器。
 
-默认数据库连接是 `postgres://mcp:mcp-dev-password@localhost:5432/mcp`，Redis 是 `redis://localhost:6379`。可在 `.env.local` 中设置 `DATABASE_URL`、`REDIS_URL`、`CONFIG_FILE` 等覆盖本地配置；重新启动前请保持原有 `CREDENTIAL_ENCRYPT_KEY`，否则已保存的用户连接凭据不能解密。若 5173、8000 或 9001 端口被其他进程占用，脚本会明确报错。
+### 方式二：全部使用本机服务
 
-若只想把 PostgreSQL 和 Redis 放在容器里，其余服务在宿主机命令行运行：
+先安装并启动 PostgreSQL 和 Redis，按 `config/default.json` 创建 PostgreSQL 用户 `mcp`、数据库 `mcp`；默认连接为 `postgres://mcp:mcp-dev-password@localhost:5432/mcp` 和 `redis://localhost:6379`。若已有 `.env.local`，确认其中地址与本机服务一致，再执行：
 
 ```bash
-docker compose up -d postgres redis
-# 在 .env.local 中保留已有密钥，并设置以下数据库与 Redis 地址：
-# DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp
-# REDIS_URL=redis://127.0.0.1:6380
+pnpm install --frozen-lockfile
 pnpm dev:local
 ```
 
-Compose 仅向宿主机回环地址发布 PostgreSQL `5433` 和 Redis `6380`，不会启动 Auth、Gateway 或前端容器。
+两种方式都由 `pnpm dev:local` 启动 Auth Server、Gateway 和管理前端；Auth 启动时自动执行数据库迁移。打开 <http://localhost:5173>，首次空库默认管理员为 `admin` / `admin123`（仅开发环境，见 `config/default.json`）。已有账号继续使用数据库中的密码。
 
-Docker 启动与验证仍可使用：
+开发模式保留独立入口：管理网页默认 `5173`、OAuth 认证默认 `9001`、MCP 网关默认 `8000`。即使数据库保存了生产访问地址，本地认证与 MCP 发现仍使用当前配置文件中的对应地址；生产统一应用镜像则使用后台保存的公开访问地址。直接连接本地网关的客户端也可在 `8000` 上发现认证元数据、注册客户端和交换令牌，浏览器授权会跳转到认证服务。
+
+首次运行会在 `.env.local` 中补充凭据加密密钥和内部 Broker Token，权限设为 `0600`，该文件被 Git 忽略。保留原有 `CREDENTIAL_ENCRYPT_KEY`，否则已保存的用户连接凭据不能解密。按 `Ctrl+C` 停止 Node 进程，PostgreSQL 和 Redis 不随脚本退出。
+
+### 方式三：整套开发环境运行在 Docker
 
 ```bash
-docker compose up -d --build
+pnpm dev:detached  # 等价于 docker compose up -d --build
+pnpm dev:logs
+# 停止开发容器：pnpm dev:down
+```
+
+此方式使用根目录 `docker-compose.yml`、源码挂载和 Vite 开发服务器。打开 <http://localhost:5173>；默认管理员见 `config/docker.json`。宿主机不安装 pnpm 时也可直接执行对应的 Docker Compose 命令。
+
+### 常见启动问题与检查
+
+| 现象 | 处理 |
+| --- | --- |
+| `PostgreSQL is not reachable at 127.0.0.1:5433` | 执行 `docker compose up -d --wait postgres redis`，再核对 `.env.local`；`dev:local` 不会自动启动数据库。 |
+| PostgreSQL 拒绝账号或数据库不存在 | 核对 `DATABASE_URL` 的账号、密码和库名；使用本机数据库时须先创建账号与数据库。 |
+| `5173`、`8000` 或 `9001` 已被占用 | 停止原有开发进程或整套开发容器，再启动选定的开发方式。 |
+
+在已安装依赖的宿主机执行代码检查：
+
+```bash
 pnpm typecheck
 pnpm test:unit
 ```

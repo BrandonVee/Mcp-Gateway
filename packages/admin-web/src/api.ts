@@ -11,6 +11,7 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     invalid_origin: "api.invalidOrigin",
     invalid_system_settings: "settings.invalid",
     "username already exists": "api.usernameExists",
+    "server already exists": "servers.nameExists",
   };
   const statusKey: Record<number, MessageKey> = {
     400: "api.invalidRequest",
@@ -117,7 +118,7 @@ export const api = {
     }),
   updateServer: (
     name: string,
-    body: { display_name?: string; enabled?: boolean; signup_access?: boolean } | ServerAuthInput,
+    body: { name?: string; display_name?: string; description?: string; enabled?: boolean; signup_access?: boolean } | ServerAuthInput,
   ) =>
     request(`/api/admin/servers/${encodeURIComponent(name)}`, {
       method: "PATCH",

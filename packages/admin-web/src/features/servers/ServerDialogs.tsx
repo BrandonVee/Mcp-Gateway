@@ -16,6 +16,7 @@ import type {
   CreateServerInput,
   DialogState,
   McpServer,
+  McpInstance,
   ServerAuthInput,
 } from "../../types";
 
@@ -25,6 +26,8 @@ interface ServerDialogsProps {
   busy: boolean;
   onClose: () => void;
   onCreate: (data: CreateServerInput) => void;
+  onEdit: (server: McpServer, data: { name: string; display_name: string; description: string }) => void;
+  onEditInstance: (server: McpServer, instance: McpInstance, data: { url: string }) => void;
   onAddInstance: (server: McpServer, data: AddInstanceInput) => void;
   onConfigureAuth: (server: McpServer, data: ServerAuthInput) => void;
   onConfigureUsers: (server: McpServer, userIds: number[], signupAccess: boolean) => void;
@@ -33,6 +36,7 @@ interface ServerDialogsProps {
 interface ServerFormValues {
   name: string;
   displayName?: string;
+  description?: string;
   signup_access: boolean;
   instanceId?: string;
   url: string;
@@ -50,6 +54,8 @@ interface ServerFormValues {
 }
 
 export function ServerDialogs(props: ServerDialogsProps) {
+  if (props.state.type === "edit-server") return <EditServerDialog key={props.state.server.name} {...props} server={props.state.server} />;
+  if (props.state.type === "edit-instance") return <EditInstanceDialog key={props.state.instance.id} {...props} server={props.state.server} instance={props.state.instance} />;
   if (props.state.type === "create-server") {
     return <CreateServerDialog {...props} />;
   }
@@ -78,6 +84,7 @@ function CreateServerDialog({
     onCreate({
       name: values.name,
       display_name: values.displayName || values.name,
+      description: values.description?.trim() ?? "",
       signup_access: values.signup_access,
       instances: [{ id: values.instanceId || undefined, url: values.url }],
       ...authFields(values),
@@ -115,7 +122,7 @@ function CreateServerDialog({
           rules={[
             { required: true, message: t("serverDialog.enterServerId") },
             {
-              pattern: /^[a-zA-Z0-9._-]+$/,
+              pattern: /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/,
               message: t("serverDialog.useLettersNumbersPeriodsUnderscores"),
             },
           ]}
@@ -129,6 +136,7 @@ function CreateServerDialog({
         <Form.Item name="displayName" label={t("serverDialog.displayName")}>
           <Input placeholder={t("serverDialog.exampleExternalSearch")} />
         </Form.Item>
+        <DescriptionField />
         <Form.Item name="signup_access" label={t("serverDialog.signupAccess")} valuePropName="checked" extra={t("serverDialog.signupAccessHelp")}>
           <Switch />
         </Form.Item>
@@ -152,6 +160,44 @@ function CreateServerDialog({
       </Form>
     </Modal>
   );
+}
+
+function DescriptionField() {
+  const { t } = useI18n();
+  return <Form.Item name="description" label={t("serverDialog.description")} extra={t("serverDialog.descriptionHelp")} rules={[{ max: 2000, message: t("serverDialog.descriptionMax") }]}>
+    <Input.TextArea rows={3} maxLength={2000} showCount placeholder={t("serverDialog.descriptionPlaceholder")} />
+  </Form.Item>;
+}
+
+function EditServerDialog({ server, busy, onClose, onEdit }: Pick<ServerDialogsProps, "busy" | "onClose" | "onEdit"> & { server: McpServer }) {
+  const { t } = useI18n();
+  const [form] = Form.useForm<{ name: string; display_name: string; description: string }>();
+  return <Modal open width={560} title={t("serverDialog.editServer")} okText={t("serverDialog.saveSettings")} cancelText={t("common.cancel")} confirmLoading={busy}
+    onCancel={onClose} onOk={() => form.validateFields().then((values) => onEdit(server, { name: values.name.trim(), display_name: values.display_name.trim(), description: values.description.trim() }))}>
+    <Form form={form} layout="vertical" requiredMark={false} initialValues={{ name: server.name, display_name: server.display_name, description: server.description ?? "" }}>
+      <Form.Item name="name" label={t("serverDialog.serverId")} extra={t("serverDialog.serverIdEditable")} rules={[{ required: true, message: t("serverDialog.enterServerId") }, { pattern: /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/, message: t("serverDialog.serverIdFormat") }]}><Input prefix={<DeploymentUnitOutlined />} maxLength={64} /></Form.Item>
+      <Form.Item noStyle shouldUpdate={(previous, next) => previous.name !== next.name}>
+        {({ getFieldValue }) => <div className="server-route-preview">
+          <span>{t("serverDialog.routePreview")}</span><code>{`/mcp/${getFieldValue("name") || ""}`}</code>
+          {getFieldValue("name")?.trim() !== server.name && <Alert type="warning" showIcon message={t("serverDialog.renameHelp")} description={server.auth_mode === "oauth" ? t("serverDialog.renameOAuthHelp") : undefined} />}
+        </div>}
+      </Form.Item>
+      <Form.Item name="display_name" label={t("serverDialog.displayName")} rules={[{ required: true, whitespace: true, message: t("serverDialog.enterDisplayName") }]}><Input autoFocus /></Form.Item>
+      <DescriptionField />
+    </Form>
+  </Modal>;
+}
+
+function EditInstanceDialog({ server, instance, busy, onClose, onEditInstance }: Pick<ServerDialogsProps, "busy" | "onClose" | "onEditInstance"> & { server: McpServer; instance: McpInstance }) {
+  const { t } = useI18n();
+  const [form] = Form.useForm<{ url: string }>();
+  return <Modal open width={560} title={t("serverDialog.editInstance")} okText={t("serverDialog.saveSettings")} cancelText={t("common.cancel")} confirmLoading={busy}
+    onCancel={onClose} onOk={() => form.validateFields().then((values) => onEditInstance(server, instance, { url: values.url.trim() }))}>
+    <Form form={form} layout="vertical" requiredMark={false} initialValues={{ url: instance.url }}>
+      <Form.Item label={t("serverDialog.instanceId")}><Input value={instance.id} disabled /></Form.Item>
+      <Form.Item name="url" label={t("serverDialog.endpointUrl")} extra={t("serverDialog.endpointChangeHelp")} rules={[{ required: true, message: t("serverDialog.enterEndpointUrl") }, { type: "url", message: t("serverDialog.enterValidHttpHttpsUrl") }]}><Input prefix={<LinkOutlined />} autoFocus /></Form.Item>
+    </Form>
+  </Modal>;
 }
 
 function authFields(values: ServerFormValues): ServerAuthInput {

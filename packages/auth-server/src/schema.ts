@@ -60,6 +60,7 @@ export const loginSessions = pgTable('login_sessions', {
 export const mcpServers = pgTable('mcp_servers', {
   name: text('name').primaryKey(),
   displayName: text('display_name').notNull(),
+  description: text('description').notNull().default(''),
   enabled: boolean('enabled').notNull().default(true),
   signupAccess: boolean('signup_access').notNull().default(false),
   authMode: text('auth_mode').$type<'none' | 'api_key' | 'oauth'>().notNull().default('none'),
@@ -81,7 +82,7 @@ export const userMcpCredentials = pgTable(
   'user_mcp_credentials',
   {
     userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
-    serverName: text('server_name').notNull().references(() => mcpServers.name, { onDelete: 'cascade' }),
+    serverName: text('server_name').notNull().references(() => mcpServers.name, { onDelete: 'cascade', onUpdate: 'cascade' }),
     mode: text('mode').$type<'api_key' | 'oauth'>().notNull(),
     secret: text('secret').notNull(),
     refreshSecret: text('refresh_secret'),
@@ -96,7 +97,7 @@ export const oauthConnectionStates = pgTable(
   {
     state: text('state').primaryKey(),
     userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
-    serverName: text('server_name').notNull().references(() => mcpServers.name, { onDelete: 'cascade' }),
+    serverName: text('server_name').notNull().references(() => mcpServers.name, { onDelete: 'cascade', onUpdate: 'cascade' }),
     verifier: text('verifier').notNull(),
     expiresAt: epoch('expires_at'),
   },
@@ -109,7 +110,7 @@ export const mcpServerInstances = pgTable(
     id: text('id').primaryKey(),
     serverName: text('server_name')
       .notNull()
-      .references(() => mcpServers.name, { onDelete: 'cascade' }),
+      .references(() => mcpServers.name, { onDelete: 'cascade', onUpdate: 'cascade' }),
     url: text('url').notNull(),
     enabled: boolean('enabled').notNull().default(true),
     createdAt: epoch('created_at'),
@@ -129,7 +130,7 @@ export const userServerAccess = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     serverName: text('server_name')
       .notNull()
-      .references(() => mcpServers.name, { onDelete: 'cascade' }),
+      .references(() => mcpServers.name, { onDelete: 'cascade', onUpdate: 'cascade' }),
     createdAt: epoch('created_at'),
   },
   (table) => [

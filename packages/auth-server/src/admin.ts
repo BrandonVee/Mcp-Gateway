@@ -6,7 +6,7 @@ import { scryptHash } from './users.js';
 import type { SigningKeys } from './keys.js';
 import type { Context as HonoContext } from 'hono';
 import { and, count, desc, eq, lt } from 'drizzle-orm';
-import { auditEvents, authCodes, loginSessions, mcpServerInstances, mcpServers, refreshTokens, userMcpCredentials, userServerAccess, users } from './schema.js';
+import { auditEvents, authCodes, loginSessions, mcpServerInstances, mcpServers, oauthConnectionStates, refreshTokens, userMcpCredentials, userServerAccess, users } from './schema.js';
 import { randomUUID } from 'node:crypto';
 import { normalizeUpstreamEndpoint, gatewayPublicUrl, adminWebUrl, databaseSettingsEnabled, systemConfigured, bootstrapOriginAllowed, normalizeSystemSettings, allowedUpstreamHosts, upstreamAllowlistEnabled } from '@mcp/shared';
 import { encryptCredential } from './credential-crypto.js';
@@ -21,7 +21,7 @@ export interface AdminDeps {
   issuer: string;
 }
 
-const SERVER_NAME_RE = /^[a-zA-Z0-9._-]{1,64}$/;
+const SERVER_NAME_RE = /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/;
 const SESSION_COOKIE = 'auth_session';
 
 function normalizeMcpEndpoint(value: string): string | null {
@@ -493,6 +493,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       .select({
         name: mcpServers.name,
         displayName: mcpServers.displayName,
+        description: mcpServers.description,
         enabled: mcpServers.enabled,
         signupAccess: mcpServers.signupAccess,
         authMode: mcpServers.authMode,
@@ -521,6 +522,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       return {
         name: row.name,
         display_name: row.displayName,
+        description: row.description,
         enabled: row.enabled,
         signup_access: row.signupAccess,
         auth_mode: row.authMode,
@@ -547,6 +549,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const body = (await c.req.json().catch(() => ({}))) as {
       name?: string;
       display_name?: string;
+      description?: string;
       signup_access?: boolean;
       instances?: Array<{ id?: string; url?: string }>;
       auth_mode?: string;
@@ -565,7 +568,10 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     if (!SERVER_NAME_RE.test(name)) return jsonError(c, 'name must be 1-64 chars [a-zA-Z0-9._-]');
     const [existing] = await db.select({ name: mcpServers.name }).from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
     if (existing) return jsonError(c, 'server already exists', 409);
+    if (body.display_name !== undefined && typeof body.display_name !== 'string') return jsonError(c, 'display_name must be a string');
+    if (body.description !== undefined && (typeof body.description !== 'string' || body.description.length > 2000)) return jsonError(c, 'description must be a string of at most 2000 characters');
     const displayName = body.display_name?.trim() || name;
+    const description = body.description?.trim() ?? '';
     if (body.signup_access !== undefined && typeof body.signup_access !== 'boolean') return jsonError(c, 'signup_access must be a boolean');
     const auth = authSettings(body as Record<string, unknown>);
     if (auth.error) return jsonError(c, auth.error);
@@ -578,7 +584,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       normalizedInstances.push({ id: instance.id?.trim() || randomUUID(), url });
     }
     await db.transaction(async (tx) => {
-      await tx.insert(mcpServers).values({ name, displayName, enabled: true, signupAccess: body.signup_access ?? false, createdAt: now, updatedAt: now, ...auth.values });
+      await tx.insert(mcpServers).values({ name, displayName, description, enabled: true, signupAccess: body.signup_access ?? false, createdAt: now, updatedAt: now, ...auth.values });
       if (normalizedInstances.length) {
         await tx.insert(mcpServerInstances).values(
           normalizedInstances.map((instance) => ({
@@ -591,7 +597,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         );
       }
     });
-    return c.json({ name, display_name: displayName, enabled: true, signup_access: body.signup_access ?? false, auth_mode: auth.values?.authMode, instances: normalizedInstances }, 201);
+    return c.json({ name, display_name: displayName, description, enabled: true, signup_access: body.signup_access ?? false, auth_mode: auth.values?.authMode, instances: normalizedInstances }, 201);
   });
 
   router.post('/admin/servers/:name/instances', async (c) => {
@@ -639,40 +645,56 @@ export function createAdminRouter(deps: AdminDeps): Hono {
 
   router.patch('/admin/servers/:name', async (c) => {
     const name = c.req.param('name');
-    const [existing] = await db.select().from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
-    if (!existing) return jsonError(c, 'server not found', 404);
-    const body = (await c.req.json().catch(() => ({}))) as { display_name?: string; enabled?: boolean; auth_mode?: string; signup_access?: boolean };
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string; display_name?: string; description?: string; enabled?: boolean; auth_mode?: string; signup_access?: boolean };
+    if (body.name !== undefined && (typeof body.name !== 'string' || !SERVER_NAME_RE.test(body.name.trim()))) return jsonError(c, 'name must be 1-64 chars [a-zA-Z0-9._-]');
+    if (body.display_name !== undefined && (typeof body.display_name !== 'string' || !body.display_name.trim())) return jsonError(c, 'display_name must be a non-empty string');
+    if (body.description !== undefined && (typeof body.description !== 'string' || body.description.length > 2000)) return jsonError(c, 'description must be a string of at most 2000 characters');
+    if (body.enabled !== undefined && typeof body.enabled !== 'boolean') return jsonError(c, 'enabled must be a boolean');
     if (body.signup_access !== undefined && typeof body.signup_access !== 'boolean') return jsonError(c, 'signup_access must be a boolean');
-    if (body.auth_mode !== undefined) {
-      const auth = authSettings(body as Record<string, unknown>, existing);
-      if (auth.error) return jsonError(c, auth.error);
-      const changed = auth.values && (
-        existing.authMode !== auth.values.authMode ||
-        (auth.values.authMode === 'api_key' && (existing.apiKeyHeader !== auth.values.apiKeyHeader || existing.apiKeyPrefix !== auth.values.apiKeyPrefix)) ||
-        (auth.values.authMode === 'oauth' && (
-          existing.oauthAuthorizeUrl !== auth.values.oauthAuthorizeUrl || existing.oauthTokenUrl !== auth.values.oauthTokenUrl ||
-          existing.oauthClientId !== auth.values.oauthClientId || existing.oauthClientSecret !== auth.values.oauthClientSecret ||
-          existing.oauthScopes !== auth.values.oauthScopes || existing.oauthResource !== auth.values.oauthResource ||
-          existing.oauthIssuer !== auth.values.oauthIssuer || existing.oauthClientAuthMethod !== auth.values.oauthClientAuthMethod
-        ))
-      );
-      await db.transaction(async (tx) => {
-        await tx.update(mcpServers).set({ ...auth.values, updatedAt: Date.now() }).where(eq(mcpServers.name, name));
-        if (changed) await tx.delete(userMcpCredentials).where(eq(userMcpCredentials.serverName, name));
+    const nextName = body.name?.trim() ?? name;
+    try {
+      const result = await db.transaction(async (tx) => {
+        const [existing] = await tx.select().from(mcpServers).where(eq(mcpServers.name, name)).for('update').limit(1);
+        if (!existing) return { error: 'server not found', status: 404 as const };
+        if (nextName !== name) {
+          const [taken] = await tx.select({ name: mcpServers.name }).from(mcpServers).where(eq(mcpServers.name, nextName)).limit(1);
+          if (taken) return { error: 'server already exists', status: 409 as const };
+        }
+        const changes: Partial<typeof mcpServers.$inferInsert> = { name: nextName, updatedAt: Date.now() };
+        let credentialsChanged = false;
+        if (body.auth_mode !== undefined) {
+          const auth = authSettings(body as Record<string, unknown>, existing);
+          if (auth.error) return { error: auth.error, status: 400 as const };
+          credentialsChanged = Boolean(auth.values && (
+            existing.authMode !== auth.values.authMode ||
+            (auth.values.authMode === 'api_key' && (existing.apiKeyHeader !== auth.values.apiKeyHeader || existing.apiKeyPrefix !== auth.values.apiKeyPrefix)) ||
+            (auth.values.authMode === 'oauth' && (
+              existing.oauthAuthorizeUrl !== auth.values.oauthAuthorizeUrl || existing.oauthTokenUrl !== auth.values.oauthTokenUrl ||
+              existing.oauthClientId !== auth.values.oauthClientId || existing.oauthClientSecret !== auth.values.oauthClientSecret ||
+              existing.oauthScopes !== auth.values.oauthScopes || existing.oauthResource !== auth.values.oauthResource ||
+              existing.oauthIssuer !== auth.values.oauthIssuer || existing.oauthClientAuthMethod !== auth.values.oauthClientAuthMethod
+            ))
+          ));
+          Object.assign(changes, auth.values);
+        }
+        if (body.display_name !== undefined) changes.displayName = body.display_name.trim();
+        if (body.description !== undefined) changes.description = body.description.trim();
+        if (body.enabled !== undefined) changes.enabled = body.enabled;
+        if (body.signup_access !== undefined) changes.signupAccess = body.signup_access;
+        // Pending upstream OAuth callbacks still point at the old route.
+        if (nextName !== name) await tx.delete(oauthConnectionStates).where(eq(oauthConnectionStates.serverName, name));
+        if (credentialsChanged) await tx.delete(userMcpCredentials).where(eq(userMcpCredentials.serverName, name));
+        // ON UPDATE CASCADE retains instances, grants, and saved credentials.
+        await tx.update(mcpServers).set(changes).where(eq(mcpServers.name, name));
+        return { name: nextName };
       });
+      if (result.error) return jsonError(c, result.error, result.status);
+      return c.json({ ok: true, name: result.name });
+    } catch (error) {
+      const failure = error as { code?: string; cause?: { code?: string } };
+      if (failure.code === '23505' || failure.cause?.code === '23505') return jsonError(c, 'server already exists', 409);
+      throw error;
     }
-    if (body.display_name !== undefined) {
-      const displayName = body.display_name.trim();
-      if (!displayName) return jsonError(c, 'display_name cannot be empty');
-      await db.update(mcpServers).set({ displayName, updatedAt: Date.now() }).where(eq(mcpServers.name, name));
-    }
-    if (body.enabled !== undefined) {
-      await db.update(mcpServers).set({ enabled: body.enabled, updatedAt: Date.now() }).where(eq(mcpServers.name, name));
-    }
-    if (body.signup_access !== undefined) {
-      await db.update(mcpServers).set({ signupAccess: body.signup_access, updatedAt: Date.now() }).where(eq(mcpServers.name, name));
-    }
-    return c.json({ ok: true });
   });
 
   router.delete('/admin/servers/:name', async (c) => {

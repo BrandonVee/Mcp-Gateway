@@ -4,8 +4,10 @@ import { ApiOutlined, CopyOutlined, DashboardOutlined, DisconnectOutlined, KeyOu
 import { api } from "../../api";
 import type { ConnectionServer } from "../../types";
 import { useI18n } from "../../i18n";
+import { ServiceDescription } from "../../components/ServiceDescription";
 import { LanguageSwitcher } from "../../components/LanguageSwitcher";
-import { workBuddyConfig } from "./workbuddy";
+import { mcpConfig, mcpServerUrl } from "./mcp-config";
+import "./connections.css";
 
 export function ConnectionsPage() {
   const { message, modal } = App.useApp();
@@ -17,9 +19,11 @@ export function ConnectionsPage() {
   const [servers, setServers] = useState<ConnectionServer[]>([]);
   const [selected, setSelected] = useState<ConnectionServer | null>(null);
   const [key, setKey] = useState("");
+  const [resource, setResource] = useState("");
 
   const load = async () => {
-    const [session, list] = await Promise.all([api.mySession(), api.myServers()]);
+    const [session, list, gateway] = await Promise.all([api.mySession(), api.myServers(), api.gatewayResource().catch(() => ({ resource: "" }))]);
+    setResource(gateway.resource);
     setUsername(session.username);
     setIsAdmin(session.role === "admin");
     setServers(list.servers);
@@ -86,13 +90,13 @@ export function ConnectionsPage() {
     },
   });
 
-  const copyWorkBuddyConfig = async (selectedServers: ConnectionServer[]) => {
+  const copyMcpConfig = async (selectedServers: ConnectionServer[]) => {
     try {
       const { resource } = await api.gatewayResource();
-      await navigator.clipboard.writeText(workBuddyConfig(selectedServers, resource));
-      message.success(t("connections.workBuddyConfigCopied"));
+      await navigator.clipboard.writeText(mcpConfig(selectedServers, resource));
+      message.success(t("connections.mcpConfigCopied"));
     } catch {
-      message.error(t("connections.workBuddyConfigCopyFailed"));
+      message.error(t("connections.mcpConfigCopyFailed"));
     }
   };
 
@@ -112,11 +116,17 @@ export function ConnectionsPage() {
               {t("connections.openAdminConsole")}
             </Button>
           )}
-          <Button icon={<LogoutOutlined />} onClick={async () => {
-            await api.myLogout();
-            setUsername(null);
-            setIsAdmin(false);
-            setServers([]);
+          <Button icon={<LogoutOutlined />} loading={busy} onClick={async () => {
+            setBusy(true);
+            try {
+              await api.myLogout();
+              setUsername(null);
+              setIsAdmin(false);
+              setServers([]);
+              setSelected(null);
+              setKey("");
+            } catch { message.error(t("auth.logoutFailed")); }
+            finally { setBusy(false); }
           }}>{t("connections.signOut")}</Button>
         </div>
       )}
@@ -138,7 +148,7 @@ export function ConnectionsPage() {
         <p>{t("connections.credentialsUsedRelevantServicePlatform")}</p></div>
         <div className="connections-intro-actions">
           <Button icon={<ReloadOutlined />} onClick={() => load().catch(() => message.error(t("common.refreshFailed")))}>{t("connections.refreshStatus")}</Button>
-          <Button type="primary" icon={<CopyOutlined />} disabled={!servers.length} onClick={() => copyWorkBuddyConfig(servers)}>{t("connections.copyAllWorkBuddyConfig")}</Button>
+          <Button type="primary" icon={<CopyOutlined />} disabled={!servers.length} onClick={() => copyMcpConfig(servers)}>{t("connections.copyAllMcpConfig")}</Button>
         </div>
       </div>
       {servers.length ? <div className="connections-grid">{servers.map((server, index) => <Card key={server.name} className="connection-card" bordered={false}>
@@ -146,16 +156,21 @@ export function ConnectionsPage() {
           <Tag color={server.connection_status === "connected" ? "success" : server.connection_status === "expired" ? "warning" : "default"}>
             {t(server.connection_status === "connected" ? "status.connected" : server.connection_status === "not_required" ? "connections.noConnectionNeeded" : server.connection_status === "expired" ? "status.expired" : "connections.notConnected")}
           </Tag></div>
-        <h2>{server.display_name}</h2><code>/mcp/{server.name}</code>
+        <h2>{server.display_name}</h2>
+        <dl className="connection-details">
+          <div><dt>{t("connections.serverName")}</dt><dd><code>{server.name}</code></dd></div>
+          <div><dt>{t("connections.mcpUrl")}</dt><dd><code>{resource ? mcpServerUrl(server.name, resource) : t("connections.urlUnavailable")}</code></dd></div>
+        </dl>
+        <ServiceDescription description={server.description} />
         <div className="connection-bottom"><span>{t(server.auth_mode === "api_key" ? "connections.modeApiKey" : server.auth_mode === "oauth" ? "connections.modeOAuth" : "connections.modePlatform")}</span>
-          <Button icon={<CopyOutlined />} onClick={() => copyWorkBuddyConfig([server])}>{t("connections.copyWorkBuddyConfig")}</Button>
+          <Button icon={<CopyOutlined />} onClick={() => copyMcpConfig([server])}>{t("connections.copyMcpConfig")}</Button>
           {server.auth_mode === "api_key" && <Button type="primary" icon={<KeyOutlined />} onClick={() => setSelected(server)}>{t(server.connection_status === "connected" ? "connections.updateKey" : "connections.configureKey")}</Button>}
           {server.auth_mode === "oauth" && <Button type="primary" icon={<LinkOutlined />} loading={busy} onClick={() => connectOAuth(server)}>{t(server.connection_status === "connected" ? "connections.reauthorize" : "connections.connectAccount")}</Button>}
           {server.connection_status !== "not_required" && server.connection_status !== "not_connected" && <Button danger type="text" icon={<DisconnectOutlined />} onClick={() => disconnect(server)}>{t("connections.disconnectAction")}</Button>}
         </div>
       </Card>)}</div> : <Empty description={t("connections.noMcpServersBeenAssigned")} />}
       <Typography.Text className="connections-note">{t("connections.serversGrantedAdministratorAppearHere")}</Typography.Text>
-      <Typography.Text className="connections-note">{t("connections.workBuddyConfigHint")}</Typography.Text>
+      <Typography.Text className="connections-note">{t("connections.mcpConfigHint")}</Typography.Text>
     </section>}
 
     <Modal title={t("connections.configureApiKeyServer", { server: selected?.display_name ?? "" })} open={!!selected} okText={t("connections.saveKey")} okButtonProps={{ disabled: !key, loading: busy }}

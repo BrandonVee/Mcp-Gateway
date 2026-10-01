@@ -5,6 +5,7 @@ import {
   DeleteOutlined,
   DeploymentUnitOutlined,
   ExportOutlined,
+  EditOutlined,
   PlusOutlined,
   PoweroffOutlined,
   SafetyCertificateOutlined,
@@ -28,6 +29,7 @@ import {
   Typography,
 } from "antd";
 import { useMemo, useState } from "react";
+import { ServiceDescription } from "../../components/ServiceDescription";
 import { PageToolbar } from "../../components/PageToolbar";
 import type { AdminUser, McpInstance, McpServer } from "../../types";
 
@@ -35,6 +37,8 @@ interface ServersPageProps {
   servers: McpServer[];
   users: AdminUser[];
   onCreate: () => void;
+  onEdit: (server: McpServer) => void;
+  onEditInstance: (server: McpServer, instance: McpInstance) => void;
   onAddInstance: (server: McpServer) => void;
   onConfigureAuth: (server: McpServer) => void;
   onConfigureUsers: (server: McpServer) => void;
@@ -57,6 +61,7 @@ export function ServersPage(props: ServersPageProps) {
         !normalizedKeyword ||
         server.name.toLowerCase().includes(normalizedKeyword) ||
         server.display_name.toLowerCase().includes(normalizedKeyword) ||
+        (server.description ?? "").toLowerCase().includes(normalizedKeyword) ||
         server.instances.some((instance) =>
           instance.url.toLowerCase().includes(normalizedKeyword),
         );
@@ -135,6 +140,7 @@ export function ServersPage(props: ServersPageProps) {
                   />
                 </header>
 
+                <ServiceDescription description={server.description} />
                 <div className="server-policy">
                   <div>
                     <small>{t("users.userSign")}</small>
@@ -163,11 +169,12 @@ export function ServersPage(props: ServersPageProps) {
                               {instance.enabled ? t("servers.online") : t("servers.disabled")}
                             </Tag>
                           </Flex>
-                          <Typography.Text ellipsis={{ tooltip: instance.url }}>
+                          <Typography.Text>
                             {instance.url}
                           </Typography.Text>
                         </div>
-                        <Space size={2}>
+                        <Space size={2} wrap>
+                          <Tooltip title={t("servers.editInstance")}><Button type="text" aria-label={t("servers.editInstance")} icon={<EditOutlined />} onClick={() => props.onEditInstance(server, instance)} /></Tooltip>
                           <Tooltip title={t("servers.copyUrl")}>
                             <Button
                               type="text"
@@ -222,7 +229,8 @@ export function ServersPage(props: ServersPageProps) {
 
                 <footer className="server-card-footer">
                   <span><TeamOutlined /> {t("servers.adminsAccessDefaultCountIdentities", { count: props.users.filter((user) => user.role === "admin" || user.servers.includes("*")).length })}</span>
-                  <Space size={4}>
+                  <Space size={4} wrap>
+                    <Button type="link" icon={<EditOutlined />} onClick={() => props.onEdit(server)}>{t("servers.editInfo")}</Button>
                     <Button
                       type="link"
                       icon={<PlusOutlined />}

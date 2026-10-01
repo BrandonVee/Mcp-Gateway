@@ -162,7 +162,7 @@ export function createConnectionsRouter(): Hono {
   router.get('/me/servers', async (c) => {
     const user = await currentUser(c);
     if (!user) return c.json({ error: 'unauthorized' }, 401);
-    const servers = await db.select({ name: mcpServers.name, displayName: mcpServers.displayName, authMode: mcpServers.authMode })
+    const servers = await db.select({ name: mcpServers.name, displayName: mcpServers.displayName, description: mcpServers.description, authMode: mcpServers.authMode })
       .from(mcpServers).where(eq(mcpServers.enabled, true)).orderBy(mcpServers.name);
     const grants = user.role === 'admin' || user.allServers ? null : await db.select({ serverName: userServerAccess.serverName })
       .from(userServerAccess).where(eq(userServerAccess.userId, user.id));
@@ -173,7 +173,7 @@ export function createConnectionsRouter(): Hono {
     return c.json({ servers: servers.filter((server) => user.role === 'admin' || user.allServers || allowed.has(server.name))
       .map((server) => {
         const credential = linked.get(server.name);
-        return { name: server.name, display_name: server.displayName, auth_mode: server.authMode,
+        return { name: server.name, display_name: server.displayName, description: server.description, auth_mode: server.authMode,
           connection_status: server.authMode === 'none' ? 'not_required' : !credential || credential.mode !== server.authMode ? 'not_connected'
             : credential.expiresAt && credential.expiresAt <= Date.now() && !credential.refreshSecret ? 'expired' : 'connected' };
       }) });

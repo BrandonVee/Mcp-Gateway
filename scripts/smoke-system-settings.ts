@@ -111,6 +111,19 @@ async function main() {
     assert.ok(after[key] === saved[key], `${key} persists across repeat deployment`);
   }
   assert.equal(after.PUBLIC_URL, undefined);
+  assert.equal((await request('/api/admin/session', 'DELETE', undefined, 'http://localhost:5173')).response.status, 403,
+    'production does not trust the development frontend origin');
+  assert.equal((await request('/api/admin/session', 'GET', undefined, updatedUrl)).response.status, 200,
+    'rejected logout keeps the session valid');
+  const logout = await request('/api/admin/session', 'DELETE', undefined, updatedUrl);
+  assert.equal(logout.response.status, 200);
+  assert.equal(logout.data.authenticated, false);
+  assert.match(logout.response.headers.get('set-cookie') ?? '', /Max-Age=0/);
+  assert.equal((await request('/api/admin/session', 'GET', undefined, updatedUrl)).response.status, 401,
+    'refresh with the old cookie cannot restore the revoked session');
+  assert.equal((await request('/api/me/session', 'GET', undefined, updatedUrl)).response.status, 401);
+  assert.equal((await request('/api/admin/users', 'GET', undefined, updatedUrl)).response.status, 403);
+  console.log('PASS: browser logout expires the cookie, revokes the server session and preserves origin checks');
   console.log('PASS: initial setup, browser origin checks, OAuth and MCP discovery, JWT issuer change, restart persistence, stable deployment secrets');
 }
 

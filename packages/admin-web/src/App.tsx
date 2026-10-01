@@ -113,10 +113,14 @@ function ControlPlane() {
       userCount={controlPlane.users.length}
       serverCount={controlPlane.servers.length}
       refreshing={controlPlane.busy}
+      loggingOut={controlPlane.loggingOut}
       lastUpdatedAt={controlPlane.lastUpdatedAt}
       onNavigate={setView}
       onRefresh={refresh}
-      onLogout={controlPlane.logout}
+      onLogout={async () => {
+        try { await controlPlane.logout(); }
+        catch { message.error(t("auth.logoutFailed")); }
+      }}
     >
       {controlPlane.initializing ? (
         <PageSkeleton />
@@ -184,6 +188,8 @@ function ControlPlane() {
               servers={controlPlane.servers}
               users={controlPlane.users}
               onCreate={() => setDialog({ type: "create-server" })}
+              onEdit={(server) => setDialog({ type: "edit-server", server })}
+              onEditInstance={(server, instance) => setDialog({ type: "edit-instance", server, instance })}
               onAddInstance={(server) =>
                 setDialog({ type: "add-instance", server })
               }
@@ -293,6 +299,8 @@ function ControlPlane() {
                 t("app.mcpServerRegistered"),
               )
             }
+            onEdit={(server, data) => execute(() => controlPlane.api.updateServer(server.name, data), t("servers.infoSaved"))}
+            onEditInstance={(server, instance, data) => execute(() => controlPlane.api.updateInstance(server.name, instance.id, data), t("servers.instanceSaved"))}
             onAddInstance={(server, data) =>
               execute(
                 () => controlPlane.api.addInstance(server.name, data),

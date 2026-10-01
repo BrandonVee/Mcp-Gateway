@@ -10,6 +10,8 @@
 
 镜像以非 root 用户运行，应用端口为 8080；9001、8000、9002 仅在容器回环地址监听，外部入口拒绝 `/internal/*` 和 `/api/internal/*`。单机 Compose 采用只读文件系统、临时 `/tmp`、移除 capabilities 和禁止提权。应用进程共享容器隔离边界，网页、认证和网关会一起升级、重启。
 
+内置 Nginx 对管理页面入口使用 `no-cache`，每次访问校验最新版本；Vite 生成的带内容哈希的 `/assets/` 文件缓存一年，缺失资源返回 404。仅静态页面及资源启用 gzip，API、OAuth 和 MCP 响应保留原有代理行为。各生产入口的访问日志只记录路径，不包含 OAuth 查询参数。可在装有 Docker、Node 和项目依赖的开发或 CI 环境运行 `pnpm exec tsx scripts/smoke-nginx.ts`，通过独立容器验证路由、缓存、压缩、安全响应头及日志，无需连接业务数据库。
+
 ```bash
 docker build -f Dockerfile.production --target app -t mcp-app:local .
 docker save -o mcp-app-local.tar mcp-app:local
@@ -197,14 +199,18 @@ curl --fail https://YOUR_DOMAIN/gateway/health
 
 | 触发方式 | 发布标签 |
 | --- | --- |
-| 推送 `main` 或手动运行 `main` | `latest`、12 位提交 SHA |
+| 推送 `main` 或手动运行 `main` | `latest`、12 位提交 SHA、自动版本 `vX.Y.Z` / `X.Y.Z` |
 | 推送 `v1.2.3` | `v1.2.3`、`1.2.3`、12 位提交 SHA |
 | PR、其他分支 | 仅测试 |
+
+通过全部测试并成功发布镜像后，`github-actions[bot]` 自动创建版本标签和 [GitHub Release](https://github.com/BrandonVee/Mcp-Gateway/releases)，记录同一提交的双架构镜像 digest 和部署命令。首版为 `v0.1.0`；之后普通提交递增补丁版本，`feat:` 递增次版本，`!` 或 `BREAKING CHANGE:` 递增主版本。重复运行同一已发布提交会复用版本，不移动已有标签。工作流声明 `contents: write`，使用内置 `GITHUB_TOKEN`，无需额外的 GitHub PAT。
+
+机器人创建标签不会再次触发 CI，因此版本镜像和 Release 都在当前已通过测试的流水线中完成。手动推送版本标签仍可发布固定版本镜像。
 
 版本标签不会覆盖 `latest`；`latest` 跟随通过所有测试的 `main`。在发布任务的摘要中查看镜像 digest，Docker Hub 的 Tags 页面查看两个架构。
 
 ```bash
-# 在当前已验证的提交上发布一个版本：
+# 可选：手动指定版本（main 已支持自动发版）：
 git tag v1.2.3
 git push origin v1.2.3
 

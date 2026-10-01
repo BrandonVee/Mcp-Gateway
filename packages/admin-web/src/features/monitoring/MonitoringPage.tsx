@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../api";
 import { UsageMonitoring } from './UsageMonitoring';
 import type { AuditEvent, AuthHealth, GatewayHealth } from "../../types";
+import './monitoring.css';
 
 const PAGE_SIZE = 50;
 const timestamp = (value: number, language: Language) => new Intl.DateTimeFormat(language, {
@@ -102,7 +103,7 @@ export function MonitoringPage() {
       <section className="monitor-audit-panel">
         <div className="monitor-section-heading">
           <div><span className="section-eyebrow">{t("monitoring.auditEyebrow")}</span><h3>{t("monitoring.auditTrail")}</h3></div>
-          <Tag color="cyan" bordered={false}>{t("monitoring.metadata90DayDefaultRetention")}</Tag>
+          <Tag color="cyan" variant="filled">{t("monitoring.metadata90DayDefaultRetention")}</Tag>
         </div>
         <div className="monitor-toolbar">
           <Input
@@ -138,8 +139,8 @@ export function MonitoringPage() {
             <div className="monitor-log-row" key={event.id}>
               <time>{timestamp(event.created_at, language)}</time>
               <strong>{event.actor}</strong>
-              <div className="monitor-operation"><Tag color={event.method === "DELETE" ? "red" : event.method === "POST" ? "blue" : "gold"} bordered={false}>{event.method}</Tag><code title={event.path}>{event.path}</code></div>
-              <Tag color={event.status_code < 400 ? "success" : "error"} bordered={false}>{event.status_code}</Tag>
+              <div className="monitor-operation"><Tag color={event.method === "DELETE" ? "red" : event.method === "POST" ? "blue" : "gold"} variant="filled">{event.method}</Tag><code title={event.path}>{event.path}</code></div>
+              <Tag color={event.status_code < 400 ? "success" : "error"} variant="filled">{event.status_code}</Tag>
               <code className="monitor-request-id" title={event.request_id}>{event.request_id.slice(0, 8)}</code>
             </div>
           )) : <div className="monitor-empty"><Empty description={t("monitoring.noMatchingAuditEvents")} /></div>}

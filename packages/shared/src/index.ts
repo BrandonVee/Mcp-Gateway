@@ -178,14 +178,19 @@ export function applySystemSettings(value: SystemSettings): void {
   }
 }
 export function systemConfigured(): boolean { return !databaseSettingsEnabled() || Boolean(systemSettings.public_url); }
-export function authIssuer(): string {
-  return databaseSettingsEnabled() ? systemSettings.public_url ?? '' : loadPlatformConfig().auth.issuer;
+export function authIssuer(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.NODE_ENV !== 'production') return loadPlatformConfig().auth.issuer;
+  return databaseSettingsEnabled(env) ? systemSettings.public_url ?? '' : loadPlatformConfig().auth.issuer;
 }
-export function gatewayPublicUrl(): string {
-  return databaseSettingsEnabled() ? systemSettings.public_url ?? '' : loadPlatformConfig().gateway.resourceBaseUrl;
+export function gatewayPublicUrl(env: NodeJS.ProcessEnv = process.env): string {
+  // Local development has separate Auth and Gateway listeners, not one ingress.
+  if (env.NODE_ENV !== 'production') return loadPlatformConfig().gateway.resourceBaseUrl;
+  return databaseSettingsEnabled(env) ? systemSettings.public_url ?? '' : loadPlatformConfig().gateway.resourceBaseUrl;
 }
-export function adminWebUrl(): string {
-  return databaseSettingsEnabled() ? systemSettings.public_url ?? '/' : process.env.ADMIN_WEB_URL ?? 'http://localhost:5173';
+export function adminWebUrl(env: NodeJS.ProcessEnv = process.env): string {
+  // Vite remains a separate browser origin when development uses stored settings.
+  if (env.NODE_ENV !== 'production') return env.ADMIN_WEB_URL ?? 'http://localhost:5173';
+  return databaseSettingsEnabled(env) ? systemSettings.public_url ?? '/' : env.ADMIN_WEB_URL ?? 'http://localhost:5173';
 }
 export function normalizeSystemSettings(value: unknown, production = process.env.NODE_ENV === 'production'): SystemSettings | null {
   if (!value || typeof value !== 'object') return null;
