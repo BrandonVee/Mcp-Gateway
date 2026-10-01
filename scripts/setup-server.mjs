@@ -163,6 +163,8 @@ export async function startSetupServer({ directory, env = process.env, port = 80
 }
 
 export async function prepareEnvironment(env) {
+  // Development and protocol fixtures use file-based dependency configuration.
+  if (env.NODE_ENV !== 'production') return { ...env };
   const directory = env.MCP_DATA_DIR || '/app/data';
   const merged = loadSetupEnvironment(directory, env);
   if (!needsSetup(merged)) return merged;

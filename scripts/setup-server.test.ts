@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, existsSync, statSync, rmSync } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 // @ts-expect-error Standalone runtime JavaScript is copied directly into the image.
-import { startSetupServer, setupCandidate, loadSetupEnvironment, needsSetup } from './setup-server.mjs';
+import { startSetupServer, setupCandidate, loadSetupEnvironment, needsSetup, prepareEnvironment } from './setup-server.mjs';
 const input = {
   postgres: { host: 'postgres', username: 'mcp', password: 'pg:@#$/密码', database: 'mcp', port: 5432 },
   redis: { host: 'redis', password: 'redis:@#$/密码', database: 0 },
@@ -74,4 +74,9 @@ test('concurrent installs cannot create different persisted encryption keys', as
     assert.equal((await first).status, 201);
     await setup.completed;
   } finally { release(); setup.server.closeAllConnections(); await new Promise<void>(done => setup.server.close(() => done())); rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('development file configuration bypasses production browser setup without touching disk', async () => {
+  const env = { NODE_ENV: 'development', MCP_DATA_DIR: '/missing/read-only/setup-ci', CONFIG_FILE: '/app/config/input.json' };
+  assert.deepEqual(await prepareEnvironment(env), env);
 });
