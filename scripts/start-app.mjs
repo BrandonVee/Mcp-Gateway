@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { prepareEnvironment } from './setup-server.mjs';
 
 // All children share this container's lifetime. Failures restart the whole app.
 const children = [];
@@ -54,6 +55,7 @@ async function waitFor(url, name) {
 
 try {
   const config = JSON.parse(readFileSync(process.env.CONFIG_FILE ?? '/app/config/app.json', 'utf8'));
+  const environment = await prepareEnvironment(process.env);
   // Old backups reference the former auth container. Normalize only local links.
   config.auth.port = 9001;
   config.gateway.port = 8000;
@@ -61,9 +63,9 @@ try {
   config.gateway.registryUrl = 'http://127.0.0.1:9001/internal/mcp-servers';
   const runtimeFile = join(mkdtempSync(join(tmpdir(), 'mcp-app-')), 'config.json');
   writeFileSync(runtimeFile, JSON.stringify(config), { mode: 0o600 });
-  const authEnv = { ...process.env, CONFIG_FILE: runtimeFile, AUTH_LISTEN_HOST: process.env.AUTH_LISTEN_HOST ?? '127.0.0.1',
+  const authEnv = { ...environment, CONFIG_FILE: runtimeFile, AUTH_LISTEN_HOST: process.env.AUTH_LISTEN_HOST ?? '127.0.0.1',
     AUTH_TRUSTED_PROXY_IPS: [process.env.AUTH_TRUSTED_PROXY_IPS, '127.0.0.1'].filter(Boolean).join(',') };
-  const gatewayEnv = { ...process.env, CONFIG_FILE: runtimeFile, GATEWAY_LISTEN_HOST: process.env.GATEWAY_LISTEN_HOST ?? '127.0.0.1' };
+  const gatewayEnv = { ...environment, CONFIG_FILE: runtimeFile, GATEWAY_LISTEN_HOST: process.env.GATEWAY_LISTEN_HOST ?? '127.0.0.1' };
   for (const key of ['CREDENTIAL_ENCRYPT_KEY', 'DATABASE_URL', 'ADMIN_PASSWORD']) delete gatewayEnv[key];
 
   health = createServer(async (req, res) => {

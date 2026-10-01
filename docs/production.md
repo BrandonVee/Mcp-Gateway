@@ -20,6 +20,19 @@ MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
 
 离线示例还需要服务器已有 PostgreSQL、Redis 镜像。`--use-local-image` 会使用已导入的本地版本，并执行相同的配置、代理信任和旧容器迁移步骤。
 
+### 首次打开网页配置数据库
+
+只启动应用、接入已有 PostgreSQL / Redis 时，可使用浏览器引导：
+
+```bash
+docker compose -f deploy/compose.setup.yml up -d
+docker compose -f deploy/compose.setup.yml logs app
+```
+
+首次打开 8080 入口，输入日志中的初始化密钥，填写 PostgreSQL / Redis 连接参数与管理员账号，测试连接后保存。系统会生成密钥并自动启动；重建容器沿用 `app_data` 卷，初始化接口关闭。详细的 HTTPS / SSH 隧道访问、数据库权限、配置备份及纯镜像部署步骤见 [Docker Hub 使用说明](dockerhub.md)。该方式不创建外部数据库，连接前需准备好数据库和账号。
+
+`/healthz` 在等待初始化时返回 `mode: setup, ready: false`；已完成初始化后恢复聚合探针。初始化状态健康表示配置页面可用，不代表 MCP 服务已就绪。`/app/data/bootstrap.json` 保存连接密码和凭据加密密钥，文件权限 `0600`，需要和数据库一起备份；显式环境变量优先。不要用空配置卷连接已有业务库。
+
 ### 使用外部数据库
 
 复制 `deploy/app.env.example` 为权限 `0600` 的 `deploy/app.env`，填写外部 PostgreSQL/Redis 地址、三组独立随机密钥、初始管理员密码、镜像版本和可信代理。宿主机 Nginx 将统一 HTTPS 域名转发到 8080，系统访问地址和可信上游在后台设置。该方式只启动一个应用容器：
@@ -225,3 +238,5 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 
 发布完成后使用 README 的 `MCP_IMAGE_PREFIX` / `MCP_IMAGE_NAME` / `MCP_VERSION` 一键拉取部署命令。分离服务高级模式仍可单独构建 `runtime` 和 `admin-web` 目标，使用原 `mcp-runtime` / `mcp-admin-web` 名称；它们不用于默认单机部署。
+
+Docker Hub Overview 自动维护：main 镜像发布成功后自动同步 `docs/dockerhub.md` 中的启动说明，复用 `DOCKERHUB_TOKEN`，也可手动运行 `.github/workflows/dockerhub-description.yml` 单独同步说明。镜像推送本身不会更新 Overview。

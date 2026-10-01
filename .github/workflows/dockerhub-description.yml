@@ -1,0 +1,22 @@
+name: Docker Hub overview
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sync:
+    if: github.repository == 'BrandonVee/Mcp-Gateway' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: dockerhub-description
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Sync startup guide to Docker Hub
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: node scripts/sync-dockerhub-description.mjs

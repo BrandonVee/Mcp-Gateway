@@ -98,6 +98,8 @@ docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.singl
 
 ### 已发布镜像的部署
 
+无需克隆源码的启动说明见 [Docker Hub 使用说明](docs/dockerhub.md)。接入已有 PostgreSQL / Redis 时，可运行 `deploy/compose.setup.yml`，首次打开网页完成连接参数、连接测试与管理员设置；配置保存在 `app_data` 卷。完整环境变量部署会跳过该引导。
+
 GitHub Actions 在测试全部通过后自动发布统一应用镜像到 [Docker Hub：brandonvee/mcp-gateway](https://hub.docker.com/r/brandonvee/mcp-gateway)，支持 Linux x86_64 和 ARM64。`main` 更新发布 `latest` 与 12 位提交版本；推送 `v*` 标签发布对应 tag，语义版本标签还会发布不含 `v` 的版本。PR 和其他分支仅测试，不发布。首次启用须配置 `DOCKERHUB_TOKEN` 仓库密钥，见 [自动发布配置](docs/production.md#自动发布到-docker-hub)。
 
 ```bash

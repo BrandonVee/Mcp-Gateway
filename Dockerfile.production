@@ -37,12 +37,13 @@ ENTRYPOINT ["nginx", "-g", "daemon off;"]
 # Default production image: one application container, external PostgreSQL/Redis.
 FROM runtime AS app
 USER root
-RUN apk add --no-cache nginx tini
+RUN apk add --no-cache nginx tini && mkdir -p /app/data && chown node:node /app/data && chmod 700 /app/data
 COPY --from=builder /app/packages/admin-web/dist /usr/share/nginx/html
 COPY deploy/nginx-app-main.conf /app/deploy/nginx-main.conf
 COPY deploy/nginx-app.conf /app/deploy/nginx-app.conf
 COPY deploy/app.json /app/config/app.json
-COPY scripts/start-app.mjs /app/scripts/start-app.mjs
+COPY scripts/start-app.mjs scripts/setup-server.mjs /app/scripts/
+COPY scripts/setup /app/scripts/setup
 USER node
 ENV NODE_ENV=production SYSTEM_CONFIG_MODE=database CONFIG_FILE=/app/config/app.json
 EXPOSE 8080

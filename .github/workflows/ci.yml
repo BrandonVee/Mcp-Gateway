@@ -45,6 +45,8 @@ jobs:
         run: ./scripts/deploy.sh --yes
       - name: Verify setup, OAuth and persistent settings
         run: pnpm exec tsx scripts/smoke-system-settings.ts
+      - name: Verify first-run browser database setup
+        run: SETUP_TEST_IMAGE="mcp-app:$(git rev-parse --short=12 HEAD)" pnpm exec tsx scripts/smoke-web-setup.ts
       - name: Verify unified process lifecycle
         run: pnpm exec tsx scripts/smoke-app-lifecycle.ts
       - name: Rehearse backup and restore
@@ -188,3 +190,12 @@ jobs:
             echo '- Platforms: linux/amd64, linux/arm64'
             echo "- Digest: \`$IMAGE_DIGEST\`"
           } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-node@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          node-version: '22'
+      - name: Sync Docker Hub startup guide
+        if: github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: node scripts/sync-dockerhub-description.mjs
