@@ -188,3 +188,18 @@ test('published repository is the default and persists across upgrades and impor
     assert.equal(existsSync(invalid.deployment), false);
   } finally { invalid.cleanup(); }
 });
+
+test('pulled deployments follow the newest release unless MCP_VERSION pins one', () => {
+  const setup = sandbox();
+  try {
+    const extra = { ADMIN_PASSWORD: 'known-installer-test-password' };
+    const pinned = setup.run(['--interactive'], ['18086', '2', 'v0.2.0', 'y', ''].join('\n'), extra);
+    assert.equal(pinned.status, 0, pinned.stderr);
+    assert.equal(readDeploymentEnvironment(setup.envFile).MCP_VERSION, 'v0.2.0');
+    assert.equal(setup.run(['--yes', '--prepare-only'], '', extra).status, 0);
+    assert.equal(readDeploymentEnvironment(setup.envFile).MCP_VERSION, 'latest', 'a rerun upgrades instead of reusing the saved tag');
+    const repinned = setup.run(['--yes', '--prepare-only'], '', { ...extra, MCP_VERSION: 'v0.2.0' });
+    assert.equal(repinned.status, 0, repinned.stderr);
+    assert.equal(readDeploymentEnvironment(setup.envFile).MCP_VERSION, 'v0.2.0');
+  } finally { setup.cleanup(); }
+});

@@ -102,15 +102,15 @@ fi
 if [[ -n "$requested_version" ]]; then
   export MCP_VERSION=$requested_version
 elif [[ -n "$MCP_IMAGE_PREFIX" ]]; then
-  # Pulled images are tracked by tag; follow the newest release unless pinned.
-  export MCP_VERSION=${MCP_VERSION-latest}
+  # Pulled deployments follow the newest release; pin one with MCP_VERSION.
+  export MCP_VERSION=latest
 else
   # Locally built or imported images are tagged with the checked-out commit.
   export MCP_VERSION=${MCP_VERSION-$(git rev-parse --short=12 HEAD)}
 fi
 if $interactive && [[ -n "$MCP_IMAGE_PREFIX" ]]; then
   while true; do
-    read_answer "已发布的镜像版本 [$MCP_VERSION]："
+    read_answer "已发布的镜像版本 [$MCP_VERSION]（回车使用最新；固定版本请输入 vX.Y.Z 或提交号）："
     candidate=${answer:-$MCP_VERSION}
     if valid_version "$candidate"; then export MCP_VERSION=$candidate; break; fi
     echo '请输入有效的镜像 tag（最多 128 个字母、数字、下划线、点或连字符）。' >&2

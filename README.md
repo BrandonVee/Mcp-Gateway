@@ -40,7 +40,7 @@ MCP_VERSION=v0.1.2 ./scripts/deploy.sh --yes   # 固定到已发布版本
 MCP_IMAGE_PREFIX= ./scripts/deploy.sh --yes    # 用当前代码本机构建
 ```
 
-交互模式下只需填写 **HTTP 端口**（默认 `8080`，仅监听回环地址）和 **首次管理员密码**（用户名固定 `admin`，至少 16 个字符，留空自动生成）；仓库与镜像名已内置。自动化部署用 `--yes` 跳过提示。配置保存在 `deploy/single-host/`：`runtime.env`（权限 `0600`）与 `config.json`，自定义目录用 `MCP_DEPLOY_DIR`。
+交互模式下只需填写 **HTTP 端口**（默认 `8080`，仅监听回环地址）和 **首次管理员密码**（用户名固定 `admin`，至少 16 个字符，留空自动生成）；仓库、镜像名和版本都已内置 —— 拉取已发布镜像时**默认就是最新版本**，回车即可，需要固定版本时再输入 `vX.Y.Z` 或提交号。自动化部署用 `--yes` 跳过提示，同样使用最新版本。配置保存在 `deploy/single-host/`：`runtime.env`（权限 `0600`）与 `config.json`，自定义目录用 `MCP_DEPLOY_DIR`。
 
 部署完成后确认状态：
 
@@ -90,8 +90,10 @@ curl --fail https://mcp.example.com/healthz    # 替换为实际域名
 ```bash
 ./scripts/backup.sh                            # 升级前备份数据库、配置和密钥
 ./scripts/deploy.sh                            # 源码构建部署前先 git pull --ff-only
-./scripts/deploy.sh --yes                      # 镜像部署，latest 重跑即升级
+./scripts/deploy.sh --yes                      # 镜像部署：重跑即升级到最新版本
 ```
+
+镜像部署默认跟随 `latest`，每次重跑都会拉最新已发布版本；需要固定版本时用 `MCP_VERSION=v0.3.2 ./scripts/deploy.sh --yes`（也可在交互提示里输入版本）。本机构建仍按当前代码的提交号打标签。
 
 备份默认写入 `backups/`，包含 PostgreSQL、配置和凭据加密密钥（权限 `0600`，保留 14 天，**不含 Redis 会话**）。定时备份与恢复步骤见 [备份与恢复](docs/production.md#备份与恢复)。不要用 `down -v` 停止生产部署，它会删除数据库卷。
 
