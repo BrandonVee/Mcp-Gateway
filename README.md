@@ -105,6 +105,95 @@ curl --fail https://mcp.example.com/healthz    # 替换为实际域名
 | 无法注册上游服务 | 检查白名单开关、可信上游主机和容器到上游的连通性。 |
 | 应用未就绪或容器 unhealthy | 用对应 Compose 文件查看 `ps` 与应用日志，再检查 PostgreSQL / Redis。 |
 
+## Docker 部署（不用克隆源码）
+
+只需要 Docker 和 Compose 时，直接用已发布镜像 `brandonvee/mcp-gateway` 启动三个容器：应用、PostgreSQL、Redis。
+
+新建目录并生成密钥（只执行一次，不要覆盖已有 `.env`）：
+
+```bash
+mkdir mcp-gateway && cd mcp-gateway
+umask 077
+{
+  echo MCP_VERSION=latest
+  echo POSTGRES_PASSWORD=$(openssl rand -hex 32)
+  echo REDIS_PASSWORD=$(openssl rand -hex 32)
+  echo INTERNAL_API_TOKEN=$(openssl rand -hex 32)
+  echo CREDENTIAL_BROKER_TOKEN=$(openssl rand -hex 32)
+  echo CREDENTIAL_ENCRYPT_KEY=$(openssl rand -hex 32)
+  echo ADMIN_PASSWORD=$(openssl rand -hex 32)
+} > .env
+```
+
+保存为 `compose.yml`：
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mcp
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  mcp-server:
+    image: brandonvee/mcp-gateway:${MCP_VERSION:-latest}
+    restart: unless-stopped
+    stop_grace_period: 15s
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      DATABASE_URL: postgres://mcp:${POSTGRES_PASSWORD:?}@postgres:5432/mcp
+      REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?}
+      CREDENTIAL_BROKER_TOKEN: ${CREDENTIAL_BROKER_TOKEN:?}
+      CREDENTIAL_ENCRYPT_KEY: ${CREDENTIAL_ENCRYPT_KEY:?}
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
+      AUTH_TRUSTED_PROXY_IPS: ${AUTH_TRUSTED_PROXY_IPS:-}
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+```bash
+docker compose up -d --wait
+curl --fail http://127.0.0.1:8080/healthz
+```
+
+管理员为 `admin`，初始密码在 `.env` 的 `ADMIN_PASSWORD`。之后与一键部署相同：配置 HTTPS 反向代理并登录，在“系统设置”填写对外访问地址。升级：
+
+```bash
+docker compose pull mcp-server
+docker compose up -d --wait mcp-server
+```
+
+调用限流与统计依赖真实客户端 IP；由宿主机 Nginx 代理时，把 `AUTH_TRUSTED_PROXY_IPS` 填为 Nginx 所在网络的网关地址后重建应用（见 [Docker Hub 使用说明](docs/dockerhub.md)）。该文档还包含**只启动应用、在网页里连接已有 PostgreSQL / Redis** 的方式，以及备份与固定版本说明。
+
 ## 日常使用
 
 ### 注册 MCP 服务
