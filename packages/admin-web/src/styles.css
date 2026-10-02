@@ -986,6 +986,19 @@ code,
   margin-bottom: 18px;
 }
 
+.permission-actions {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.permission-actions .ant-btn {
+  height: auto;
+  padding: 0 4px;
+}
+
 .permission-grid {
   width: 100%;
   display: grid;
@@ -1361,6 +1374,18 @@ code,
 
 .login-hint .anticon {
   margin-right: 5px;
+}
+
+/* Chrome autofill paints a light background; keep it on the dark control surface. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #edf5ff;
+  caret-color: #edf5ff;
+  -webkit-box-shadow: 0 0 0 1000px #0a111e inset;
+  box-shadow: 0 0 0 1000px #0a111e inset;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 /* Boot */
