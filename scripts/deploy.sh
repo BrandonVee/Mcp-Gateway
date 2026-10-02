@@ -55,8 +55,11 @@ if [[ -f "$env_path" ]]; then
   done < "$env_path"
 fi
 export COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-mcp-gateway}
-export MCP_IMAGE_PREFIX=${MCP_IMAGE_PREFIX:-}
-export MCP_IMAGE_NAME=${MCP_IMAGE_NAME:-mcp-app}
+# Published images live in one Docker Hub repository. Default to it so a server
+# install only needs the port and password; override the variables for forks.
+default_image_prefix=brandonvee/
+export MCP_IMAGE_PREFIX=${MCP_IMAGE_PREFIX-$default_image_prefix}
+export MCP_IMAGE_NAME=${MCP_IMAGE_NAME-mcp-gateway}
 if $use_local_image; then export MCP_IMAGE_PREFIX=''; fi
 export MCP_HTTP_PORT=${MCP_HTTP_PORT:-8080}
 export AUTH_TRUSTED_PROXY_IPS=${AUTH_TRUSTED_PROXY_IPS:-}
@@ -91,29 +94,20 @@ if $interactive; then
     done
     if [[ "$mode" == 1 ]]; then
       export MCP_IMAGE_PREFIX=''
-    else
-      while true; do
-        read_answer "镜像仓库前缀${MCP_IMAGE_PREFIX:+ [$MCP_IMAGE_PREFIX]}（如 brandonvee/）："
-        candidate=${answer:-$MCP_IMAGE_PREFIX}
-        if [[ -n "$candidate" && "$candidate" != */ ]]; then candidate="$candidate/"; fi
-        if valid_prefix "$candidate"; then export MCP_IMAGE_PREFIX=$candidate; break; fi
-        echo '请输入小写的镜像仓库前缀。' >&2
-      done
-      while true; do
-        read_answer "镜像名称 [$MCP_IMAGE_NAME]（Docker Hub 使用 mcp-gateway）："
-        candidate=${answer:-$MCP_IMAGE_NAME}
-        if valid_image_name "$candidate"; then export MCP_IMAGE_NAME=$candidate; break; fi
-        echo '请输入小写的镜像名称，不含仓库前缀或 tag。' >&2
-      done
+    elif [[ -z "$MCP_IMAGE_PREFIX" ]]; then
+      export MCP_IMAGE_PREFIX=$default_image_prefix
     fi
   fi
 fi
 if [[ -n "$requested_version" ]]; then
   export MCP_VERSION=$requested_version
-elif [[ -z "$MCP_IMAGE_PREFIX" ]] && ! $use_local_image; then
-  export MCP_VERSION=$(git rev-parse --short=12 HEAD)
+elif [[ -n "$MCP_IMAGE_PREFIX" ]]; then
+  # Pulled images are tracked by tag; follow the newest release unless pinned.
+  export MCP_VERSION=${MCP_VERSION-latest}
+else
+  # Locally built or imported images are tagged with the checked-out commit.
+  export MCP_VERSION=${MCP_VERSION-$(git rev-parse --short=12 HEAD)}
 fi
-export MCP_VERSION=${MCP_VERSION:-$(git rev-parse --short=12 HEAD)}
 if $interactive && [[ -n "$MCP_IMAGE_PREFIX" ]]; then
   while true; do
     read_answer "已发布的镜像版本 [$MCP_VERSION]："

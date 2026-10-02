@@ -38,6 +38,9 @@ jobs:
       MCP_DEPLOY_DIR: /tmp/mcp-single-host
       MCP_HTTP_PORT: '18080'
       ADMIN_PASSWORD: ci-system-admin-password-123456
+      # Build the checked-out commit instead of pulling the published image.
+      MCP_IMAGE_PREFIX: ''
+      MCP_IMAGE_NAME: mcp-app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

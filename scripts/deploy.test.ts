@@ -66,15 +66,17 @@ test('interactive setup validates input and preserves a literal hidden password 
   } finally { setup.cleanup(); }
 });
 
-test('interactive image deployment selects the repository and tag without printing the supplied password', () => {
+test('interactive image deployment selects the tag without asking for the repository', () => {
   const setup = sandbox();
   try {
     const password = 'known-installer-test-password';
-    const result = setup.run(['--interactive'], ['18082', '2', 'ghcr.io/example',
-      'mcp-app', 'invalid/tag', 'v1.2.3', 'y', ''].join('\n'), { ADMIN_PASSWORD: password });
+    const result = setup.run(['--interactive'], ['18082', '2', 'invalid/tag', 'v1.2.3', 'y', ''].join('\n'),
+      { ADMIN_PASSWORD: password, MCP_IMAGE_PREFIX: 'ghcr.io/example/', MCP_IMAGE_NAME: 'mcp-app' });
     assert.equal(result.status, 0, result.stderr);
+    assert.ok(!result.stderr.includes('镜像仓库前缀') && !result.stderr.includes('镜像名称'));
     const saved = readDeploymentEnvironment(setup.envFile);
     assert.equal(saved.MCP_IMAGE_PREFIX, 'ghcr.io/example/');
+    assert.equal(saved.MCP_IMAGE_NAME, 'mcp-app');
     assert.equal(saved.MCP_VERSION, 'v1.2.3');
     assert.equal(saved.AUTH_TRUSTED_PROXY_IPS, '172.88.0.0/24');
     assert.match(setup.commands(), /pull mcp-server/);
@@ -110,6 +112,9 @@ test('noninteractive deployment keeps defaults and existing credentials and reje
     assert.equal(first.status, 0);
     const saved = readDeploymentEnvironment(setup.envFile);
     assert.equal(saved.MCP_HTTP_PORT, '8080');
+    assert.equal(saved.MCP_IMAGE_PREFIX, 'brandonvee/');
+    assert.equal(saved.MCP_IMAGE_NAME, 'mcp-gateway');
+    assert.equal(saved.MCP_VERSION, 'latest');
     assert.match(saved.ADMIN_PASSWORD, /^[a-f0-9]{64}$/);
     assert.equal(setup.run(['--prepare-only']).status, 0);
     assert.deepEqual(readDeploymentEnvironment(setup.envFile), saved);
@@ -132,7 +137,7 @@ test('exhausted interactive input aborts without saving, while help has no side 
 test('upgrade prepares the app image before replacing legacy containers and preserves data services', () => {
   const setup = sandbox();
   try {
-    const extra = { ADMIN_PASSWORD: 'known-installer-test-password', MOCK_LEGACY_APPS: '1' };
+    const extra = { ADMIN_PASSWORD: 'known-installer-test-password', MOCK_LEGACY_APPS: '1', MCP_IMAGE_PREFIX: '' };
     assert.equal(setup.run(['--yes'], '', extra).status, 0);
     const commands = setup.commands();
     assert.ok(commands.indexOf('build mcp-server') < commands.indexOf('stop --time 15 legacy-auth'));
@@ -142,7 +147,7 @@ test('upgrade prepares the app image before replacing legacy containers and pres
   } finally { setup.cleanup(); }
   const failed = sandbox();
   try {
-    const result = failed.run(['--yes'], '', { ADMIN_PASSWORD: 'known-installer-test-password', MOCK_LEGACY_APPS: '1', MOCK_BUILD_FAIL: '1' });
+    const result = failed.run(['--yes'], '', { ADMIN_PASSWORD: 'known-installer-test-password', MOCK_LEGACY_APPS: '1', MOCK_BUILD_FAIL: '1', MCP_IMAGE_PREFIX: '' });
     assert.equal(result.status, 42);
     assert.ok(!failed.commands().includes('stop --time'));
   } finally { failed.cleanup(); }
@@ -155,19 +160,18 @@ test('local image deployment skips build/pull and uses the imported tag', () => 
     assert.equal(result.status, 0, result.stderr);
     const saved = readDeploymentEnvironment(setup.envFile);
     assert.equal(saved.MCP_VERSION, 'local');assert.equal(saved.MCP_IMAGE_PREFIX, '');
-    assert.match(setup.commands(), /image inspect mcp-app:local/);
+    assert.match(setup.commands(), /image inspect mcp-gateway:local/);
     assert.ok(!setup.commands().includes('build mcp-server') && !setup.commands().includes('pull mcp-server'));
     assert.match(setup.commands(), /up -d --no-build --pull never --wait/);
   } finally { setup.cleanup(); }
 });
 
-test('Docker Hub repository selection persists across upgrades and imported images', () => {
+test('published repository is the default and persists across upgrades and imported images', () => {
   const setup = sandbox();
   try {
-    const result = setup.run(['--interactive'], ['18082', '2', 'brandonvee/',
-      'Invalid/Name', 'mcp-gateway', 'latest', 'y', ''].join('\n'), { ADMIN_PASSWORD: 'known-installer-test-password' });
+    const result = setup.run(['--interactive'], ['18082', '2', 'latest', 'y', ''].join('\n'), { ADMIN_PASSWORD: 'known-installer-test-password' });
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stderr, /请输入小写的镜像名称/);
+    assert.ok(!result.stderr.includes('镜像仓库前缀') && !result.stderr.includes('镜像名称'));
     assert.match(result.stderr, /brandonvee\/mcp-gateway:latest/);
     const saved = readDeploymentEnvironment(setup.envFile);
     assert.equal(saved.MCP_IMAGE_PREFIX, 'brandonvee/');

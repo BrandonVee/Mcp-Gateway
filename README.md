@@ -37,10 +37,11 @@ cd Mcp-Gateway
 ./scripts/deploy.sh
 ```
 
-使用已发布镜像时，将最后一条命令替换为：
+脚本默认直接拉取已发布镜像 `brandonvee/mcp-gateway:latest`。需要固定版本或改用源码构建时：
 
 ```bash
-MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scripts/deploy.sh --yes
+MCP_VERSION=v0.1.2 ./scripts/deploy.sh --yes   # 固定到已发布版本
+MCP_IMAGE_PREFIX= ./scripts/deploy.sh --yes    # 用当前代码本机构建
 ```
 
 发布镜像为 `brandonvee/mcp-gateway`，支持 `linux/amd64` 和 `linux/arm64`。`main` 通过全部测试并发布镜像后，`github-actions[bot]` 会自动创建版本标签和 GitHub Release；`latest` 跟随该提交。需要固定版本时改为已发布的 12 位提交号或版本标签（如 `vX.Y.Z` / `X.Y.Z`）。无需克隆源码的镜像启动方式见 [Docker Hub 使用说明](docs/dockerhub.md)。
@@ -52,7 +53,8 @@ MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scr
 不带 `--yes` 在终端运行时，脚本会引导填写以下参数，回车保留默认值：
 
 - **HTTP 端口**：默认 `8080`，仅监听 `127.0.0.1`，供你自己的 Nginx 转发。
-- **镜像来源**：默认本机构建；拉取 Docker Hub 镜像时，仓库前缀填写 `brandonvee/`，镜像名称填写 `mcp-gateway`，版本填写 `latest` 或指定版本。
+- **镜像来源**：默认拉取 Docker Hub 已发布镜像 `brandonvee/mcp-gateway`，不需要填写仓库和镜像名；选择 **1) 本机构建** 时用当前代码构建。
+- **镜像版本**：默认 `latest`，可改为已发布的版本标签或 12 位提交号。
 - **首次管理员密码**：用户名固定为 `admin`；密码至少 16 个字符，隐藏输入并再次确认，留空则自动生成。已有部署会保留密码，不重复询问。
 
 交互模式会显示配置摘要，确认后保存并启动 **mcp-server、PostgreSQL、Redis 三个容器**。统一应用镜像包含管理网页、Nginx、Auth Server 和 Gateway，仅提供一个 HTTP 入口。数据库密码、内部令牌和凭据加密密钥自动生成，不需要手写环境文件；取消或输入中断不会保存本次配置。自动生成的管理员密码会在本次执行结束时显示，手动输入的密码不会输出。
@@ -63,7 +65,7 @@ MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scr
 ./scripts/deploy.sh --interactive                 # 交互安装
 ./scripts/deploy.sh --interactive --prepare-only  # 只保存配置，不启动服务
 ./scripts/deploy.sh --yes                         # 使用环境变量、已有配置或默认值，跳过提示
-MCP_IMAGE_NAME=mcp-app MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
+MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
 ```
 
 非终端环境默认跳过提示，CI 使用 `--yes`。默认配置保存在 `deploy/single-host/`：`runtime.env` 保存镜像版本、端口、密码和密钥，权限为 `0600`；`config.json` 保存基础配置。可用 `MCP_DEPLOY_DIR` 指定其他目录，后续部署和备份也须使用该目录。升级沿用已有参数，不会重置数据库中已存在的管理员密码。
@@ -138,7 +140,7 @@ git pull --ff-only
 
 ```bash
 ./scripts/backup.sh
-MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scripts/deploy.sh --yes
+./scripts/deploy.sh --yes
 ```
 
 查看容器和日志：
@@ -149,7 +151,7 @@ docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.singl
 docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml logs --tail=100 mcp-server
 ```
 
-镜像来源、名称和版本会保存，后续可执行 `./scripts/deploy.sh --yes` 沿用配置；若保存的是固定标签，须显式设置新的 `MCP_VERSION` 才会升级。需要切回源码构建时，交互选择 **1) 本机构建**。
+镜像来源、名称和版本会保存，后续可执行 `./scripts/deploy.sh --yes` 沿用配置；保存的是 `latest` 时重跑即升级，固定标签须显式设置新的 `MCP_VERSION` 才会升级。需要切回源码构建时，交互选择 **1) 本机构建**。
 
 脚本保留已生成的密钥和密码，数据库与 Redis 使用命名卷持久化。备份默认写入 `backups/`，包含 PostgreSQL、配置和凭据加密密钥，权限为 `0600`，默认保留 14 天；**不包含 Redis 会话及尚未落库的调用队列**。定时备份、加密与恢复步骤见 [备份与恢复](docs/production.md#备份与恢复)。保留部署配置及原有 `CREDENTIAL_ENCRYPT_KEY`，不要用 `down -v` 停止生产部署，它会删除数据库卷。单机升级可能短暂中断，已有 MCP 会话中断后客户端需重新初始化。
 
@@ -173,15 +175,15 @@ docker compose -f deploy/compose.setup.yml logs mcp-server
 在联网构建机上生成镜像并导出，再传到相同 CPU 架构的服务器：
 
 ```bash
-docker build -f Dockerfile.production --target app -t mcp-app:local .
+docker build -f Dockerfile.production --target app -t mcp-gateway:local .
 # 离线传到服务器时可导出，服务器用 docker load 导入。
-docker save -o mcp-app-local.tar mcp-app:local
+docker save -o mcp-gateway-local.tar mcp-gateway:local
 # 在服务器项目根目录导入并部署：
-docker load -i mcp-app-local.tar
-MCP_IMAGE_NAME=mcp-app MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
+docker load -i mcp-gateway-local.tar
+MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
 ```
 
-离线服务器还须预先导入 `postgres:16-alpine` 和 `redis:7-alpine` 镜像。本地镜像默认名为 `mcp-app`，与 Docker Hub 的 `brandonvee/mcp-gateway` 区分。
+离线服务器还须预先导入 `postgres:16-alpine` 和 `redis:7-alpine` 镜像。本地镜像默认名为 `mcp-gateway`（可用 `MCP_IMAGE_NAME` 覆盖），与 Docker Hub 镜像同名但只在本机存在，`--use-local-image` 不会联网拉取。
 
 已有单机部署直接执行同一脚本：镜像准备成功后，脚本会移除当前项目的旧 `auth`、`gateway`、`admin-web` 或 `app` 容器并启动 `mcp-server`，保留数据库、Redis、数据卷和密钥。Compose 实际容器名包含项目名前缀，例如 `mcp-gateway-mcp-server-1`；日志命令使用服务名 `mcp-server`。
 

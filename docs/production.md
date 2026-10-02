@@ -1,22 +1,22 @@
 # 生产部署与上线检查
 
-推荐使用 [README 的一键部署](../README.md#服务器部署推荐)：无需部署域名参数，使用自己的 Nginx 转发一个 HTTP 端口，再在管理后台保存系统访问地址与可信上游。`deploy/compose.single-host.yml` 同时启动数据库和应用；配置保存在 PostgreSQL 的 `meta.system_settings` 中。默认应用由单个 `mcp-app` 镜像运行，加 PostgreSQL、Redis 共三个容器。下面提供外部数据库部署，并保留分离域名的高级模式。
+推荐使用 [README 的一键部署](../README.md#服务器部署推荐)：无需部署域名参数，使用自己的 Nginx 转发一个 HTTP 端口，再在管理后台保存系统访问地址与可信上游。`deploy/compose.single-host.yml` 同时启动数据库和应用；配置保存在 PostgreSQL 的 `meta.system_settings` 中。默认应用由单个 `mcp-gateway` 镜像运行，加 PostgreSQL、Redis 共三个容器。下面提供外部数据库部署，并保留分离域名的高级模式。
 
 根目录 `docker-compose.yml` 使用源码挂载和开发进程，只用于本地验证。分离服务生产示例在 `deploy/compose.production.yml`：它构建 Node 运行镜像和 Nginx 静态前端镜像，不包含开发账号、演示数据、PostgreSQL 或 Redis。三个 HTTP 端口只绑定宿主机回环地址，须由同机负载均衡器提供 TLS、公网路由、访问控制和滚动更新。生产镜像的基础镜像按 digest 固定；升级时要同时更新 digest 并重新扫描。
 
 ## 统一应用镜像
 
-`Dockerfile.production` 的默认最终目标为 `app`，镜像名称为 `mcp-app`。镜像内依次启动 Auth、Gateway、Nginx；进程管理器由 tini 托管，任何子进程异常退出都会关闭其他进程并退出容器，由 Docker 重启策略重新启动。SIGTERM 会传给子进程，超过 8 秒仍未退出的进程会被终止，Compose 停止宽限为 15 秒。健康检查通过 `/healthz` 同时检查 Auth、Gateway（包括数据库/Redis依赖）；Docker 的 unhealthy 状态本身不会触发重启，依赖恢复后探针可恢复健康。
+`Dockerfile.production` 的默认最终目标为 `app`，部署脚本使用的镜像名称为 `mcp-gateway`（本机构建时为 `mcp-gateway:<提交号>`，可用 `MCP_IMAGE_NAME` 覆盖）。镜像内依次启动 Auth、Gateway、Nginx；进程管理器由 tini 托管，任何子进程异常退出都会关闭其他进程并退出容器，由 Docker 重启策略重新启动。SIGTERM 会传给子进程，超过 8 秒仍未退出的进程会被终止，Compose 停止宽限为 15 秒。健康检查通过 `/healthz` 同时检查 Auth、Gateway（包括数据库/Redis依赖）；Docker 的 unhealthy 状态本身不会触发重启，依赖恢复后探针可恢复健康。
 
 镜像以非 root 用户运行，应用端口为 8080；9001、8000、9002 仅在容器回环地址监听，外部入口拒绝 `/internal/*` 和 `/api/internal/*`。单机 Compose 采用只读文件系统、临时 `/tmp`、移除 capabilities 和禁止提权。应用进程共享容器隔离边界，网页、认证和网关会一起升级、重启。
 
 内置 Nginx 对管理页面入口使用 `no-cache`，每次访问校验最新版本；Vite 生成的带内容哈希的 `/assets/` 文件缓存一年，缺失资源返回 404。仅静态页面及资源启用 gzip，API、OAuth 和 MCP 响应保留原有代理行为。各生产入口的访问日志只记录路径，不包含 OAuth 查询参数。可在装有 Docker、Node 和项目依赖的开发或 CI 环境运行 `pnpm exec tsx scripts/smoke-nginx.ts`，通过独立容器验证路由、缓存、压缩、安全响应头及日志，无需连接业务数据库。
 
 ```bash
-docker build -f Dockerfile.production --target app -t mcp-app:local .
-docker save -o mcp-app-local.tar mcp-app:local
+docker build -f Dockerfile.production --target app -t mcp-gateway:local .
+docker save -o mcp-gateway-local.tar mcp-gateway:local
 # 在服务器上导入，然后使用本地已导入的版本启动：
-docker load -i mcp-app-local.tar
+docker load -i mcp-gateway-local.tar
 MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
 ```
 
@@ -216,10 +216,12 @@ git push origin v1.2.3
 
 # 服务器从 Docker Hub 拉取（已有部署建议先备份）：
 ./scripts/backup.sh
-MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scripts/deploy.sh --yes
+./scripts/deploy.sh --yes
 ```
 
-外部数据库模式在 `deploy/app.env` 中设置 `MCP_IMAGE_PREFIX=brandonvee/`、`MCP_IMAGE_NAME=mcp-gateway`、`MCP_VERSION=latest`，然后执行 `docker compose --env-file deploy/app.env -f deploy/compose.app.yml pull mcp-server` 和 `up -d --no-build --wait`。本机构建默认名称仍为 `mcp-app`，保留已有配置兼容性。
+已发布镜像 `brandonvee/mcp-gateway` 是脚本默认值，`MCP_VERSION` 默认 `latest`，需要固定版本时显式设置。`MCP_IMAGE_PREFIX=`（空值）改用本机构建，镜像名默认 `mcp-gateway`。
+
+外部数据库模式在 `deploy/app.env` 中设置 `MCP_IMAGE_PREFIX=brandonvee/`、`MCP_IMAGE_NAME=mcp-gateway`、`MCP_VERSION=latest`，然后执行 `docker compose --env-file deploy/app.env -f deploy/compose.app.yml pull mcp-server` 和 `up -d --no-build --wait`。
 
 ## 手动发布生产镜像
 
@@ -243,6 +245,6 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 这会发布适用于 x86_64 和 ARM64 服务器的单个应用镜像；**不要发布 `builder` 或 `test-upstream` 目标**。详见 [Docker 多架构构建](https://docs.docker.com/build/building/multi-platform/)。
 
 
-发布完成后使用 README 的 `MCP_IMAGE_PREFIX` / `MCP_IMAGE_NAME` / `MCP_VERSION` 一键拉取部署命令。分离服务高级模式仍可单独构建 `runtime` 和 `admin-web` 目标，使用原 `mcp-runtime` / `mcp-admin-web` 名称；它们不用于默认单机部署。
+发布完成后，`./scripts/deploy.sh --yes` 即默认拉取该镜像；需要固定版本时使用 README 的 `MCP_VERSION` 一键拉取部署命令。分离服务高级模式仍可单独构建 `runtime` 和 `admin-web` 目标，使用原 `mcp-runtime` / `mcp-admin-web` 名称；它们不用于默认单机部署。
 
 Docker Hub Overview 自动维护：main 镜像发布成功后自动同步 `docs/dockerhub.md` 中的启动说明，复用 `DOCKERHUB_TOKEN`，也可手动运行 `.github/workflows/dockerhub-description.yml` 单独同步说明。镜像推送本身不会更新 Overview。

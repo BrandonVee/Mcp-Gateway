@@ -164,7 +164,7 @@ export async function publishRelease({ repository, token, tag, sha, digest, make
   const body = `${notes.body}\n\n### Docker image\n\n` +
     `\`brandonvee/mcp-gateway:${tag}\` (linux/amd64, linux/arm64)\n\n` +
     `Digest: \`${digest}\`\n\n` +
-    `\`MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=${tag} ./scripts/deploy.sh --yes\`\n`;
+    `\`MCP_VERSION=${tag} ./scripts/deploy.sh --yes\`\n`;
   const payload = { tag_name: tag, target_commitish: sha, name: tag, body, draft: false, prerelease: false, make_latest: makeLatest };
   return existing ? api(`releases/${existing.id}`, 'PATCH', payload) : api('releases', 'POST', payload);
 }
