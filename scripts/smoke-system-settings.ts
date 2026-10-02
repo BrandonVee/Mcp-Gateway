@@ -72,9 +72,16 @@ async function main() {
   assert.equal((await request('/authorize?'+signupQuery)).text.includes('/authorize/signup'),false);
   const blockedSignup=await fetch(base+'/authorize/signup',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',origin:originalUrl},body:signupQuery});
   assert.equal(blockedSignup.status,403);
+  const closedStatus=await request('/api/me/signup');
+  assert.equal(closedStatus.response.status,200);
+  assert.equal(closedStatus.data.registration_enabled,false,'the console entry reads the same switch');
+  const closedConsole=await request('/api/me/signup','POST',{username:'switch-closed',password:'switch-test-password',confirm_password:'switch-test-password'});
+  assert.equal(closedConsole.response.status,403);
+  assert.equal(closedConsole.data.error,'registration_disabled');
   cookie=adminCookie;
   assert.equal((await request('/api/admin/system-settings','PUT',{public_url:originalUrl,upstream_hosts:[],registration_enabled:true})).response.status,200);
-  cookie='';assert.equal((await request('/authorize/signup?'+signupQuery)).response.status,200);cookie=adminCookie;
+  cookie='';assert.equal((await request('/authorize/signup?'+signupQuery)).response.status,200);
+  assert.equal((await request('/api/me/signup')).data.registration_enabled,true);cookie=adminCookie;
   console.log('PASS: registration switch gates GET/POST, hides signup, and preserves existing login');
 
   process.env.AUTH_URL = base;

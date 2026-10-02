@@ -116,9 +116,9 @@ curl --fail https://mcp.example.com/healthz  # 替换为实际域名
 
 系统设置持久化在 PostgreSQL 中，重启后继续生效。未设置访问地址时，管理后台可用，OAuth 与 MCP 接入返回 `503 system_not_configured`；生产环境的访问地址需使用 HTTPS。更换地址后，已有 MCP 客户端需重新授权。
 
-MCP 客户端打开 OAuth 登录页后，没有账号的用户可以选择“创建账号”。注册成功后会自动登录并继续原来的授权，保留客户端、回调地址、PKCE 和 state 参数。注册账号均为普通用户。
+没有账号的用户可以在两个入口自行注册：**管理后台登录页**的“还没有账号？立即注册”，以及 MCP 客户端打开 OAuth 登录页后的“创建账号”。两者规则一致：账号为普通用户，注册成功后自动登录（后台注册直接进入个人连接中心，OAuth 注册继续原来的授权，保留客户端、回调地址、PKCE 和 state 参数）。
 
-系统设置中的**允许自行注册**默认开启；关闭后隐藏注册入口，并拒绝直接访问或提交注册页面，已有账号仍可登录、授权，管理员仍可创建用户。文件配置模式可用 `MCP_REGISTRATION_ENABLED=false` 关闭注册。
+系统设置中的**允许自行注册**默认开启；关闭后两个入口都会隐藏，并拒绝直接访问或提交注册页面与 `POST /api/me/signup`，已有账号仍可登录、授权，管理员仍可创建用户。文件配置模式可用 `MCP_REGISTRATION_ENABLED=false` 关闭注册。
 
 管理员可在“注册服务”弹窗或服务的“分配权限”弹窗中开启**新注册用户默认可访问**。自行注册的新用户会自动获得已启用且勾选此项的服务权限；其他服务仍由管理员手动分配。该选项默认关闭，调整后只影响之后的注册，已有用户的权限不变。服务本身需要 API 密钥或 OAuth 连接时，用户仍需在个人连接中心完成对应连接。
 
@@ -324,7 +324,7 @@ export CREDENTIAL_BROKER_TOKEN="$(openssl rand -hex 32)"
 
 备份此密钥并与数据库备份一同管理；丢失或更换密钥会使已保存的 API Key、OAuth Token 和 Client Secret 不可解密。生产环境还应使用 HTTPS、限制内部凭据接口只能由 Gateway 访问，并为每个外部 OAuth 提供方核对回调、Scopes 和 Token 请求约定。
 
-用户连接相关接口：`POST/GET/DELETE /me/session`、`GET /me/servers`、`PUT/DELETE /me/servers/:name/credential`、`POST /me/servers/:name/oauth`。这些接口使用浏览器的 HttpOnly 会话 Cookie；服务器会对带 `Origin` 的写请求检查来源。
+用户连接相关接口：`POST/GET/DELETE /me/session`、`GET/POST /me/signup`、`GET /me/servers`、`PUT/DELETE /me/servers/:name/credential`、`POST /me/servers/:name/oauth`。这些接口使用浏览器的 HttpOnly 会话 Cookie；服务器会对带 `Origin` 的写请求检查来源。`GET /me/signup` 供登录页匿名读取注册开关，`POST /me/signup` 为自助注册并在成功后直接下发会话。
 
 ## 配置文件
 

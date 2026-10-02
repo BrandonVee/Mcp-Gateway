@@ -7,7 +7,16 @@ export function usePlatformSession() {
   const [session, setSession] = useState<PlatformSession | null | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
+  const [registrationEnabled, setRegistrationEnabled] = useState<boolean | undefined>(undefined);
   const generation = useRef(0);
+
+  // Older backends have no signup route; treat every failure as a closed entry.
+  useEffect(() => {
+    let active = true;
+    api.signupStatus().then((status) => { if (active) setRegistrationEnabled(status.registration_enabled); })
+      .catch(() => { if (active) setRegistrationEnabled(false); });
+    return () => { active = false; };
+  }, []);
 
   const refresh = useCallback(async () => {
     const request = ++generation.current;
@@ -62,5 +71,5 @@ export function usePlatformSession() {
     window.history.replaceState(null, "", "/");
   };
 
-  return { session, error, checking, refresh, signedIn, logout };
+  return { session, error, checking, refresh, signedIn, logout, registrationEnabled };
 }

@@ -14,6 +14,12 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     "server already exists": "servers.nameExists",
     last_active_admin_required: "users.lastAdminProtected",
     session_changed: "api.sessionChanged",
+    username_taken: "api.usernameExists",
+    registration_disabled: "api.registrationDisabled",
+    invalid_username: "api.invalidUsername",
+    invalid_password: "api.invalidPassword",
+    password_mismatch: "api.passwordMismatch",
+    already_authenticated: "api.alreadyAuthenticated",
   };
   const statusKey: Record<number, MessageKey> = {
     400: "api.invalidRequest",
@@ -43,6 +49,8 @@ export class ApiError extends Error {
 }
 
 async function sendRequest<T>(url: string, init?: RequestInit, identity?: string): Promise<T> {
+  // Sign-in and self-registration write the identity they create, not an existing one.
+  const anonymousWrite = init?.method === "POST" && (url.endsWith("/session") || url.endsWith("/signup"));
   let response: Response;
   try {
     response = await fetch(url, {
@@ -50,7 +58,7 @@ async function sendRequest<T>(url: string, init?: RequestInit, identity?: string
       ...init,
       headers: {
         ...(init?.body ? { "content-type": "application/json" } : {}),
-        ...(identity && init?.method && !["GET", "HEAD"].includes(init.method) && !(url.endsWith("/session") && init.method === "POST")
+        ...(identity && init?.method && !["GET", "HEAD"].includes(init.method) && !anonymousWrite
           ? { "x-session-identity": identity } : {}),
         ...init?.headers,
       },
@@ -181,6 +189,12 @@ export function apiForSession(session?: PlatformSession) {
     method: "POST", body: JSON.stringify({ username, password }),
   }),
   myLogout: () => request("/api/me/session", { method: "DELETE" }),
+  signupStatus: () => request<{ registration_enabled: boolean }>("/api/me/signup"),
+  mySignup: (username: string, password: string, confirmation: string) =>
+    request<PlatformSession>("/api/me/signup", {
+      method: "POST",
+      body: JSON.stringify({ username, password, confirm_password: confirmation }),
+    }),
   myServers: () => request<{ servers: ConnectionServer[] }>("/api/me/servers"),
   saveApiKey: (name: string, apiKey: string) => request(`/api/me/servers/${encodeURIComponent(name)}/credential`, {
     method: "PUT", body: JSON.stringify({ api_key: apiKey }),

@@ -80,6 +80,8 @@ const publicPostLimits: Record<string, [number, number]> = {
   '/authorize/signup': [10, 3600],
   '/admin/session': [20, 60],
   '/me/session': [20, 60],
+  // Separate from /authorize/signup: one address may create twice as many accounts.
+  '/me/signup': [10, 3600],
   '/token': [120, 60],
   '/register': [20, 60],
 };
@@ -100,7 +102,7 @@ app.use('*', async (c, next) => {
       }
     }
   }
-  if (['/authorize', '/authorize/submit', '/authorize/signup', '/token', '/admin/session', '/me/session', '/register'].includes(c.req.path)) {
+  if (['/authorize', '/authorize/submit', '/authorize/signup', '/token', '/admin/session', '/me/session', '/me/signup', '/register'].includes(c.req.path)) {
     c.header('Cache-Control', 'no-store');
   }
   await next();

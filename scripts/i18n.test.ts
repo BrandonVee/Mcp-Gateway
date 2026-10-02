@@ -32,6 +32,10 @@ test("API failures are localized instead of displaying backend English", () => {
   assert.equal(apiErrorMessage(409, { error: "username already exists" }, "zh-CN"), "用户名已存在");
   assert.equal(apiErrorMessage(500, { error: "internal server error" }, "zh-CN"), "服务器处理失败，请稍后重试");
   assert.equal(apiErrorMessage(401, { error: "invalid_credentials" }, "en-US"), "Incorrect username or password");
+  assert.equal(apiErrorMessage(403, { error: "registration_disabled" }, "zh-CN"), "当前未开放自行注册，请联系管理员");
+  assert.equal(apiErrorMessage(409, { error: "username_taken" }, "en-US"), "Username already exists");
+  assert.equal(apiErrorMessage(400, { error: "invalid_username" }, "zh-CN"), "账号格式不正确");
+  assert.equal(apiErrorMessage(400, { error: "password_mismatch" }, "en-US"), "The two passwords do not match");
 });
 
 test("HTML entry defaults to Chinese before the app loads", () => {

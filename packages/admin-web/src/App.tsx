@@ -67,7 +67,7 @@ function SessionRouter() {
   const identity = usePlatformSession();
   if (identity.error) return <DataLoadError message={identity.error} loading={identity.checking} onRetry={() => void identity.refresh()} />;
   if (identity.session === undefined) return <BootScreen />;
-  if (!identity.session) return <LoginPage onSuccess={identity.signedIn} />;
+  if (!identity.session) return <LoginPage onSuccess={identity.signedIn} registrationEnabled={identity.registrationEnabled} />;
   const session = identity.session;
   const key = `${session.user_id}:${session.auth_version}:${session.role}`;
   return <div inert={identity.checking} aria-busy={identity.checking}>

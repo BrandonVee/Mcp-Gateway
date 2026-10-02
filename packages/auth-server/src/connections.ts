@@ -2,16 +2,18 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { authIssuer, adminWebUrl } from '@mcp/shared';
+import { authIssuer, adminWebUrl, registrationEnabled } from '@mcp/shared';
 import { createLoginSession, db, deleteLoginSession, getSessionUser, verifyUser } from './db.js';
 import { decryptCredential, encryptCredential } from './credential-crypto.js';
 import { mcpServers, oauthConnectionStates, userMcpCredentials, userServerAccess, users } from './schema.js';
-import { limitLoginAccount } from './rate-limit.js';
+import { consumeRateLimit, limitLoginAccount } from './rate-limit.js';
+import { createRegisteredUser, validateSignup } from './registration.js';
 import { lockAccessibleConnection, revokeUserConnection } from './connection-lifecycle.js';
 import { accessTokenValid, exchangeOAuthToken, OAuthTokenError, shouldRefresh, tokenExpiry } from './oauth-token-exchange.js';
 import { recordAudit } from './admin.js';
 
 const cookieName = 'auth_session';
+const signupErrors = { invalidUsername: 'invalid_username', invalidPassword: 'invalid_password', passwordMismatch: 'password_mismatch' } as const;
 type User = { id: number; username: string; role: 'admin' | 'user'; allServers: boolean; authVersion: number };
 
 async function currentUser(c: Context): Promise<User | null> {
@@ -99,8 +101,9 @@ export function createConnectionsRouter(): Hono {
       const accepted = [new URL(authIssuer()).origin, new URL(adminWebUrl()).origin];
       if (origin && !accepted.includes(origin)) return c.json({ error: 'invalid_origin' }, 403);
       const expectedIdentity = c.req.header('x-session-identity');
-      const login = c.req.method === 'POST' && c.req.path === '/me/session';
-      if (expectedIdentity !== undefined && !login) {
+      // Sign-in and self-registration are the only anonymous writes.
+      const anonymous = c.req.method === 'POST' && (c.req.path === '/me/session' || c.req.path === '/me/signup');
+      if (expectedIdentity !== undefined && !anonymous) {
         const user = await currentUser(c);
         const expiredLogout = !user && c.req.method === 'DELETE' && c.req.path === '/me/session';
         if (!expiredLogout && (!user || expectedIdentity !== `${user.id}:${user.authVersion}`)) {
@@ -149,6 +152,45 @@ export function createConnectionsRouter(): Hono {
     });
     if (user.role === 'admin') await recordAudit(c, user.username, 200);
     return c.json({ authenticated: true, username: user.username, role: user.role, user_id: user.id, auth_version: user.authVersion });
+  });
+
+  /** Anonymous read so the login page can hide the entry when signup is closed. */
+  router.get('/me/signup', (c) => {
+    c.header('Cache-Control', 'no-store');
+    return c.json({ registration_enabled: registrationEnabled() });
+  });
+
+  router.post('/me/signup', async (c) => {
+    if (!registrationEnabled()) return c.json({ error: 'registration_disabled' }, 403);
+    // A stale tab signing up would overwrite the session cookie of the current identity.
+    if (await currentUser(c)) return c.json({ error: 'already_authenticated' }, 409);
+    const body = (await c.req.json().catch(() => ({}))) as { username?: string; password?: string; confirm_password?: string };
+    const username = typeof body.username === 'string' ? body.username.trim() : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+    const invalid = validateSignup(username, password, typeof body.confirm_password === 'string' ? body.confirm_password : '');
+    if (invalid) return c.json({ error: signupErrors[invalid] }, 400);
+    try {
+      // Shares the OAuth sign-up budget so neither entry point offers more attempts.
+      if (!(await consumeRateLimit('signup-account', username.toLowerCase(), 5, 3600))) {
+        c.header('Retry-After', '3600');
+        return c.json({ error: 'rate_limit_exceeded' }, 429);
+      }
+    } catch {
+      return c.json({ error: 'rate_limit_unavailable' }, 503);
+    }
+    let user: { id: number; username: string; role: 'admin' | 'user'; authVersion: number } | null;
+    let token: string;
+    try {
+      user = await createRegisteredUser(username, password);
+      if (!user) return c.json({ error: 'username_taken' }, 409);
+      token = await createLoginSession(user.id, user.authVersion);
+    } catch {
+      return c.json({ error: 'registration_unavailable' }, 503);
+    }
+    setCookie(c, cookieName, token, {
+      httpOnly: true, sameSite: 'Lax', secure: authIssuer().startsWith('https://'), path: '/', maxAge: 7 * 24 * 3600,
+    });
+    return c.json({ authenticated: true, username: user.username, role: user.role, user_id: user.id, auth_version: user.authVersion }, 201);
   });
 
   router.delete('/me/session', async (c) => {

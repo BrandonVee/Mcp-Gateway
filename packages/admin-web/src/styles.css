@@ -1343,6 +1343,16 @@ code,
   height: 44px;
 }
 
+.login-switch {
+  margin: -8px 0 10px;
+  text-align: center;
+}
+
+.login-switch .ant-btn {
+  padding: 0 4px;
+  height: auto;
+}
+
 .login-hint {
   color: #98a3b2;
   text-align: center;

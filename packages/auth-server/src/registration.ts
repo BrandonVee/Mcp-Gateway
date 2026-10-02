@@ -11,13 +11,13 @@ export function validateSignup(username: string, password: string, confirmation:
 }
 
 /** Account creation and administrator-selected signup grants succeed together. */
-export async function createRegisteredUser(username: string, password: string): Promise<{ id: number; username: string } | null> {
+export async function createRegisteredUser(username: string, password: string): Promise<{ id: number; username: string; role: 'admin' | 'user'; authVersion: number } | null> {
   const passwordHash = scryptHash(password);
   const now = Date.now();
   return db.transaction(async (tx) => {
     const [user] = await tx.insert(users).values({
       username, passwordHash, role: 'user', disabled: false, allServers: false, createdAt: now, updatedAt: now,
-    }).onConflictDoNothing({ target: users.username }).returning({ id: users.id, username: users.username });
+    }).onConflictDoNothing({ target: users.username }).returning({ id: users.id, username: users.username, role: users.role, authVersion: users.authVersion });
     if (!user) return null;
     const defaults = await tx.select({ name: mcpServers.name }).from(mcpServers)
       .where(and(eq(mcpServers.enabled, true), eq(mcpServers.signupAccess, true)));

@@ -27,10 +27,25 @@ interface LoginForm {
   password: string;
 }
 
-export function LoginPage({ onSuccess }: { onSuccess: (session: PlatformSession) => void }) {
+interface SignupForm {
+  username: string;
+  password: string;
+  confirmation: string;
+}
+
+export function LoginPage({ onSuccess, registrationEnabled }: {
+  onSuccess: (session: PlatformSession) => void;
+  registrationEnabled?: boolean;
+}) {
   const { t } = useI18n();
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const switchMode = (next: "login" | "signup") => {
+    setMode(next);
+    setError("");
+  };
 
   const submit = async (values: LoginForm) => {
     setError("");
@@ -40,6 +55,19 @@ export function LoginPage({ onSuccess }: { onSuccess: (session: PlatformSession)
       onSuccess(session);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : t("auth.login.invalidCredentials"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const register = async (values: SignupForm) => {
+    setError("");
+    setBusy(true);
+    try {
+      const session = await api.mySignup(values.username, values.password, values.confirmation);
+      onSuccess(session);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : t("common.operationFailed"));
     } finally {
       setBusy(false);
     }
@@ -97,59 +125,153 @@ export function LoginPage({ onSuccess }: { onSuccess: (session: PlatformSession)
             <div className="secure-icon">
               <SafetyCertificateOutlined />
             </div>
-            <Typography.Title level={2}>{t("auth.login.title")}</Typography.Title>
+            <Typography.Title level={2}>
+              {mode === "login" ? t("auth.login.title") : t("auth.signup.title")}
+            </Typography.Title>
             <Typography.Text type="secondary">
-              {t("auth.login.subtitle")}
+              {mode === "login" ? t("auth.login.subtitle") : t("auth.signup.subtitle")}
             </Typography.Text>
           </Space>
 
           <Divider />
 
-          <Form<LoginForm>
-            layout="vertical"
-            initialValues={{ username: "", password: "" }}
-            disabled={busy}
-            onFinish={submit}
-            requiredMark={false}
-          >
-            <Form.Item
-              name="username"
-              label={t("auth.login.usernameLabel")}
-              rules={[{ required: true, message: t("auth.login.usernameRequired") }]}
+          {mode === "login" ? (
+            <Form<LoginForm>
+              key="login"
+              name="login"
+              layout="vertical"
+              initialValues={{ username: "", password: "" }}
+              disabled={busy}
+              onFinish={submit}
+              requiredMark={false}
             >
-              <Input
-                prefix={<UserOutlined />}
-                placeholder={t("auth.login.usernamePlaceholder")}
-                autoComplete="username"
-              />
-            </Form.Item>
-            <Form.Item
-              name="password"
-              label={t("auth.login.passwordLabel")}
-              rules={[{ required: true, message: t("auth.login.passwordRequired") }]}
+              <Form.Item
+                name="username"
+                label={t("auth.login.usernameLabel")}
+                rules={[{ required: true, message: t("auth.login.usernameRequired") }]}
+              >
+                <Input
+                  prefix={<UserOutlined />}
+                  placeholder={t("auth.login.usernamePlaceholder")}
+                  autoComplete="username"
+                />
+              </Form.Item>
+              <Form.Item
+                name="password"
+                label={t("auth.login.passwordLabel")}
+                rules={[{ required: true, message: t("auth.login.passwordRequired") }]}
+              >
+                <Input.Password
+                  prefix={<LockOutlined />}
+                  placeholder={t("auth.login.passwordPlaceholder")}
+                  autoComplete="current-password"
+                />
+              </Form.Item>
+
+              {error && (
+                <Alert
+                  type="error"
+                  message={error}
+                  showIcon
+                  className="login-error"
+                />
+              )}
+
+              <Form.Item className="login-submit">
+                <Button type="primary" htmlType="submit" block size="large" loading={busy}>
+                  {t("auth.login.submit")} <ArrowRightOutlined />
+                </Button>
+              </Form.Item>
+            </Form>
+          ) : (
+            <Form<SignupForm>
+              key="signup"
+              name="signup"
+              layout="vertical"
+              initialValues={{ username: "", password: "", confirmation: "" }}
+              disabled={busy}
+              onFinish={register}
+              requiredMark={false}
             >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder={t("auth.login.passwordPlaceholder")}
-                autoComplete="current-password"
-              />
-            </Form.Item>
+              <Form.Item
+                name="username"
+                label={t("auth.signup.usernameLabel")}
+                extra={t("auth.signup.usernameRule")}
+                rules={[
+                  { required: true, message: t("auth.signup.usernameRequired") },
+                  { pattern: /^[a-zA-Z0-9._-]{2,64}$/, message: t("auth.signup.usernameRule") },
+                ]}
+              >
+                <Input
+                  prefix={<UserOutlined />}
+                  placeholder={t("auth.signup.usernamePlaceholder")}
+                  autoComplete="username"
+                />
+              </Form.Item>
+              <Form.Item
+                name="password"
+                label={t("auth.signup.passwordLabel")}
+                extra={t("auth.signup.passwordRule")}
+                rules={[
+                  { required: true, message: t("auth.signup.passwordRequired") },
+                  { min: 12, max: 256, message: t("auth.signup.passwordRule") },
+                ]}
+              >
+                <Input.Password
+                  prefix={<LockOutlined />}
+                  placeholder={t("auth.signup.passwordPlaceholder")}
+                  autoComplete="new-password"
+                />
+              </Form.Item>
+              <Form.Item
+                name="confirmation"
+                label={t("auth.signup.confirmLabel")}
+                dependencies={["password"]}
+                rules={[
+                  { required: true, message: t("auth.signup.confirmRequired") },
+                  ({ getFieldValue }) => ({
+                    validator: (_rule, value) =>
+                      !value || value === getFieldValue("password")
+                        ? Promise.resolve()
+                        : Promise.reject(new Error(t("auth.signup.mismatch"))),
+                  }),
+                ]}
+              >
+                <Input.Password
+                  prefix={<LockOutlined />}
+                  placeholder={t("auth.signup.confirmPlaceholder")}
+                  autoComplete="new-password"
+                />
+              </Form.Item>
 
-            {error && (
-              <Alert
-                type="error"
-                message={error}
-                showIcon
-                className="login-error"
-              />
-            )}
+              {error && (
+                <Alert
+                  type="error"
+                  message={error}
+                  showIcon
+                  className="login-error"
+                />
+              )}
 
-            <Form.Item className="login-submit">
-              <Button type="primary" htmlType="submit" block size="large" loading={busy}>
-                {t("auth.login.submit")} <ArrowRightOutlined />
+              <Form.Item className="login-submit">
+                <Button type="primary" htmlType="submit" block size="large" loading={busy}>
+                  {t("auth.signup.submit")} <ArrowRightOutlined />
+                </Button>
+              </Form.Item>
+            </Form>
+          )}
+
+          <div className="login-switch">
+            {mode === "signup" ? (
+              <Button type="link" onClick={() => switchMode("login")} disabled={busy}>
+                {t("auth.signup.switchToLogin")}
               </Button>
-            </Form.Item>
-          </Form>
+            ) : registrationEnabled ? (
+              <Button type="link" onClick={() => switchMode("signup")}>
+                {t("auth.signup.switchToSignup")}
+              </Button>
+            ) : null}
+          </div>
 
           <div className="login-hint">
             <LockOutlined /> {t("auth.adminSessionsUseSecureHttponly")}

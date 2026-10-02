@@ -52,6 +52,18 @@ test('system settings retain the explicit allowlist switch and reject non-boolea
   }
 });
 
+test('the registration switch keeps booleans and rejects other values', () => {
+  const settings = { public_url: 'https://mcp.example.com', upstream_hosts: [] };
+  for (const registration_enabled of [true, false]) {
+    const normalized = normalizeSystemSettings({ ...settings, registration_enabled }, true);
+    assert.equal(normalized?.registration_enabled, registration_enabled);
+    assert.deepEqual(normalizeSystemSettings(JSON.parse(JSON.stringify(normalized)), true), normalized);
+  }
+  for (const registration_enabled of ['false', 'true', 0, 1, null, {}]) {
+    assert.equal(normalizeSystemSettings({ ...settings, registration_enabled }, true), null);
+  }
+});
+
 test('initial setup validates browser origin against the actual request host', () => {
   assert.equal(bootstrapOriginAllowed('https://mcp.example.com', 'mcp.example.com', true), true);
   assert.equal(bootstrapOriginAllowed('https://mcp.example.com:8443', 'mcp.example.com:8443', true), true);

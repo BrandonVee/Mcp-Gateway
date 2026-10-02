@@ -15,6 +15,8 @@ const privateName = `manual-${suffix}`;
 const pausedName = `paused-${suffix}`;
 const firstUsername = `new-${suffix}`;
 const secondUsername = `later-${suffix}`;
+const consoleName = `console-${suffix}`;
+const consoleName2 = `console2-${suffix}`;
 const password = 'signup-test-password-123';
 let adminCookie = '';
 const cookie = (response: Response, name: string) => response.headers.getSetCookie()
@@ -147,6 +149,38 @@ async function main() {
     assert.equal((await fetch(`${GATEWAY}/mcp/${privateName}`, { method: 'POST', headers, body: '{}' })).status, 403);
     console.log('PASS: signup, CSRF, validation, session, consent, PKCE callback, token exchange, default grants, and Gateway access');
 
+    // The console entry uses the same validation, grants and session as the OAuth flow.
+    const signupJson = (body: Record<string, unknown>, origin = new URL(AUTH).origin) => fetch(`${AUTH}/me/signup`, {
+      method: 'POST', headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body),
+    });
+    const status = await fetch(`${AUTH}/me/signup`, { headers: { origin: new URL(AUTH).origin } });
+    assert.equal(status.status, 200);
+    assert.equal(status.headers.get('cache-control'), 'no-store');
+    assert.equal((await status.json()).registration_enabled, true);
+    assert.equal((await signupJson({ username: 'bad name', password, confirm_password: password })).status, 400);
+    const weak = await signupJson({ username: consoleName, password: password.slice(0, 11), confirm_password: password.slice(0, 11) });
+    assert.equal(weak.status, 400);
+    assert.equal((await weak.json()).error, 'invalid_password');
+    assert.equal((await signupJson({ username: consoleName, password, confirm_password: 'wrong-confirmation' })).status, 400);
+    assert.equal((await signupJson({ username: consoleName, password, confirm_password: password }, 'https://attacker.example.test')).status, 403);
+    const created = await signupJson({ username: consoleName, password, confirm_password: password });
+    assert.equal(created.status, 201, await created.text());
+    const createdBody = await created.json();
+    assert.equal(createdBody.role, 'user');
+    const consoleCookie = cookie(created, 'auth_session');
+    assert.ok(consoleCookie);
+    const me = await fetch(`${AUTH}/me/session`, { headers: { cookie: consoleCookie, origin: new URL(AUTH).origin } });
+    assert.equal((await me.json()).role, 'user', 'console registration signs the new account in');
+    assert.equal((await signupJson({ username: consoleName, password, confirm_password: password })).status, 409);
+    // Caller-supplied privilege fields must not change the created account.
+    const elevated = await signupJson({ username: consoleName2, password, confirm_password: password, role: 'admin', all_servers: true });
+    assert.equal(elevated.status, 201);
+    assert.equal((await elevated.json()).role, 'user');
+    const registered = (await (await admin('/users')).json()).users as Array<{ username: string; servers: string[] }>;
+    assert.deepEqual(registered.find((user) => user.username === consoleName)?.servers, [defaultName]);
+    assert.deepEqual(registered.find((user) => user.username === consoleName2)?.servers, [defaultName]);
+    console.log('PASS: console self-registration validates, signs in, rejects duplicates and keeps default grants');
+
     assert.equal((await admin(`/servers/${defaultName}/users`, 'PUT', { user_ids: [claims.uid], signup_access: false })).status, 200);
     const later = await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...await signupForm(secondUsername), redirect: 'manual' });
     assert.equal(later.status, 303);
@@ -174,10 +208,22 @@ async function main() {
     }
     assert.ok(limited, 'public signup is rate-limited per client IP');
     console.log('PASS: public signup rate limits and retry headers');
+    let consoleLimited = false;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const probe = await signupJson({ username: `rate-console-${suffix}`, password, confirm_password: 'wrong-confirmation' });
+      if (probe.status === 429) {
+        assert.equal(probe.headers.get('retry-after'), '3600');
+        consoleLimited = true;
+        break;
+      }
+      assert.equal(probe.status, 400);
+    }
+    assert.ok(consoleLimited, 'console signup is rate-limited per client IP');
+    console.log('PASS: console signup rate limits and retry headers');
   } finally {
     if (adminCookie) {
       const users = (await (await admin('/users')).json()).users as Array<{ id: number; username: string }>;
-      for (const user of users.filter((user) => [firstUsername, secondUsername].includes(user.username))) await admin(`/users/${user.id}`, 'DELETE');
+      for (const user of users.filter((user) => [firstUsername, secondUsername, consoleName, consoleName2].includes(user.username))) await admin(`/users/${user.id}`, 'DELETE');
       for (const name of [defaultName, privateName, pausedName]) await admin(`/servers/${name}`, 'DELETE');
     }
   }
