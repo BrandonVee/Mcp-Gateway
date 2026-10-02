@@ -159,9 +159,9 @@ jobs:
   sync-version:
     name: Write release version back to main
     needs: release
-    if: >-
-      github.repository == 'BrandonVee/Mcp-Gateway' && inputs.dry_run != true &&
-      needs.release.outputs.released != 'true'
+    # Idempotent: syncing again after a failed run or a re-release skips itself
+    # when the branch already carries that version or a newer one.
+    if: github.repository == 'BrandonVee/Mcp-Gateway' && inputs.dry_run != true
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+    import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -151,9 +151,10 @@ export function commitVersion({ tag, cwd = process.cwd() }) {
   }).filter(update => update.content !== update.original);
   const sha = git(['rev-parse', 'HEAD']);
   if (!updates.length) return { tag, version, sha, short_sha: sha.slice(0, 12), changed: false };
-  if (git(['tag', '--points-at', sha]).split('\n').includes(tag)) {
-    throw new Error(`Published ${tag} has different manifest versions; refusing to change its commit`);
-  }
+  // The released tag now points at the tested commit, whose manifests still carry
+  // the previous version. Only a commit released as another version is off limits.
+  const released = git(['tag', '--points-at', sha]).split('\n').filter(candidate => versionPattern.test(candidate) && candidate !== tag);
+  if (released.length) throw new Error(`Commit ${sha} is already released as ${released.join(', ')}; refusing to write ${tag}`);
   for (const update of updates) writeFileSync(join(cwd, update.file), update.content);
   git(['add', '--', ...updates.map(update => update.file)]);
   git(['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com',

@@ -221,7 +221,7 @@ test('version write-back syncs the released version and never moves it backwards
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test('version preparation refuses to change an already published tag', () => {
+test('version commit refuses to relabel a commit released as another version', () => {
   const directory = mkdtempSync(join(tmpdir(), 'mcp-immutable-'));
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   try {
@@ -230,8 +230,12 @@ test('version preparation refuses to change an already published tag', () => {
     writeFileSync(join(directory, 'package.json'), '{"name":"mcp-gateway","version":"0.0.0"}\n');
     writeFileSync(join(directory, 'packages/shared/package.json'), '{"name":"@mcp/shared","version":"0.0.0"}\n');
     git('add', '.'); git('commit', '-m', 'feat: initial'); git('tag', 'v0.1.0');
-    assert.throws(() => commitVersion({ tag: 'v0.1.0', cwd: directory }), /refusing to change its commit/);
+    assert.throws(() => commitVersion({ tag: 'v0.2.0', cwd: directory }), /already released as v0\.1\.0/);
     assert.equal(git('status', '--porcelain'), '');
+    // Writing back the version of the tag that already points here is expected.
+    const synced = commitVersion({ tag: 'v0.1.0', cwd: directory });
+    assert.equal(synced.changed, true);
+    assert.equal(JSON.parse(git('show', `${synced.sha}:package.json`)).version, '0.1.0');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
