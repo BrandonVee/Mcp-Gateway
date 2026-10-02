@@ -147,7 +147,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Select an automatic release version
+      - name: Select a release version and prepare its bot commit
         if: github.ref == 'refs/heads/main'
         id: version
         run: node scripts/github-release.mjs prepare
@@ -180,11 +180,15 @@ jobs:
           flavor: latest=false
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=sha,prefix=,format=short
+            type=sha,prefix=,format=short,enable=${{ github.ref != 'refs/heads/main' }}
+            type=raw,value=${{ steps.version.outputs.short_sha }},enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=${{ steps.version.outputs.tag }},enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' }}
             type=ref,event=tag
             type=semver,pattern={{version}}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.version.outputs.sha || github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version || github.ref_name }}
       - name: Build and publish unified application
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
@@ -220,6 +224,11 @@ jobs:
         env:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: node scripts/sync-dockerhub-description.mjs
+      - name: Write release versions back to main as github-actions[bot]
+        if: github.ref == 'refs/heads/main'
+        env:
+          RELEASE_SHA: ${{ steps.version.outputs.sha }}
+        run: node scripts/github-release.mjs write-back
       - name: Publish GitHub Release as github-actions[bot]
         if: github.ref == 'refs/heads/main'
         env:

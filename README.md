@@ -45,6 +45,8 @@ MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scr
 
 发布镜像为 `brandonvee/mcp-gateway`，支持 `linux/amd64` 和 `linux/arm64`。`main` 通过全部测试并发布镜像后，`github-actions[bot]` 会自动创建版本标签和 GitHub Release；`latest` 跟随该提交。需要固定版本时改为已发布的 12 位提交号或版本标签（如 `vX.Y.Z` / `X.Y.Z`）。无需克隆源码的镜像启动方式见 [Docker Hub 使用说明](docs/dockerhub.md)。
 
+发版时会同步根目录及 `packages/*/package.json` 的 `version`，由机器人提交 `chore(release): vX.Y.Z [skip ci]` 并回写 `main`。镜像、Git 标签与 Release 均对应这条版本提交；测试用的 `tests/fixtures` 保留独立版本。回写使用工作流的 `GITHUB_TOKEN`，不会触发循环发版。若发版期间 `main` 有新提交，普通推送会拒绝覆盖，需等待最新提交的流水线或在最新 `main` 手动运行 CI。首次版本为 `v0.1.0`；之后 `feat:` 增加次版本，`!` / `BREAKING CHANGE:` 增加主版本，其余提交增加修订版本。
+
 不带 `--yes` 在终端运行时，脚本会引导填写以下参数，回车保留默认值：
 
 - **HTTP 端口**：默认 `8080`，仅监听 `127.0.0.1`，供你自己的 Nginx 转发。

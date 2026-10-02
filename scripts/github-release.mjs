@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const versionPattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -32,6 +33,40 @@ export function prepareRelease(cwd = process.cwd()) {
   const commits = git(['log', ...(previous ? [`${previous}..HEAD`] : []), '--format=%B%x00']).split('\0');
   const tag = nextReleaseTag(tags, git(['tag', '--points-at', sha]).split('\n'), commits);
   return { tag, version: tag.slice(1), sha };
+}
+
+export function prepareVersionCommit(cwd = process.cwd()) {
+  const git = args => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+  if (git(['status', '--porcelain'])) throw new Error('Version preparation requires a clean working tree');
+  const release = prepareRelease(cwd);
+  const files = ['package.json', ...readdirSync(join(cwd, 'packages'), { withFileTypes: true })
+    .filter(entry => entry.isDirectory()).map(entry => `packages/${entry.name}/package.json`)];
+  // Read every manifest before writing, so malformed files leave the checkout intact.
+  const updates = files.map(file => {
+    const original = readFileSync(join(cwd, file), 'utf8');
+    const manifest = JSON.parse(original);
+    return { file, original, content: `${JSON.stringify({ ...manifest, version: release.version }, null, 2)}\n` };
+  }).filter(update => update.content !== update.original);
+  if (updates.length) {
+    if (git(['tag', '--points-at', release.sha]).split('\n').includes(release.tag)) {
+      throw new Error(`Published ${release.tag} has different manifest versions; refusing to change its commit`);
+    }
+    for (const update of updates) writeFileSync(join(cwd, update.file), update.content);
+    git(['add', '--', ...updates.map(update => update.file)]);
+    git(['-c', 'user.name=github-actions[bot]', '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com',
+      'commit', '-m', `chore(release): ${release.tag} [skip ci]`]);
+  }
+  const sha = git(['rev-parse', 'HEAD']);
+  return { ...release, sha, short_sha: sha.slice(0, 12) };
+}
+
+export function writeBackVersion(sha, cwd = process.cwd()) {
+  const git = args => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  if (!/^[a-f\d]{40}$/.test(sha) || git(['rev-parse', 'HEAD']) !== sha || git(['status', '--porcelain'])) {
+    throw new Error('Version write-back requires the clean, prepared release commit');
+  }
+  // A normal fast-forward push rejects concurrent changes; never force-push main.
+  git(['push', 'origin', `${sha}:refs/heads/main`]);
 }
 
 export async function publishRelease({ repository, token, tag, sha, digest, apiUrl = 'https://api.github.com', fetchImpl = fetch }) {
@@ -73,16 +108,22 @@ export async function publishRelease({ repository, token, tag, sha, digest, apiU
 
 async function main() {
   if (process.argv[2] === 'prepare') {
-    const release = prepareRelease();
     if (!process.env.GITHUB_OUTPUT) throw new Error('GITHUB_OUTPUT is required');
+    const remote = execFileSync('git', ['ls-remote', 'origin', 'refs/heads/main'], { encoding: 'utf8' }).trim().split(/\s+/)[0];
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    if (remote !== head) throw new Error('main advanced since this workflow started; release the latest main instead');
+    const release = prepareVersionCommit();
     appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(release).map(([key, value]) => `${key}=${value}\n`).join(''));
     console.log(`Selected ${release.tag} for ${release.sha}`);
+  } else if (process.argv[2] === 'write-back') {
+    writeBackVersion(process.env.RELEASE_SHA);
+    console.log(`Version commit ${process.env.RELEASE_SHA} written back to main`);
   } else if (process.argv[2] === 'publish') {
     const release = await publishRelease({ repository: process.env.GITHUB_REPOSITORY, token: process.env.GITHUB_TOKEN,
       tag: process.env.RELEASE_TAG, sha: process.env.RELEASE_SHA, digest: process.env.IMAGE_DIGEST, apiUrl: process.env.GITHUB_API_URL });
     console.log(`Published ${release.html_url}`);
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n### GitHub Release\n\n[${release.tag_name}](${release.html_url})\n`);
-  } else throw new Error('Usage: node scripts/github-release.mjs prepare|publish');
+  } else throw new Error('Usage: node scripts/github-release.mjs prepare|write-back|publish');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(error => { console.error(error.message); process.exitCode = 1; });
