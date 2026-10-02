@@ -14,8 +14,14 @@ async function main() {
   if (!process.env.DATABASE_URL) throw new Error('Provide DATABASE_URL for a local PostgreSQL role with CREATE DATABASE permission');
   const originalUrl = new URL(process.env.DATABASE_URL);
   if (!['localhost', '127.0.0.1', '[::1]'].includes(originalUrl.hostname)) throw new Error('Auth lifecycle smoke requires local disposable PostgreSQL');
+  // Dropping the disposable database terminates its connections; an idle client
+  // error must not surface as an unhandled event while the process shuts down.
+  const quietIdleErrors = (pool: InstanceType<typeof Pool>) => {
+    pool.on('error', () => undefined);
+    return pool;
+  };
   const databaseName = `mcp_auth_lifecycle_${randomUUID().replaceAll('-', '')}`;
-  const controlPool = new Pool({ connectionString: originalUrl.toString() });
+  const controlPool = quietIdleErrors(new Pool({ connectionString: originalUrl.toString() }));
   let fixturePool: InstanceType<typeof Pool> | undefined;
   let applicationPool: InstanceType<typeof Pool> | undefined;
   let created = false;
@@ -32,7 +38,7 @@ async function main() {
     process.env.ADMIN_PASSWORD = 'lifecycle-recovery-password-123456';
     process.env.INTERNAL_API_TOKEN = 'lifecycle-internal-token';
     delete process.env.ADMIN_BOOTSTRAP_RECOVERY;
-    fixturePool = new Pool({ connectionString: fixtureUrl.toString() });
+    fixturePool = quietIdleErrors(new Pool({ connectionString: fixtureUrl.toString() }));
     const migrations = pathToFileURL(resolve('packages/auth-server/drizzle') + '/');
     const journal = JSON.parse(readFileSync(new URL('meta/_journal.json', migrations), 'utf8')) as { entries: Array<{ tag: string }> };
     // Upgrade a genuine old schema with both valid and orphaned legacy credentials.
