@@ -5,7 +5,7 @@
 - 一个应用镜像包含管理网页、认证服务、MCP 网关和内部 Nginx。
 - PostgreSQL 与 Redis 独立运行，可连接已有服务，也可使用下方的 Compose 一起启动。
 - 支持 `linux/amd64`、`linux/arm64`。应用入口为 `8080`。
-- 标签：`latest` 跟随 main；12 位 Git 提交号用于固定版本；发布版本还提供 `vX.Y.Z` / `X.Y.Z` 标签。
+- 标签：`latest` 跟随最新正式发布版本；12 位 Git 提交号用于固定版本；发布版本还提供 `vX.Y.Z` / `X.Y.Z` 标签。
 
 ## 方式一：首次打开网页，连接已有 PostgreSQL 和 Redis
 

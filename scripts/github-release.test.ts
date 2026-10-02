@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { existingReleaseCandidate, nextReleaseTag, prepareRelease, prepareVersionCommit, publishedReleaseForCommit, publishRelease, versionCommitForSource, writeBackVersion } from './github-release.mjs';
+import { commitVersion, existingReleaseCandidate, nextReleaseTag, planRelease, prepareRelease, publishedReleaseForCommit, publishRelease, pushVersionCommit, resolveRelease, syncVersion, versionCommitForSource } from './github-release.mjs';
 
 test('automatic releases use stable semantic versions and conventional commit changes', () => {
   assert.equal(nextReleaseTag([], [], ['feat: first version']), 'v0.1.0');
@@ -24,6 +24,8 @@ test('version commit synchronizes product manifests, preserves fixtures and is r
     mkdirSync(join(directory, file, '..'), { recursive: true });
     writeFileSync(join(directory, file), `${JSON.stringify({ name, version: '0.1.0', private: true, dependencies: { '@mcp/shared': 'workspace:*' } }, null, 2)}\n`);
   };
+  const identity = (release: { tag: string; version: string; sha: string; short_sha: string }) =>
+    ({ tag: release.tag, version: release.version, sha: release.sha, short_sha: release.short_sha });
   try {
     git('init'); git('config', 'user.name', 'Release test'); git('config', 'user.email', 'test@example.test');
     manifest('package.json', 'mcp-gateway'); manifest('packages/gateway/package.json', '@mcp/gateway');
@@ -31,9 +33,12 @@ test('version commit synchronizes product manifests, preserves fixtures and is r
     git('add', '.'); git('commit', '-m', 'feat: initial'); git('tag', 'v0.1.0');
     writeFileSync(join(directory, 'fix.txt'), 'fix'); git('add', '.'); git('commit', '-m', 'fix: release write-back');
     const base = git('rev-parse', 'HEAD');
-    const release = prepareVersionCommit(directory);
+    const tag = prepareRelease(directory).tag;
+    assert.equal(tag, 'v0.1.1');
+    const release = commitVersion({ tag, cwd: directory });
     assert.equal(release.tag, 'v0.1.1'); assert.notEqual(release.sha, base);
     assert.equal(release.short_sha, release.sha.slice(0, 12));
+    assert.equal(release.changed, true);
     assert.equal(git('rev-parse', 'HEAD^'), base);
     assert.equal(git('log', '-1', '--format=%an <%ae>'), 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>');
     assert.equal(git('log', '-1', '--format=%s'), 'chore(release): v0.1.1 [skip ci]');
@@ -43,16 +48,42 @@ test('version commit synchronizes product manifests, preserves fixtures and is r
     }
     assert.equal(JSON.parse(readFileSync(join(directory, 'tests/fixtures/package.json'), 'utf8')).version, '0.1.0');
     assert.equal(git('status', '--porcelain'), '');
-    assert.deepEqual(prepareVersionCommit(directory), release);
+    const retry = commitVersion({ tag, cwd: directory });
+    assert.equal(retry.changed, false);
+    assert.deepEqual(identity(retry), identity(release));
     git('tag', release.tag);
-    assert.deepEqual(prepareVersionCommit(directory), release);
-    assert.deepEqual(existingReleaseCandidate(directory), release);
+    assert.deepEqual(existingReleaseCandidate(directory), identity(release));
     git('checkout', '--detach', base);
-    assert.deepEqual(existingReleaseCandidate(directory), release); // Retry the original workflow source.
-    assert.deepEqual(versionCommitForSource(release.sha, base, directory), release);
+    assert.deepEqual(existingReleaseCandidate(directory), identity(release)); // Retry the original workflow source.
+    assert.deepEqual(versionCommitForSource(release.sha, base, directory), identity(release));
     git('checkout', '--detach', release.sha);
     writeFileSync(join(directory, 'untracked.txt'), 'keep');
-    assert.throws(() => prepareVersionCommit(directory), /clean working tree/);
+    assert.throws(() => commitVersion({ tag, cwd: directory }), /clean working tree/);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('release planning ignores the version write-back commit and reads the API without writing', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mcp-plan-'));
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  let writes = 0;
+  const fetchImpl = async (url: string, init: RequestInit) => {
+    if (init.method !== 'GET') writes++;
+    return new Response('{}', { status: 404, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    git('init'); git('config', 'user.name', 'Release test'); git('config', 'user.email', 'test@example.test');
+    writeFileSync(join(directory, 'package.json'), '{"name":"mcp-gateway","version":"0.1.0"}\n');
+    mkdirSync(join(directory, 'packages/shared'), { recursive: true });
+    writeFileSync(join(directory, 'packages/shared/package.json'), '{"name":"@mcp/shared","version":"0.1.0"}\n');
+    git('add', '.'); git('commit', '-m', 'feat: initial'); git('tag', 'v0.1.0');
+    writeFileSync(join(directory, 'fix.txt'), 'fix'); git('add', '.'); git('commit', '-m', 'fix: release this');
+    const planned = await planRelease({ cwd: directory, repository: 'owner/repo', token: 'isolated-test-token', fetchImpl });
+    assert.equal(planned.tag, 'v0.1.1'); assert.equal(planned.released, 'false'); assert.equal(writes, 0);
+    commitVersion({ tag: planned.tag, cwd: directory });
+    // The write-back commit alone must not produce another version.
+    assert.equal(prepareRelease(directory).tag, 'v0.1.1');
+    assert.equal((await planRelease({ cwd: directory, repository: 'owner/repo', token: 'isolated-test-token', fetchImpl })).tag, 'v0.1.1');
+    assert.equal(writes, 0);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -70,37 +101,39 @@ test('version write-back rejects concurrent main commits and never overwrites th
     git(first, 'add', '.'); git(first, 'commit', '-m', 'feat: initial'); git(first, 'tag', 'v0.1.0');
     writeFileSync(join(first, 'fix.txt'), 'fix'); git(first, 'add', '.'); git(first, 'commit', '-m', 'fix: version');
     git(first, 'push', 'origin', 'main');
-    const release = prepareVersionCommit(first);
-    writeBackVersion(release.sha, first);
+    const release = commitVersion({ tag: 'v0.1.1', cwd: first });
+    pushVersionCommit({ sha: release.sha, cwd: first });
     assert.equal(git(remote, 'rev-parse', 'main'), release.sha);
-    writeBackVersion(release.sha, first); // Retrying an accepted push is harmless.
+    pushVersionCommit({ sha: release.sha, cwd: first }); // Retrying an accepted push is harmless.
     git(directory, 'clone', remote, second);
     git(second, 'config', 'user.name', 'New contributor'); git(second, 'config', 'user.email', 'new@example.test');
     writeFileSync(join(second, 'new.txt'), 'retain concurrent work');
     git(second, 'add', '.'); git(second, 'commit', '-m', 'feat: concurrent change'); git(second, 'push', 'origin', 'main');
     const concurrent = git(second, 'rev-parse', 'HEAD');
-    assert.throws(() => writeBackVersion(release.sha, first));
+    assert.throws(() => pushVersionCommit({ sha: release.sha, cwd: first }));
     assert.equal(git(remote, 'rev-parse', 'main'), concurrent);
     assert.equal(git(remote, 'show', 'main:new.txt'), 'retain concurrent work');
-    assert.throws(() => writeBackVersion('a'.repeat(40), first), /prepared release commit/);
+    assert.throws(() => pushVersionCommit({ sha: 'a'.repeat(40), cwd: first }), /prepared release commit/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test('the original source workflow resumes bot write-back and preserves an already published release', async () => {
-  const directory = mkdtempSync(join(tmpdir(), 'mcp-release-recovery-'));
+test('release resolution reports the branch head and preserves an already published release', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mcp-release-resolve-'));
   const remote = join(directory, 'remote.git'), checkout = join(directory, 'checkout');
   const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-  let published = false, writes = 0, sha = '';
+  let published = false, writes = 0, branchHead = '';
   const digest = `sha256:${'b'.repeat(64)}`;
   const server = createServer((req, res) => {
     if (req.method !== 'GET') writes++;
     res.setHeader('content-type', 'application/json');
+    if (req.url?.endsWith('/commits/main')) return res.end(JSON.stringify({ sha: branchHead }));
     if (published && req.url?.endsWith('/releases/tags/v0.1.1')) {
-      res.end(JSON.stringify({ draft: false, body: `Digest: \`${digest}\``, html_url: 'https://github.com/owner/repo/releases/tag/v0.1.1' }));
-    } else if (published && req.url?.endsWith('/git/ref/tags/v0.1.1')) {
-      res.end(JSON.stringify({ object: { type: 'commit', sha } }));
-    } else { res.statusCode = 404; res.end('{}'); }
+      return res.end(JSON.stringify({ draft: false, body: `Digest: \`${digest}\``, html_url: 'https://github.com/owner/repo/releases/tag/v0.1.1' }));
+    }
+    if (published && req.url?.endsWith('/git/ref/tags/v0.1.1')) return res.end(JSON.stringify({ object: { type: 'commit', sha: source } }));
+    res.statusCode = 404; res.end('{}');
   });
+  let source = '';
   try {
     git(directory, 'init', '--bare', '--initial-branch=main', remote); git(directory, 'clone', remote, checkout);
     git(checkout, 'config', 'user.name', 'Release test'); git(checkout, 'config', 'user.email', 'test@example.test');
@@ -111,44 +144,81 @@ test('the original source workflow resumes bot write-back and preserves an alrea
     git(checkout, 'add', '.'); git(checkout, 'commit', '-m', 'feat: initial'); git(checkout, 'tag', 'v0.1.0');
     writeFileSync(join(checkout, 'fix.txt'), 'source fix'); git(checkout, 'add', '.'); git(checkout, 'commit', '-m', 'fix: retry release');
     git(checkout, 'push', 'origin', 'main', '--tags');
-    const source = git(checkout, 'rev-parse', 'HEAD');
-    sha = prepareVersionCommit(checkout).sha;
-    writeBackVersion(sha, checkout);
+    source = git(checkout, 'rev-parse', 'HEAD'); branchHead = source;
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     const address = server.address();
     assert.ok(address && typeof address !== 'string');
-    const prepare = async (name: string) => {
-      const output = join(directory, `${name}.output`);
-      const child = spawn(process.execPath, [fileURLToPath(new URL('github-release.mjs', import.meta.url)), 'prepare'], {
-        cwd: checkout, env: { ...process.env, GITHUB_REPOSITORY: 'owner/repo', GITHUB_TOKEN: 'isolated-test-token',
-          GITHUB_API_URL: `http://127.0.0.1:${address.port}`, GITHUB_REF: 'refs/heads/main',
-          GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: '' }, stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      let error = '';
-      child.stdout.resume(); child.stderr.on('data', chunk => { error += chunk; });
-      const code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
-      assert.equal(code, 0, error);
-      return Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').map(line => {
-        const separator = line.indexOf('='); return [line.slice(0, separator), line.slice(separator + 1)];
-      }));
-    };
-    git(checkout, 'checkout', '--detach', source);
-    const resumed = await prepare('resume-unpublished');
-    assert.equal(resumed.tag, 'v0.1.1'); assert.equal(resumed.sha, sha); assert.equal(resumed.released, 'false');
-    assert.equal(git(checkout, 'rev-parse', 'HEAD'), sha, 'a failed API publish reuses the bot commit without another version bump');
-    assert.equal(git(remote, 'rev-parse', 'main'), sha);
-    git(checkout, 'tag', 'v0.1.1', sha); git(checkout, 'push', 'origin', 'refs/tags/v0.1.1');
-    git(checkout, 'checkout', '--detach', source); published = true;
-    const preserved = await prepare('preserve-published');
-    assert.equal(preserved.sha, sha); assert.equal(preserved.released, 'true'); assert.equal(preserved.digest, digest);
-    assert.equal(git(checkout, 'rev-parse', 'HEAD'), source, 'a completed release does not modify the original workflow checkout');
+    const resolve = (tag?: string, ref = source) => resolveRelease({ cwd: checkout, repository: 'owner/repo', token: 'isolated-test-token',
+      apiUrl: `http://127.0.0.1:${address.port}`, tag, ref, branch: 'main' });
+    const unpublished = await resolve('v0.1.1');
+    assert.equal(unpublished.sha, source); assert.equal(unpublished.released, 'false');
+    assert.equal(unpublished.latest, 'true', 'the branch head release updates Docker latest and GitHub Latest');
+    git(checkout, 'tag', 'v0.1.1', source); published = true;
+    const preserved = await resolve('v0.1.1');
+    assert.equal(preserved.released, 'true'); assert.equal(preserved.digest, digest);
+    assert.equal(git(checkout, 'rev-parse', 'HEAD'), source, 'a completed release does not modify the release checkout');
     assert.equal(git(checkout, 'status', '--porcelain'), '');
-    assert.equal(writes, 0, 'preparation and a completed release retry only read the GitHub API');
+    writeFileSync(join(checkout, 'next.txt'), 'next'); git(checkout, 'add', '.'); git(checkout, 'commit', '-m', 'feat: after release');
+    git(checkout, 'push', 'origin', 'main');
+    branchHead = git(checkout, 'rev-parse', 'HEAD');
+    git(checkout, 'checkout', '--detach', branchHead);
+    await assert.rejects(resolve(undefined, branchHead), /manual releases need a tag/);
+    git(checkout, 'checkout', '--detach', source);
+    assert.equal((await resolve('v0.1.1')).latest, 'false', 're-releasing an older commit must not move latest');
+    assert.equal(writes, 0, 'release resolution only reads the GitHub API');
   } finally {
     server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('release resolution refuses a tag that already points at another commit', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mcp-release-moved-'));
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  let writes = 0;
+  const fetchImpl = async (url: string, init: RequestInit) => {
+    if (init.method !== 'GET') writes++;
+    const path = new URL(url).pathname;
+    if (path.endsWith('/commits/main')) return new Response('{}', { status: 404, headers: { 'content-type': 'application/json' } });
+    if (path.includes('/releases/tags/')) return new Response(JSON.stringify({ draft: false, body: 'Digest: `sha256:' + 'b'.repeat(64) + '`' }), { headers: { 'content-type': 'application/json' } });
+    if (path.includes('/git/ref/')) return new Response(JSON.stringify({ object: { type: 'commit', sha: 'c'.repeat(40) } }), { headers: { 'content-type': 'application/json' } });
+    throw new Error(`Unexpected API call: ${init.method} ${path}`);
+  };
+  try {
+    git('init'); git('config', 'user.name', 'Release test'); git('config', 'user.email', 'test@example.test');
+    writeFileSync(join(directory, 'version.txt'), 'initial'); git('add', '.'); git('commit', '-m', 'feat: initial');
+    const sha = git('rev-parse', 'HEAD');
+    await assert.rejects(resolveRelease({ cwd: directory, repository: 'owner/repo', token: 'isolated-test-token', tag: 'v0.1.0', ref: sha, fetchImpl }), /refusing to move it/);
+    assert.equal(writes, 0);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('version write-back syncs the released version and never moves it backwards', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mcp-sync-version-'));
+  const remote = join(directory, 'remote.git'), checkout = join(directory, 'checkout');
+  const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  try {
+    git(directory, 'init', '--bare', '--initial-branch=main', remote); git(directory, 'clone', remote, checkout);
+    git(checkout, 'config', 'user.name', 'Release test'); git(checkout, 'config', 'user.email', 'test@example.test');
+    mkdirSync(join(checkout, 'packages/shared'), { recursive: true });
+    writeFileSync(join(checkout, 'package.json'), '{"name":"mcp-gateway","version":"0.1.0"}\n');
+    writeFileSync(join(checkout, 'packages/shared/package.json'), '{"name":"@mcp/shared","version":"0.1.0"}\n');
+    git(checkout, 'add', '.'); git(checkout, 'commit', '-m', 'feat: initial'); git(checkout, 'tag', 'v0.1.0');
+    writeFileSync(join(checkout, 'fix.txt'), 'fix'); git(checkout, 'add', '.'); git(checkout, 'commit', '-m', 'fix: release');
+    git(checkout, 'push', 'origin', 'main', '--tags');
+    const released = git(checkout, 'rev-parse', 'HEAD');
+    git(checkout, 'checkout', '--detach', released);
+    const synced = syncVersion({ tag: 'v0.2.0', cwd: checkout });
+    assert.equal(synced.changed, true);
+    assert.equal(git(remote, 'rev-parse', 'main'), synced.sha);
+    assert.equal(git(checkout, 'log', '-1', '--format=%s'), 'chore(release): v0.2.0 [skip ci]');
+    assert.equal(JSON.parse(git(remote, 'show', 'main:package.json')).version, '0.2.0');
+    git(checkout, 'checkout', '--detach', released);
+    assert.equal(syncVersion({ tag: 'v0.2.0', cwd: checkout }).changed, false, 'the branch already carries the released version');
+    assert.equal(syncVersion({ tag: 'v0.1.0', cwd: checkout }).changed, false, 're-releasing an older tag cannot move the branch backwards');
+    assert.equal(git(remote, 'rev-parse', 'main'), synced.sha);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test('version preparation refuses to change an already published tag', () => {
@@ -160,7 +230,7 @@ test('version preparation refuses to change an already published tag', () => {
     writeFileSync(join(directory, 'package.json'), '{"name":"mcp-gateway","version":"0.0.0"}\n');
     writeFileSync(join(directory, 'packages/shared/package.json'), '{"name":"@mcp/shared","version":"0.0.0"}\n');
     git('add', '.'); git('commit', '-m', 'feat: initial'); git('tag', 'v0.1.0');
-    assert.throws(() => prepareVersionCommit(directory), /refusing to change its commit/);
+    assert.throws(() => commitVersion({ tag: 'v0.1.0', cwd: directory }), /refusing to change its commit/);
     assert.equal(git('status', '--porcelain'), '');
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
@@ -177,6 +247,7 @@ test('version preparation reads real Git history and reuses an existing tag on r
     const next = prepareRelease(directory);
     assert.equal(next.tag, 'v0.2.0');
     assert.equal(next.sha, git('rev-parse', 'HEAD'));
+    assert.equal(next.short_sha, next.sha.slice(0, 12));
     git('tag', '-a', next.tag, '-m', 'Release');
     assert.deepEqual(prepareRelease(directory), next);
   } finally { rmSync(directory, { recursive: true, force: true }); }

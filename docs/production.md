@@ -125,7 +125,7 @@ Auth 和 Gateway 的 `INTERNAL_API_TOKEN`、`CREDENTIAL_BROKER_TOKEN` 必须一�
 
 ## 持续集成
 
-`.github/workflows/ci.yml` 在每次推送和拉取请求中运行类型检查、单元测试、前端及 Node 运行包构建和生产依赖审计；通过后以独立的 `mcp-ci` Compose 项目构建统一应用镜像，检查 Nginx 内的前端产物，并使用 `.github/compose.app-ci.yml` 从镜像文件启动服务（不挂载源码、不使用 watch 进程）运行端到端 smoke 测试；测试上游使用独立的 `test-upstream` 镜像目标，不包含在生产 runtime 镜像中。Docker 镜像使用锁文件和 `pnpm install --frozen-lockfile`。另有 `single-host` 任务实际执行一键部署，验证首次后台设置、注册总开关、OAuth 地址变更、旧令牌失效、重启持久化、数据库和加密密钥的备份恢复、内部端口隔离、整体健康检查、故障重启、正常停止和五容器迁移。调用监控测试覆盖 JSON/SSE、HTTP 200 工具错误、未知结果、去重、元数据隐私、排行和采集开关；注册及监控测试先于会故意耗尽动态客户端注册额度的完整 smoke 测试。此流程验证构建与功能，不代替真实域名、真实上游和生产流量验收。在本机复现 CI 时也应设置独立的 `COMPOSE_PROJECT_NAME`；`docker compose down -v` 会删除该项目的 PostgreSQL 卷。
+`.github/workflows/ci.yml` **只做验证，不发布**。它在每次推送和拉取请求中运行类型检查、单元测试、前端及 Node 运行包构建和生产依赖审计；通过后以独立的 `mcp-ci` Compose 项目构建统一应用镜像，检查 Nginx 内的前端产物，并使用 `.github/compose.app-ci.yml` 从镜像文件启动服务（不挂载源码、不使用 watch 进程）运行端到端 smoke 测试；测试上游使用独立的 `test-upstream` 镜像目标，不包含在生产 runtime 镜像中。Docker 镜像使用锁文件和 `pnpm install --frozen-lockfile`。另有 `single-host` 任务实际执行一键部署，验证首次后台设置、注册总开关、OAuth 地址变更、旧令牌失效、重启持久化、数据库和加密密钥的备份恢复、内部端口隔离、整体健康检查、故障重启、正常停止和五容器迁移。调用监控测试覆盖 JSON/SSE、HTTP 200 工具错误、未知结果、去重、元数据隐私、排行和采集开关；注册及监控测试先于会故意耗尽动态客户端注册额度的完整 smoke 测试。此流程验证构建与功能，不代替真实域名、真实上游和生产流量验收。在本机复现 CI 时也应设置独立的 `COMPOSE_PROJECT_NAME`；`docker compose down -v` 会删除该项目的 PostgreSQL 卷。
 
 ## 备份与恢复
 
@@ -200,30 +200,36 @@ curl --fail https://YOUR_DOMAIN/gateway/health
 
 ## 自动发布到 Docker Hub
 
-`.github/workflows/ci.yml` 的 `publish` 任务等待类型检查、单元测试、完整 MCP/OAuth/监控测试和单机升级/备份演练全部通过，再构建 `Dockerfile.production` 的 `app` 目标并推送到 `brandonvee/mcp-gateway`。构建使用 Docker 官方 Actions、Buildx 与 QEMU，同时发布 `linux/amd64`、`linux/arm64`，生成 SBOM 和最小构建来源证明，复用 GitHub Actions 缓存。发布任务串行执行，避免同时覆盖标签。
+发布由独立的 `.github/workflows/release.yml` 完成，与只做验证的 `ci.yml` 分开：
+
+1. `ci.yml` 的类型检查、单元测试、MCP/OAuth/监控测试和单机升级备份演练全部通过后，`release` 任务按 conventional commits 算出下一个版本号（首版 `v0.1.0`；之后普通提交递增补丁版本，`feat:` 递增次版本，`!` 或 `BREAKING CHANGE:` 递增主版本）。
+2. 该任务用 `workflow_dispatch` 调用 `release.yml` 并传入版本号与提交。用 `GITHUB_TOKEN` 创建的标签不会再触发工作流，所以不能用“打标签再等触发”的方式。
+3. `release.yml` 签出默认分支上的发布脚本（旧标签也能用当前脚本重发），再签出要发布的提交，构建 `Dockerfile.production` 的 `app` 目标并推送到 `brandonvee/mcp-gateway`，然后由 `github-actions[bot]` 创建版本标签和 [GitHub Release](https://github.com/BrandonVee/Mcp-Gateway/releases)，记录双架构镜像 digest 和部署命令。
+4. 发布成功后 `sync-version` 任务在 `main` 上补一个 `chore(release): vX.Y.Z [skip ci]` 提交，把产品 `package.json` 的版本写成已发布的版本。因此打标签那一刻仓库里的 `package.json` 还停留在上一版。
+
+构建使用 Docker 官方 Actions、Buildx 与 QEMU，同时发布 `linux/amd64`、`linux/arm64`，生成 SBOM 和最小构建来源证明，复用 GitHub Actions 缓存。发布任务串行执行，避免同时覆盖标签。
 
 首次配置：
 
 1. 在 Docker 账号设置的 Personal access tokens 中创建发布专用令牌，授予 Read & Write 权限。不要使用账号密码。见 [Docker 令牌说明](https://docs.docker.com/security/access-tokens/personal-access-tokens/)。
 2. 在 [GitHub Actions secrets](https://github.com/BrandonVee/Mcp-Gateway/settings/secrets/actions) 添加 Repository secret：名称 `DOCKERHUB_TOKEN`，值为上述令牌。用户名固定为 `brandonvee`。
-3. 推送到 `main`，或在 Actions → CI → Run workflow 选择 `main`。密钥缺失时发布任务会明确报错，测试任务仍可执行。
+3. 推送到 `main` 即自动发布。密钥缺失时发布任务会明确报错，测试任务仍可执行。
 
-标签规则：
+触发与标签规则：
 
-| 触发方式 | 发布标签 |
-| --- | --- |
-| 推送 `main` 或手动运行 `main` | `latest`、12 位提交 SHA、自动版本 `vX.Y.Z` / `X.Y.Z` |
-| 推送 `v1.2.3` | `v1.2.3`、`1.2.3`、12 位提交 SHA |
-| PR、其他分支 | 仅测试 |
+| 触发方式 | 说明 | 发布标签 |
+| --- | --- | --- |
+| 推送 `main` 且测试通过 | 自动算版本并派发 release.yml | `latest`（仅当发布提交就是默认分支 HEAD）、12 位提交 SHA、`vX.Y.Z` / `X.Y.Z` |
+| 推送 `v1.2.3` | 直接发布该标签指向的提交 | `v1.2.3`、`1.2.3`、12 位提交 SHA |
+| 手动运行 release.yml | 填写 tag，可填 ref 指定提交，可开 dry_run | 同版本标签；dry_run 只构建校验，不推送、不打标签、不建 Release |
+| PR、其他分支 | 仅测试 | 无 |
 
-通过全部测试并成功发布镜像后，`github-actions[bot]` 自动创建版本标签和 [GitHub Release](https://github.com/BrandonVee/Mcp-Gateway/releases)，记录同一提交的双架构镜像 digest 和部署命令。首版为 `v0.1.0`；之后普通提交递增补丁版本，`feat:` 递增次版本，`!` 或 `BREAKING CHANGE:` 递增主版本。重复运行同一已发布提交会复用版本，不移动已有标签。工作流声明 `contents: write`，使用内置 `GITHUB_TOKEN`，无需额外的 GitHub PAT。
+重复运行同一已发布提交会复用版本，不移动已有标签，也不会重写已记录的镜像 digest。工作流声明 `contents: write`，使用内置 `GITHUB_TOKEN`，无需额外的 GitHub PAT。手动运行 release.yml **不经过 CI 测试**，仅用于重发、固定版本或演练。
 
-机器人创建标签不会再次触发 CI，因此版本镜像和 Release 都在当前已通过测试的流水线中完成。手动推送版本标签仍可发布固定版本镜像。
-
-版本标签不会覆盖 `latest`；`latest` 跟随通过所有测试的 `main`。在发布任务的摘要中查看镜像 digest，Docker Hub 的 Tags 页面查看两个架构。
+`latest` 只在被发布的提交等于默认分支 HEAD 时更新；重发旧标签只发布对应版本标签。若发布期间 `main` 又有新提交，本次不会更新 `latest`，可用新的 `main` HEAD 再手动运行一次。在发布任务的摘要中查看镜像 digest，Docker Hub 的 Tags 页面查看两个架构。
 
 ```bash
-# 可选：手动指定版本（main 已支持自动发版）：
+# 可选：手动指定版本（推送到 main 会自动发版）：
 git tag v1.2.3
 git push origin v1.2.3
 
@@ -260,4 +266,4 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 发布完成后，`./scripts/deploy.sh --yes` 即默认拉取该镜像；需要固定版本时使用 README 的 `MCP_VERSION` 一键拉取部署命令。分离服务高级模式仍可单独构建 `runtime` 和 `admin-web` 目标，使用原 `mcp-runtime` / `mcp-admin-web` 名称；它们不用于默认单机部署。
 
-Docker Hub Overview 自动维护：main 镜像发布成功后自动同步 `docs/dockerhub.md` 中的启动说明，复用 `DOCKERHUB_TOKEN`，也可手动运行 `.github/workflows/dockerhub-description.yml` 单独同步说明。镜像推送本身不会更新 Overview。
+Docker Hub Overview 自动维护：默认分支 HEAD 的发布成功后自动同步 `docs/dockerhub.md` 中的启动说明，复用 `DOCKERHUB_TOKEN`，也可手动运行 `.github/workflows/dockerhub-description.yml` 单独同步说明。镜像推送本身不会更新 Overview。

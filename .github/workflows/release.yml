@@ -1,0 +1,184 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, for example v1.2.3'
+        required: true
+        type: string
+      ref:
+        description: 'Commit or ref to publish; defaults to the tag, then the default branch'
+        required: false
+        type: string
+      dry_run:
+        description: 'Build and verify without pushing the image, creating the tag or the Release'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: mcp-release${{ inputs.dry_run && '-dry-run' || '' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build and publish the image
+    if: github.repository == 'BrandonVee/Mcp-Gateway'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+      short_sha: ${{ steps.release.outputs.short_sha }}
+      released: ${{ steps.release.outputs.released }}
+      latest: ${{ steps.release.outputs.latest }}
+    steps:
+      # Release tooling always comes from the default branch, so an older tag
+      # can be re-released with the current scripts.
+      - name: Checkout release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .release-tooling
+          fetch-depth: 1
+      # Outside the workspace: the next checkout cleans the working directory.
+      - name: Preserve tooling for older tags
+        run: |
+          mkdir -p "$RUNNER_TEMP/mcp-release-tools"
+          cp .release-tooling/scripts/github-release.mjs \
+             .release-tooling/scripts/sync-dockerhub-description.mjs \
+             "$RUNNER_TEMP/mcp-release-tools/"
+      - name: Checkout the commit to publish
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || inputs.tag || github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Resolve the release commit
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_REF: ${{ inputs.ref }}
+          RELEASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node "$RUNNER_TEMP/mcp-release-tools/github-release.mjs" resolve
+      - name: Check Docker Hub credential
+        if: steps.release.outputs.released != 'true' && inputs.dry_run != true
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -z "$DOCKERHUB_TOKEN" ]]; then
+            echo '::error::Add the DOCKERHUB_TOKEN repository secret with Docker Hub Read & Write permissions.'
+            exit 1
+          fi
+      - name: Set up QEMU
+        if: steps.release.outputs.released != 'true' && inputs.dry_run != true
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+        with:
+          platforms: arm64
+      - name: Set up Docker Buildx
+        if: steps.release.outputs.released != 'true'
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069f # v4
+      - name: Log in to Docker Hub
+        if: steps.release.outputs.released != 'true' && inputs.dry_run != true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          username: brandonvee
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Image tags and labels
+        if: steps.release.outputs.released != 'true'
+        id: metadata
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        env:
+          DOCKER_METADATA_SHORT_SHA_LENGTH: '12'
+        with:
+          images: brandonvee/mcp-gateway
+          flavor: latest=false
+          tags: |
+            type=raw,value=latest,enable=${{ steps.release.outputs.latest == 'true' }}
+            type=raw,value=${{ steps.release.outputs.short_sha }}
+            type=raw,value=${{ steps.release.outputs.tag }}
+            type=raw,value=${{ steps.release.outputs.version }}
+      - name: Build and publish unified application
+        if: steps.release.outputs.released != 'true'
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: Dockerfile.production
+          target: app
+          # A dry run stays on one platform: the docker exporter cannot load a manifest list.
+          platforms: ${{ inputs.dry_run && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ inputs.dry_run != true }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=mcp-app-release
+          cache-to: ${{ inputs.dry_run != true && 'type=gha,mode=max,scope=mcp-app-release' || '' }}
+          provenance: mode=min
+          sbom: true
+      - name: Inspect published manifest
+        if: steps.release.outputs.released != 'true' && inputs.dry_run != true
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker buildx imagetools inspect "brandonvee/mcp-gateway@$IMAGE_DIGEST"
+          {
+            echo '### Docker Hub image published'
+            echo '- Repository: [brandonvee/mcp-gateway](https://hub.docker.com/r/brandonvee/mcp-gateway)'
+            echo '- Platforms: linux/amd64, linux/arm64'
+            echo "- Digest: \`$IMAGE_DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Sync Docker Hub startup guide
+        if: steps.release.outputs.released != 'true' && inputs.dry_run != true && steps.release.outputs.latest == 'true'
+        env:
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          MCP_DOCKERHUB_DOC: ${{ github.workspace }}/docs/dockerhub.md
+        run: node "$RUNNER_TEMP/mcp-release-tools/sync-dockerhub-description.mjs"
+      - name: Create the Git tag and GitHub Release
+        if: steps.release.outputs.released != 'true' && inputs.dry_run != true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          MAKE_LATEST: ${{ steps.release.outputs.latest == 'true' && 'true' || 'legacy' }}
+        run: node "$RUNNER_TEMP/mcp-release-tools/github-release.mjs" publish
+
+  sync-version:
+    name: Write release version back to main
+    needs: release
+    if: >-
+      github.repository == 'BrandonVee/Mcp-Gateway' && inputs.dry_run != true &&
+      needs.release.outputs.released != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: mcp-sync-version
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Sync product manifests as github-actions[bot]
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+          RELEASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: node scripts/github-release.mjs sync-version

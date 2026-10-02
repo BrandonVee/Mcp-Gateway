@@ -132,20 +132,21 @@ jobs:
         if: always()
         run: docker compose down -v
 
-  publish:
-    name: Publish image and GitHub release
+  release:
+    name: Plan and trigger release
     needs: [verify, single-host, smoke]
+    # Tags created with GITHUB_TOKEN do not trigger workflows, so the release
+    # workflow is dispatched with the version this job computes.
     if: >-
       github.repository == 'BrandonVee/Mcp-Gateway' &&
-      ((github.event_name == 'push' &&
-        (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) ||
-       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
+      actions: write
     concurrency:
-      group: dockerhub-publish
+      group: mcp-release-plan
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -154,97 +155,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Select a release version and prepare its bot commit
-        id: version
+      - name: Select the next release version
+        id: plan
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/github-release.mjs prepare
-      - name: Check Docker Hub credential
-        if: steps.version.outputs.released != 'true'
+        run: node scripts/github-release.mjs plan
+      - name: Trigger the release workflow
+        if: steps.plan.outputs.released != 'true'
         env:
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.plan.outputs.tag }}
+          RELEASE_SHA: ${{ steps.plan.outputs.sha }}
         run: |
-          if [[ -z "$DOCKERHUB_TOKEN" ]]; then
-            echo '::error::Add the DOCKERHUB_TOKEN repository secret with Docker Hub Read & Write permissions.'
-            exit 1
-          fi
-      - name: Set up QEMU
-        if: steps.version.outputs.released != 'true'
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
-        with:
-          platforms: arm64
-      - name: Set up Docker Buildx
-        if: steps.version.outputs.released != 'true'
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
-      - name: Log in to Docker Hub
-        if: steps.version.outputs.released != 'true'
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
-        with:
-          username: brandonvee
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Image tags and labels
-        if: steps.version.outputs.released != 'true'
-        id: metadata
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
-        env:
-          DOCKER_METADATA_SHORT_SHA_LENGTH: '12'
-        with:
-          images: brandonvee/mcp-gateway
-          flavor: latest=false
-          tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=sha,prefix=,format=short,enable=${{ github.ref != 'refs/heads/main' }}
-            type=raw,value=${{ steps.version.outputs.short_sha }},enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=${{ steps.version.outputs.tag }},enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.ref == 'refs/heads/main' }}
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-          labels: |
-            org.opencontainers.image.revision=${{ steps.version.outputs.sha || github.sha }}
-            org.opencontainers.image.version=${{ steps.version.outputs.version || github.ref_name }}
-      - name: Build and publish unified application
-        if: steps.version.outputs.released != 'true'
-        id: build
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
-        with:
-          context: .
-          file: Dockerfile.production
-          target: app
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.metadata.outputs.tags }}
-          labels: ${{ steps.metadata.outputs.labels }}
-          cache-from: type=gha,scope=mcp-app-release
-          cache-to: type=gha,mode=max,scope=mcp-app-release
-          provenance: mode=min
-          sbom: true
-      - name: Inspect published manifest
-        if: steps.version.outputs.released != 'true'
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          docker buildx imagetools inspect "brandonvee/mcp-gateway@$IMAGE_DIGEST"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/release.yml/dispatches" -X POST \
+            -f ref=main -f "inputs[tag]=$RELEASE_TAG" -f "inputs[ref]=$RELEASE_SHA" -f 'inputs[dry_run]=false'
           {
-            echo '### Docker Hub image published'
-            echo '- Repository: [brandonvee/mcp-gateway](https://hub.docker.com/r/brandonvee/mcp-gateway)'
-            echo '- Platforms: linux/amd64, linux/arm64'
-            echo "- Digest: \`$IMAGE_DIGEST\`"
+            echo "### Release dispatched"
+            echo ""
+            echo "$RELEASE_TAG for \`$RELEASE_SHA\` — [Release workflow](https://github.com/$GITHUB_REPOSITORY/actions/workflows/release.yml)"
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Sync Docker Hub startup guide
-        if: github.ref == 'refs/heads/main' && steps.version.outputs.released != 'true'
-        env:
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: node scripts/sync-dockerhub-description.mjs
-      - name: Write release versions back to main as github-actions[bot]
-        if: github.ref == 'refs/heads/main' && steps.version.outputs.released != 'true'
-        env:
-          RELEASE_SHA: ${{ steps.version.outputs.sha }}
-        run: node scripts/github-release.mjs write-back
-      - name: Publish GitHub Release as github-actions[bot]
-        if: steps.version.outputs.released != 'true'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
-          RELEASE_SHA: ${{ steps.version.outputs.sha }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        run: node scripts/github-release.mjs publish

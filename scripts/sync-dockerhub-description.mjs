@@ -9,7 +9,8 @@ const request = async (path, options = {}) => {
 try {
   const secret = process.env.DOCKERHUB_TOKEN;
   if (!secret) throw new Error('DOCKERHUB_TOKEN is required with Read & Write permissions');
-  const full_description = await readFile(new URL('../docs/dockerhub.md', import.meta.url), 'utf8');
+  // Release runs copy this script out of the checkout; allow an explicit path.
+  const full_description = await readFile(process.env.MCP_DOCKERHUB_DOC ?? new URL('../docs/dockerhub.md', import.meta.url), 'utf8');
   if (!full_description.trim() || full_description.length > 25000) throw new Error('Docker Hub overview must contain 1–25000 characters');
   const { access_token } = await request('/v2/auth/token', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: 'brandonvee', secret }),
