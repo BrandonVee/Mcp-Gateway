@@ -60,6 +60,19 @@ git pull --ff-only
 
 回退至旧五容器代码时，先用当前 Compose 停止并移除 `mcp-server` 容器，然后切换到原提交执行原 `deploy.sh`，让旧脚本重建内网链接；保留数据库卷和密钥。数据库迁移的回退须结合版本兼容性评估，需要恢复时先保存当前备份。
 
+### 升级影响与管理员恢复
+
+Auth Server 启动时自动迁移数据库。身份迁移 `0013_identity_lifecycle` 会使旧浏览器登录会话、授权码和 refresh token 失效；升级后需重新登录，让 MCP 客户端重新完成平台授权。用户、服务、权限和已保存的上游连接保留，正常升级不会重置管理员密码。
+
+若旧部署已没有启用管理员，且配置指定的账号已被禁用或降级，启动会明确报错。恢复需同时显式设置 `ADMIN_BOOTSTRAP_RECOVERY=true` 和 `ADMIN_PASSWORD`，只恢复 `ADMIN_USERNAME` 指定的账号；生产密码至少 16 字符。单机部署可临时传入环境变量并重建应用容器：
+
+```bash
+ADMIN_BOOTSTRAP_RECOVERY=true ADMIN_PASSWORD='替换为新的强密码，至少16字符' \
+  docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml up -d --force-recreate mcp-server
+```
+
+自定义管理员还需传入 `ADMIN_USERNAME`。恢复成功后移除临时开关，再重建应用容器，使用新密码登录；维护 `runtime.env` 中的密码时也应同步更新。自定义 `MCP_DEPLOY_DIR` 时替换上面的环境文件路径。已有启用管理员时，恢复开关不会覆盖任何账号。
+
 ## 分离服务部署（高级）
 
 首次服务器部署见 [README：服务器部署](../README.md#服务器部署推荐)。以下高级示例使用 `SYSTEM_CONFIG_MODE=file`，将独立的 Auth、Gateway 和管理端地址保留在配置文件中，后台系统设置只读。`deploy/production.env.example` 提供环境变量模板，`deploy/nginx-ingress.conf.example` 提供宿主机 Nginx 示例；`MCP_IMAGE_PREFIX` 可为空或指定带末尾 `/` 的镜像仓库命名空间。
