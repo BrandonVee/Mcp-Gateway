@@ -471,6 +471,8 @@ export const messages = {
   "userDialog.wildcardAccessIncludesCurrentFuture": "通配符允许访问当前和未来的全部服务。新增授权需获取新令牌；收回授权立即生效。",
   "userDialog.availableLogicalMcpServers": "可连接的逻辑 MCP 服务",
   "userDialog.selectServers": "选择服务",
+  "userDialog.selectAllServers": "全选当前服务",
+  "userDialog.clearServerSelection": "清空已选",
   "userDialog.resetPasswordUser": "重置密码 / {user}",
   "userDialog.resetPassword": "确认重置",
   "userDialog.newPassword": "新密码",

@@ -4,7 +4,7 @@ import {
   LockOutlined,
   UserAddOutlined,
 } from "@ant-design/icons";
-import { Alert, Checkbox, Form, Input, Modal, Radio, Select } from "antd";
+import { Alert, Button, Checkbox, Form, Input, Modal, Radio, Select } from "antd";
 import type {
   AdminUser,
   CreateUserInput,
@@ -107,16 +107,30 @@ function CreateUserDialog({
             <Form.Item name="all_servers" valuePropName="checked" className="wildcard-grant">
               <Checkbox>{t("userDialog.serversIncludingFutureServers")}</Checkbox>
             </Form.Item>
-            {!allServers && <Form.Item name="servers" label={t("userDialog.specificServerAccess")}>
-              <Checkbox.Group className="permission-grid">
-                {servers.map((server) => (
-                  <Checkbox key={server.name} value={server.name}>
-                    {server.display_name}
-                    <code>{server.name}</code>
-                  </Checkbox>
-                ))}
-              </Checkbox.Group>
-            </Form.Item>}
+            {!allServers && (
+              <>
+                <div className="permission-actions">
+                  <Button type="link" size="small" disabled={servers.length === 0}
+                    onClick={() => form.setFieldValue("servers", servers.map((server) => server.name))}>
+                    {t("userDialog.selectAllServers")}
+                  </Button>
+                  <Button type="link" size="small" disabled={servers.length === 0}
+                    onClick={() => form.setFieldValue("servers", [])}>
+                    {t("userDialog.clearServerSelection")}
+                  </Button>
+                </div>
+                <Form.Item name="servers" label={t("userDialog.specificServerAccess")}>
+                  <Checkbox.Group className="permission-grid">
+                    {servers.map((server) => (
+                      <Checkbox key={server.name} value={server.name}>
+                        {server.display_name}
+                        <code>{server.name}</code>
+                      </Checkbox>
+                    ))}
+                  </Checkbox.Group>
+                </Form.Item>
+              </>
+            )}
           </>
         )}
       </Form>

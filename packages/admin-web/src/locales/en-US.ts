@@ -471,6 +471,8 @@ export const messages = {
   "userDialog.wildcardAccessIncludesCurrentFuture": "Wildcard access includes current and future servers. New grants require a new token; revocations take effect immediately.",
   "userDialog.availableLogicalMcpServers": "Available logical MCP servers",
   "userDialog.selectServers": "Select servers",
+  "userDialog.selectAllServers": "Select all current servers",
+  "userDialog.clearServerSelection": "Clear selection",
   "userDialog.resetPasswordUser": "Reset password / {user}",
   "userDialog.resetPassword": "Reset password",
   "userDialog.newPassword": "New password",
