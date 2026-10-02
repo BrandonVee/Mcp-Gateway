@@ -164,7 +164,7 @@ async function main() {
     assert.equal((await signupJson({ username: consoleName, password, confirm_password: 'wrong-confirmation' })).status, 400);
     assert.equal((await signupJson({ username: consoleName, password, confirm_password: password }, 'https://attacker.example.test')).status, 403);
     const created = await signupJson({ username: consoleName, password, confirm_password: password });
-    assert.equal(created.status, 201, await created.text());
+    assert.equal(created.status, 201, created.status === 201 ? undefined : await created.text());
     const createdBody = await created.json();
     assert.equal(createdBody.role, 'user');
     const consoleCookie = cookie(created, 'auth_session');
