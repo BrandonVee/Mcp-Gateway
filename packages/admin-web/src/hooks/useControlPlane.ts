@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import { ApiError, api } from "../api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ApiError, apiForSession } from "../api";
 import { getCurrentLanguage, getTranslation } from "../i18n";
-import type { SystemSettings, AdminConnection, AdminUser, GatewayHealth, McpServer } from "../types";
+import type { PlatformSession, SystemSettings, AdminConnection, AdminUser, GatewayHealth, McpServer } from "../types";
 
-export function useControlPlane() {
-  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+export function useControlPlane(session: PlatformSession, onLogout: () => Promise<void>, onSessionExpired: () => Promise<void>) {
+  const api = useMemo(() => apiForSession(session), [session.user_id, session.auth_version]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [servers, setServers] = useState<McpServer[]>([]);
@@ -47,33 +47,21 @@ export function useControlPlane() {
       );
       throw error;
     }
-  }, []);
+  }, [api]);
 
   useEffect(() => {
-    api
-      .session()
-      .then((session) => setAuthenticated(session.authenticated === true))
-      .catch(() => setAuthenticated(false));
-  }, []);
-
-  useEffect(() => {
-    if (!authenticated) {
-      setInitializing(false);
-      return;
-    }
-
     setInitializing(true);
     load()
       .catch((error) => {
         if (
           error instanceof ApiError &&
-          (error.status === 401 || error.status === 403)
+          (error.status === 401 || error.status === 403 || error.code === "session_changed")
         ) {
-          setAuthenticated(false);
+          void onSessionExpired();
         }
       })
       .finally(() => setInitializing(false));
-  }, [authenticated, load]);
+  }, [load, onSessionExpired]);
 
   const execute = async (operation: () => Promise<unknown>) => {
     setBusy(true);
@@ -83,9 +71,9 @@ export function useControlPlane() {
     } catch (error) {
       if (
         error instanceof ApiError &&
-        (error.status === 401 || error.status === 403)
+        (error.status === 401 || error.status === 403 || error.code === "session_changed")
       ) {
-        setAuthenticated(false);
+        void onSessionExpired();
       }
       throw error;
     } finally {
@@ -100,9 +88,9 @@ export function useControlPlane() {
     } catch (error) {
       if (
         error instanceof ApiError &&
-        (error.status === 401 || error.status === 403)
+        (error.status === 401 || error.status === 403 || error.code === "session_changed")
       ) {
-        setAuthenticated(false);
+        void onSessionExpired();
       }
       throw error;
     } finally {
@@ -113,9 +101,7 @@ export function useControlPlane() {
   const logout = async () => {
     setLoggingOut(true);
     try {
-      await api.logout();
-      // Clear the UI only after the server has revoked the browser session.
-      setAuthenticated(false);
+      await onLogout();
       setSettings(null);
       setUsers([]);
       setServers([]);
@@ -130,7 +116,6 @@ export function useControlPlane() {
 
   return {
     api,
-    authenticated,
     settings,
     users,
     servers,
@@ -144,9 +129,5 @@ export function useControlPlane() {
     execute,
     refresh,
     logout,
-    markAuthenticated: () => {
-      setInitializing(true);
-      setAuthenticated(true);
-    },
   };
 }

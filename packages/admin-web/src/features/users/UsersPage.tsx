@@ -135,13 +135,13 @@ export function UsersPage({
       key: "disabled",
       width: 150,
       render: (disabled: boolean, user) => (
-        <Switch
+        <Tooltip title={user.can_disable === false ? t("users.lastAdminProtected") : undefined}><Switch
           checked={!disabled}
           checkedChildren={t("users.signEnabled")}
           unCheckedChildren={t("users.signDisabled")}
-          disabled={user.username === "admin"}
+          disabled={!disabled && user.can_disable === false}
           onChange={() => onToggle(user)}
-        />
+        /></Tooltip>
       ),
     },
     {
@@ -165,16 +165,15 @@ export function UsersPage({
               onClick={() => onPassword(user)}
             />
           </Tooltip>
-          {user.username !== "admin" && (
-            <Tooltip title={t("users.deleteUser")}>
+            <Tooltip title={user.can_delete === false ? t("users.lastAdminProtected") : t("users.deleteUser")}>
               <Button
                 type="text"
                 danger
+                disabled={user.can_delete === false}
                 icon={<DeleteOutlined />}
                 onClick={() => onDelete(user)}
               />
             </Tooltip>
-          )}
         </Space>
       ),
     },

@@ -3,8 +3,8 @@ import { request } from 'undici';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { env, getServerConfig, refreshServerConfigs } from '../config.js';
-import { pickInstance, bindSession, sessionOwnedBy } from '../lb.js';
-import { forbidden, hasServerAccess } from '../auth.js';
+import { pickInstance, bindSession, touchSession, removeSession, sessionOwnedBy } from '../lb.js';
+import { forbidden, hasServerAccess, tokenAuthVersion, unauthorized } from '../auth.js';
 import { filterRequestHeaders, filterResponseHeaders } from './headers.js';
 import { reserveUpstreamSlot } from './capacity.js';
 import { mcpCorsHeaders } from './origin.js';
@@ -42,6 +42,11 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
     await reply.code(401).send({ error: 'new_login_required' });
     return;
   }
+  const authVersion = tokenAuthVersion(req.mcpAuth);
+  if (authVersion === null) {
+    await unauthorized(reply, 'invalid_token', 'invalid auth_version claim', serverName);
+    return;
+  }
 
   // Servers without upstream credentials still need a live access check;
   // otherwise an old JWT could outlive an admin's disable/revoke action.
@@ -50,6 +55,7 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
       const accessUrl = new URL(env.accessCheckUrl);
       accessUrl.searchParams.set('server', serverName);
       accessUrl.searchParams.set('user_id', String(userId));
+      accessUrl.searchParams.set('auth_version', String(authVersion));
       const result = await fetch(accessUrl, {
         headers: { authorization: `Bearer ${env.internalApiToken}` },
         signal: AbortSignal.timeout(10_000),
@@ -76,6 +82,7 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
       const credentialUrl = new URL(env.credentialUrl);
       credentialUrl.searchParams.set('server', serverName);
       credentialUrl.searchParams.set('user_id', String(userId));
+      credentialUrl.searchParams.set('auth_version', String(authVersion));
       const result = await fetch(credentialUrl, {
         headers: { authorization: `Bearer ${env.credentialBrokerToken}` },
         signal: AbortSignal.timeout(10_000),
@@ -114,6 +121,10 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
     await reply.code(404).send({ error: 'session_not_found' });
     return;
   }
+  if (incomingSessionId && !await touchSession(serverName, incomingSessionId, sessionOwner)) {
+    await reply.code(404).send({ error: 'session_not_found' });
+    return;
+  }
   const candidates = incomingSessionId
     ? [target.url] // Existing sessions cannot move; still try their bound instance.
     : orderedAvailableInstances(cfg.instances, target.index);
@@ -142,7 +153,27 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
     return;
   }
 
+  let stopSessionRenewal: (() => void) | undefined;
+  const renewWhileActive = (sessionId: string): void => {
+    stopSessionRenewal?.();
+    if (reply.raw.destroyed) return;
+    let renewing = false;
+    const timer = setInterval(() => {
+      if (renewing) return;
+      renewing = true;
+      void touchSession(serverName, sessionId, sessionOwner).then(renewed => {
+        if (!renewed) clearInterval(timer);
+      }).catch(error => {
+        req.log.warn({ err: error, server: serverName }, 'active session renewal failed');
+      }).finally(() => { renewing = false; });
+    }, Math.max(250, Math.min(30_000, env.sessionTtlSeconds * 1000 / 3)));
+    timer.unref();
+    stopSessionRenewal = () => clearInterval(timer);
+  };
+  reply.raw.once('close', () => stopSessionRenewal?.());
+
   try {
+    if (incomingSessionId) renewWhileActive(incomingSessionId);
     for (const targetUrl of attempts) {
       req.monitoring?.target(targetUrl);
       const upstreamUrl = new URL(targetUrl);
@@ -184,11 +215,23 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
         return;
       }
 
-      // Session affinity: bind the MCP session id (from initialize response) to
-      // the instance that created it. Re-bind on every request to refresh TTL.
+      // A successful DELETE or upstream 404 ends the session. Otherwise renew
+      // the verified incoming ID even when subsequent responses do not echo it.
+      const sessionEnded = incomingSessionId && (upstream.statusCode === 404
+        || (req.method === 'DELETE' && upstream.statusCode >= 200 && upstream.statusCode < 300));
       const sessionId = upstream.headers['mcp-session-id'];
-      if (typeof sessionId === 'string' && sessionId) {
-        await bindSession(cfg.name, sessionId, targetUrl, sessionOwner);
+      try {
+        if (sessionEnded) {
+          stopSessionRenewal?.();
+          await removeSession(serverName, incomingSessionId, sessionOwner);
+        } else if (!incomingSessionId && typeof sessionId === 'string' && sessionId
+          && upstream.statusCode >= 200 && upstream.statusCode < 300) {
+          await bindSession(cfg.name, sessionId, targetUrl, sessionOwner);
+          renewWhileActive(sessionId);
+        }
+      } catch (error) {
+        upstream.body.destroy();
+        throw error;
       }
 
       const resHeaders = { ...filterResponseHeaders(upstream.headers), ...mcpCorsHeaders(req.headers.origin, env.resourceBaseUrl) };
@@ -216,6 +259,7 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
     }
     await reply.code(502).send({ error: 'upstream_unavailable', server: serverName });
   } finally {
+    stopSessionRenewal?.();
     releaseSlot();
   }
 }

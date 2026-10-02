@@ -47,6 +47,8 @@ MCP_IMAGE_PREFIX=brandonvee/ MCP_IMAGE_NAME=mcp-gateway MCP_VERSION=latest ./scr
 
 发版时会同步根目录及 `packages/*/package.json` 的 `version`，由机器人提交 `chore(release): vX.Y.Z [skip ci]` 并回写 `main`。镜像、Git 标签与 Release 均对应这条版本提交；测试用的 `tests/fixtures` 保留独立版本。回写使用工作流的 `GITHUB_TOKEN`，不会触发循环发版。若发版期间 `main` 有新提交，普通推送会拒绝覆盖，需等待最新提交的流水线或在最新 `main` 手动运行 CI。首次版本为 `v0.1.0`；之后 `feat:` 增加次版本，`!` / `BREAKING CHANGE:` 增加主版本，其余提交增加修订版本。
 
+已发布版本重跑 CI 时会核对标签提交和 Release 中的镜像 digest，跳过镜像构建与发布写入，保留原镜像。版本已回写但 Release API 失败时，重跑原提交可继续完成发布。手工 `vX.Y.Z` 标签须与全部产品 package.json 的版本一致，发布旧版不会降低 GitHub Latest。
+
 不带 `--yes` 在终端运行时，脚本会引导填写以下参数，回车保留默认值：
 
 - **HTTP 端口**：默认 `8080`，仅监听 `127.0.0.1`，供你自己的 Nginx 转发。
@@ -108,7 +110,7 @@ curl --fail https://mcp.example.com/healthz  # 替换为实际域名
 1. **对外访问地址**：填写 Nginx 对外的 HTTPS 根地址，例如 `https://mcp.example.com`。OAuth 登录、MCP 入口与个人连接中心统一使用此地址，部署时无需配置 `PUBLIC_URL`。
 2. **启用上游白名单**：默认开启。开启时在**可信上游主机**填写计划接入的 MCP 服务主机名或 IP，每行一个，不带协议、端口或路径；名单为空时拒绝所有上游。关闭后允许管理员接入任意合法的上游地址，已填写的名单仍会保留。
 3. 按需调整**用户注册**、**调用采集与保留**、**告警阈值**，保存设置。
-4. 注册实际 MCP 服务、创建用户并分配访问权限；新数据库不会导入演示服务。客户端入口为 `https://mcp.example.com/mcp/{SERVER_NAME}`，需要上游凭据时，用户到 `/connections` 完成连接。
+4. 注册实际 MCP 服务、创建用户并分配访问权限；新数据库不会导入演示服务。客户端入口为 `https://mcp.example.com/mcp/{SERVER_NAME}`，需要上游凭据时，普通用户登录根地址 `/` 后即可完成连接；管理员从侧边栏打开个人连接中心。旧 `/connections` 链接继续可用。
 
 系统设置持久化在 PostgreSQL 中，重启后继续生效。未设置访问地址时，管理后台可用，OAuth 与 MCP 接入返回 `503 system_not_configured`；生产环境的访问地址需使用 HTTPS。更换地址后，已有 MCP 客户端需重新授权。
 
@@ -195,6 +197,19 @@ MCP_IMAGE_NAME=mcp-app MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-i
 | 无法注册上游服务 | 检查白名单开关、可信上游主机和容器到上游的连通性；默认开启白名单，空名单拒绝所有上游。 |
 | 应用未就绪或容器 unhealthy | 用该部署对应的 Compose 文件查看 `ps` 和应用日志，再检查 PostgreSQL / Redis 连接；`unhealthy` 本身不会触发 Docker 自动重启。 |
 
+### 升级与管理员恢复
+
+Auth Server 启动时自动迁移数据库。身份迁移 `0013_identity_lifecycle` 会使旧浏览器登录会话、授权码和 refresh token 失效；升级后需重新登录，让 MCP 客户端重新完成平台授权。用户、服务、权限和已保存的上游连接保留，正常升级不会重置管理员密码。
+
+若旧部署已没有启用管理员，且配置指定的账号已被禁用或降级，启动会明确报错。恢复需同时显式设置 `ADMIN_BOOTSTRAP_RECOVERY=true` 和 `ADMIN_PASSWORD`，只恢复 `ADMIN_USERNAME` 指定的账号；生产密码至少 16 字符。单机部署可临时传入环境变量并重建应用容器：
+
+```bash
+ADMIN_BOOTSTRAP_RECOVERY=true ADMIN_PASSWORD='替换为新的强密码，至少16字符' \
+  docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml up -d --force-recreate mcp-server
+```
+
+自定义管理员还需传入 `ADMIN_USERNAME`。恢复成功后移除临时开关，再重建应用容器，使用新密码登录；维护 `runtime.env` 中的密码时也应同步更新。自定义 `MCP_DEPLOY_DIR` 时替换上面的环境文件路径。已有启用管理员时，恢复开关不会覆盖任何账号。
+
 ## 权限模型
 
 - 一个 Auth Server 负责所有用户的登录和 OAuth 2.1 Authorization Code + PKCE。
@@ -274,9 +289,9 @@ http://localhost:8000/mcp/external-search
 
 ## 外部服务的用户级认证
 
-平台登录与外部服务凭据是两层独立认证：用户先取得某个逻辑 Server 的访问授权，再到 **http://localhost:5173/connections** 为该 Server 连接自己的 API Key 或 OAuth 账号。管理员在 Server 卡片的“设置认证”中选择 `无额外认证`、`用户 API Key` 或 `用户 OAuth`，并在“分配权限”中选择可访问该 Server 的普通用户。切换认证方式会删除该 Server 已保存的用户连接，以避免旧凭据被误用。
+平台登录与外部服务凭据是两层独立认证：用户先取得某个逻辑 Server 的访问授权，再登录 **http://localhost:5173/** 为该 Server 连接自己的 API Key 或 OAuth 账号。管理员从侧边栏进入个人连接中心，在 Server 卡片的“设置认证”中选择 `无额外认证`、`用户 API Key` 或 `用户 OAuth`，并在“分配权限”中选择可访问该 Server 的普通用户。切换认证方式会删除该 Server 已保存的用户连接，以避免旧凭据被误用。
 
-管理后台侧边栏的**二次认证**页面会列出用户与需要认证的 Server 的授权关系、连接状态、认证方式和更新时间；管理员可撤销单个用户的连接，用户随后需在**个人连接中心**重新配置。管理页面只返回连接元数据，不显示 API Key、Access Token 或 Refresh Token。登录页与管理后台侧边栏均提供个人连接中心入口。管理接口为 `GET /admin/connections` 和 `DELETE /admin/connections/:userId/:serverName`，仅管理员可调用。
+管理后台侧边栏的**二次认证**页面会列出用户与需要认证的 Server 的授权关系、连接状态、认证方式和更新时间；管理员可撤销单个用户的连接，用户随后需在**个人连接中心**重新配置。管理页面只返回连接元数据，不显示 API Key、Access Token 或 Refresh Token。管理员与普通用户共用 `/` 登录页，登录后按角色进入对应工作台；管理后台侧边栏提供个人连接中心入口，旧 `/connections` 链接仍可使用。管理接口为 `GET /admin/connections` 和 `DELETE /admin/connections/:userId/:serverName`，仅管理员可调用。
 
 ### API Key
 
@@ -293,6 +308,8 @@ http://localhost:8000/mcp/external-search
 用户在连接中心点击“连接账号”；平台使用 Authorization Code + PKCE、一次性 `state` 和浏览器回调取得**外部服务的** Access/Refresh Token。Gateway 按用户注入外部 Bearer Token；即将过期时平台在数据库锁内刷新，避免并发重复兑换轮换型 Refresh Token。平台自己的 JWT 不会转发给外部服务。若提供方在授权响应中返回 `iss`，建议配置预期 Issuer；若提供方要求 RFC 8707 的 `resource` 参数，请配置其受保护资源 URL。
 
 用户未连接时 Gateway 返回 `409 {"error":"connection_required", "connect_url":"..."}`；上游拒绝已保存凭据时返回 `409 {"error":"upstream_credential_rejected", "connect_url":"..."}`，不会将上游 OAuth Challenge 当成平台登录 Challenge 透传。当前客户端应引导用户打开连接中心完成连接，再重试 MCP 请求。Gateway 的连接中心地址可用 `CONNECTIONS_WEB_URL` 覆盖。
+
+没有 refresh token 的 access token 可使用到实际过期时间。刷新遇到网络错误、429、408 或 5xx 会保留 refresh token 供恢复，仅明确 `invalid_grant` 撤销刷新凭据。修改 OAuth 配置、断开连接或重新授权会取消旧 state；进行中的回调或刷新不能重新保存已撤销凭据。
 
 ### 凭据加密配置
 
@@ -358,13 +375,13 @@ curl -X PUT http://localhost:9001/admin/users/USER_ID/servers \
 
 给普通用户设置通配符：`PUT /admin/users/:id/servers` 提交 `{"servers":["*"]}`。`*` 必须单独使用，不能与具体 Server 名称混用；撤销通配符后可再分配具体 Server。
 
-管理员通过 `PATCH /admin/users/:id` 设置 `{"disabled":true}` 可关闭用户认证。关闭认证或重置密码会撤销该用户的浏览器会话、授权码和刷新令牌。移除 Server 授权或关闭用户认证会立即阻止旧 Access Token 继续访问；新增授权仍需用户获取新 Token，因为 JWT 中的授权列表是签发时的快照。
+管理员通过 `PATCH /admin/users/:id` 设置 `{"disabled":true}` 可关闭用户认证。关闭认证、重置密码或变更角色会递增认证版本，撤销浏览器会话、授权码、刷新令牌和待完成的上游 OAuth 授权，并立即拒绝旧管理与 MCP Access Token。认证记录绑定不可复用用户 ID，删除后重建同名账号不会继承旧身份。最后一名启用管理员不可禁用、降级或删除，界面和服务端均拦截，包括并发操作。移除 Server 授权会立即阻止旧 Access Token 访问；新增授权仍需获取新 Token，因为 JWT 中的授权列表是签发时的快照。
 
 ## 前端管理系统
 
 `packages/admin-web` 是 React + TypeScript + Vite + Ant Design 管理端，覆盖：
 
-- 统一管理员会话登录与退出；
+- 管理员与普通用户统一从 `/` 登录、退出，按角色进入对应工作台；跨标签页切换账号会重新核验身份，旧页面不能将凭据保存给新账号；
 - 用户创建、认证开关、删除和密码重置；
 - 从用户或 Server 两个视角管理 MCP Server 访问授权；
 - 内部/外部 MCP Server 注册、启停和删除；
@@ -372,7 +389,7 @@ curl -X PUT http://localhost:9001/admin/users/USER_ID/servers \
 - Gateway、Redis、动态注册表运行状态总览。
 - 系统设置：维护对外访问地址、可信上游、注册开关、调用采集开关、保留期限和告警阈值。
 - 日志监控：服务健康、调用趋势、服务/工具/用户/客户端排行、调用明细、当前阈值告警，以及可筛选的管理操作审计。
-- 个人连接中心可复制单个或全部已授权 Server 的 WorkBuddy MCP 配置；复制结果是 `mcpServers` 字段的内容，不包含外层 `mcpServers` 包装。配置只包含 Gateway URL（本地开发默认 `http://localhost:8000/mcp/{SERVER_NAME}`），登录和二次认证仍由各自的 OAuth/连接流程完成。平台动态注册支持 [WorkBuddy 文档](https://open.workbuddy.cn/docs/connector)所述的私有协议 OAuth 回调及本机回环回调。
+- 个人连接中心可复制单个或全部已授权 Server 的 MCP 配置；复制结果是 `mcpServers` 字段的内容，不包含外层 `mcpServers` 包装。配置只包含 Gateway URL（本地开发默认 `http://localhost:8000/mcp/{SERVER_NAME}`），登录和二次认证仍由各自的 OAuth/连接流程完成。平台动态注册支持 [WorkBuddy 文档](https://open.workbuddy.cn/docs/connector)所述的私有协议 OAuth 回调及本机回环回调。
 - 中文/英文界面切换：登录页、管理台、连接中心共用语言下拉菜单；页面标题、状态、表单、提示和请求错误均来自语义键的 `zh-CN` / `en-US` 资源文件。语言选择保存在浏览器本地存储，变量通过 `t("key", { name })` 传递。OAuth 登录/授权页按 `Accept-Language`（含权重）或 `?lang=zh-CN|en-US` 选择语言，并在表单提交时保持选择。协议名称、产品名称、HTTP 方法和实际标识符保持原文。
 - 界面字体：英文使用 Nunito，简体中文使用随前端打包的 [Resource Han Rounded CN](https://github.com/CyanoHao/Resource-Han-Rounded) 字形子集；字体许可及更新说明见 `packages/admin-web/src/assets/fonts/`。
 
@@ -481,5 +498,7 @@ MCP_USER=alice MCP_PASSWORD='<用户密码>' pnpm token
 ## 冒烟测试
 
 测试上游、测试用户与注册数据位于 `tests/fixtures/`，仅用于独立测试数据库，不参与 `pnpm dev:local`、默认 Docker Compose 或生产 runtime 镜像。CI 通过 `.github/compose.app-ci.yml` 显式启动测试上游并导入测试数据，再运行 `pnpm smoke`。
+
+隔离数据库回归测试覆盖旧库升级、同名账号重建、认证版本撤销、最后管理员并发保护、跨标签页身份切换，以及上游 OAuth 短寿命令牌、暂时错误恢复和回调/刷新/撤销并发；结束后删除测试库或 schema。单元测试还覆盖 MCP 会话不重复返回 session header 及长 SSE 请求时的续期。
 
 端到端测试覆盖统一登录、server 列表过滤、未授权入口返回 403、用户授权后进入指定入口，以及同一逻辑 server 的会话粘性与负载分配。

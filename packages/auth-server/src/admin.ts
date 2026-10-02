@@ -1,12 +1,12 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { jwtVerify } from 'jose';
-import { createLoginSession, db, deleteLoginSession, getSessionUser, verifyUser } from './db.js';
+import { createLoginSession, db, deleteLoginSession, getSessionUser, revokeUserAuthentication, verifyUser } from './db.js';
 import { scryptHash } from './users.js';
 import type { SigningKeys } from './keys.js';
 import type { Context as HonoContext } from 'hono';
-import { and, count, desc, eq, lt } from 'drizzle-orm';
-import { auditEvents, authCodes, loginSessions, mcpServerInstances, mcpServers, oauthConnectionStates, refreshTokens, userMcpCredentials, userServerAccess, users } from './schema.js';
+import { and, count, desc, eq, lt, sql } from 'drizzle-orm';
+import { auditEvents, mcpServerInstances, mcpServers, oauthConnectionStates, userMcpCredentials, userServerAccess, users } from './schema.js';
 import { randomUUID } from 'node:crypto';
 import { normalizeUpstreamEndpoint, gatewayPublicUrl, adminWebUrl, databaseSettingsEnabled, systemConfigured, bootstrapOriginAllowed, normalizeSystemSettings, allowedUpstreamHosts, upstreamAllowlistEnabled } from '@mcp/shared';
 import { encryptCredential } from './credential-crypto.js';
@@ -15,6 +15,7 @@ import { trustedAdminBearerClient } from './admin-bearer.js';
 import { currentSystemSettings, saveSystemSettings } from './system-settings.js';
 import { systemOptionDefaults, registrationEnabled } from '@mcp/shared';
 import { registerMonitoringRoutes } from './monitoring-api.js';
+import { revokeUserConnection } from './connection-lifecycle.js';
 
 export interface AdminDeps {
   keys: SigningKeys;
@@ -126,11 +127,13 @@ async function replaceUserServers(userId: number, names: string[]): Promise<void
 }
 
 async function getAdminActor(c: HonoContext, deps: AdminDeps): Promise<string | null> {
-  const isActiveAdmin = async (username: string): Promise<boolean> => {
+  const isActiveAdmin = async (userId: unknown, username: string, authVersion: unknown): Promise<boolean> => {
+    if (typeof userId !== 'number' || !Number.isSafeInteger(userId) || userId <= 0
+      || typeof authVersion !== 'number' || !Number.isSafeInteger(authVersion) || authVersion < 0) return false;
     const [row] = await db
       .select({ role: users.role, disabled: users.disabled })
       .from(users)
-      .where(eq(users.username, username))
+      .where(and(eq(users.id, userId), eq(users.username, username), eq(users.authVersion, authVersion)))
       .limit(1);
     return row?.role === 'admin' && !row.disabled;
   };
@@ -143,7 +146,8 @@ async function getAdminActor(c: HonoContext, deps: AdminDeps): Promise<string | 
         ...(process.env.NODE_ENV === 'production' ? { audience: `${deps.issuer}/admin` } : {}),
       });
       if (payload.role === 'admin' && typeof payload.sub === 'string'
-        && trustedAdminBearerClient(payload.client_id) && (await isActiveAdmin(payload.sub))) return payload.sub;
+        && trustedAdminBearerClient(payload.client_id)
+        && (await isActiveAdmin(payload.uid, payload.sub, payload.auth_version ?? 0))) return payload.sub;
     } catch {
       /* An invalid explicit credential must not fall back to a browser cookie. */
     }
@@ -153,12 +157,12 @@ async function getAdminActor(c: HonoContext, deps: AdminDeps): Promise<string | 
   const cookie = getCookie(c, 'auth_session');
   if (cookie) {
     const session = await getSessionUser(cookie);
-    if (session && (await isActiveAdmin(session.sub))) return session.sub;
+    if (session && (await isActiveAdmin(session.userId, session.sub, session.userAuthVersion))) return session.sub;
   }
   return null;
 }
 
-async function recordAudit(c: HonoContext, actor: string, statusCode: number): Promise<void> {
+export async function recordAudit(c: HonoContext, actor: string, statusCode: number): Promise<void> {
   try {
     await db.insert(auditEvents).values({
       actor,
@@ -190,6 +194,16 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         ? bootstrapOriginAllowed(origin, c.req.header('host'))
         : [deps.issuer, adminWebUrl()].map((url) => new URL(url).origin).includes(origin));
       if (!allowed) return jsonError(c, 'invalid_origin', 403);
+      const expectedIdentity = c.req.header('x-session-identity');
+      const login = c.req.method === 'POST' && c.req.path === '/admin/session';
+      if (!login && expectedIdentity !== undefined && !c.req.header('authorization')?.startsWith('Bearer ')) {
+        const cookie = getCookie(c, SESSION_COOKIE);
+        const session = cookie ? await getSessionUser(cookie) : null;
+        const expiredLogout = !session && c.req.method === 'DELETE' && c.req.path === '/admin/session';
+        if (!expiredLogout && (!session || expectedIdentity !== `${session.userId}:${session.userAuthVersion}`)) {
+          return jsonError(c, 'session_changed', 409);
+        }
+      }
     }
     if (c.req.path === '/admin' || c.req.path === '/admin/session') {
       await next();
@@ -222,12 +236,15 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         return c.json({ error: 'rate_limit_unavailable' }, 503);
       }
     }
-    const user = body.username && body.password ? await verifyUser(body.username.trim(), body.password) : null;
+    const user = typeof body.username === 'string' && typeof body.password === 'string'
+      ? await verifyUser(body.username.trim(), body.password) : null;
     if (!user || user.role !== 'admin') {
       await recordAudit(c, typeof body.username === 'string' && SERVER_NAME_RE.test(body.username) ? body.username : 'anonymous', 401);
       return c.json({ error: 'invalid_admin_credentials' }, 401);
     }
-    const token = await createLoginSession(user.username);
+    let token: string;
+    try { token = await createLoginSession(user.id, user.authVersion); }
+    catch { return c.json({ error: 'invalid_admin_credentials' }, 401); }
     setCookie(c, SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: 'Lax',
@@ -296,12 +313,16 @@ export function createAdminRouter(deps: AdminDeps): Hono {
 
   router.get('/admin/users', async (c) => {
     const userRows = await db.select().from(users).orderBy(users.id);
+    const activeAdminCount = userRows.filter((user) => user.role === 'admin' && !user.disabled).length;
     const userDtos = await Promise.all(userRows.map(async (u) => {
+      const protectedAdmin = u.role === 'admin' && !u.disabled && activeAdminCount <= 1;
       return {
         id: u.id,
         username: u.username,
         role: u.role,
         disabled: u.disabled,
+        can_disable: !protectedAdmin,
+        can_delete: !protectedAdmin,
         servers: u.role === 'admin' || u.allServers ? ['*'] : await listServerNamesForUser(u.id),
         created_at: u.createdAt,
       };
@@ -412,45 +433,53 @@ export function createAdminRouter(deps: AdminDeps): Hono {
 
   router.patch('/admin/users/:id', async (c) => {
     const id = Number(c.req.param('id'));
-    const [row] = await db.select({ id: users.id, username: users.username }).from(users).where(eq(users.id, id)).limit(1);
-    if (!row) return jsonError(c, 'user not found', 404);
+    if (!Number.isSafeInteger(id) || id <= 0) return jsonError(c, 'invalid user ID');
     const body = await c.req.json().catch(() => ({}));
     const { password, role, disabled } = body as { password?: string; role?: string; disabled?: boolean };
-    if (password !== undefined && (typeof password !== 'string' || password.length < 12)) return jsonError(c, 'password must be at least 12 characters');
+    if (password !== undefined && (typeof password !== 'string' || password.length < 12 || password.length > 256)) return jsonError(c, 'password must be 12-256 characters');
     if (role !== undefined && role !== 'admin' && role !== 'user') return jsonError(c, 'role must be admin or user');
     if (disabled !== undefined && typeof disabled !== 'boolean') return jsonError(c, 'disabled must be a boolean');
-    if (row.username === 'admin' && role !== undefined && role !== 'admin') return jsonError(c, 'cannot demote the bootstrap admin');
-    if (row.username === 'admin' && disabled) return jsonError(c, 'cannot disable the bootstrap admin');
-    if (password !== undefined) {
-      await db.transaction(async (tx) => {
-        await tx.update(users).set({ passwordHash: scryptHash(password), updatedAt: Date.now() }).where(eq(users.id, id));
-        await tx.delete(loginSessions).where(eq(loginSessions.sub, row.username));
-        await tx.delete(refreshTokens).where(eq(refreshTokens.sub, row.username));
-        await tx.delete(authCodes).where(eq(authCodes.sub, row.username));
-      });
-    }
-    if (role !== undefined) {
-      await db.update(users).set({ role, updatedAt: Date.now() }).where(eq(users.id, id));
-    }
-    if (disabled !== undefined) {
-      await db.transaction(async (tx) => {
-        await tx.update(users).set({ disabled, updatedAt: Date.now() }).where(eq(users.id, id));
-        if (disabled) {
-          await tx.delete(loginSessions).where(eq(loginSessions.sub, row.username));
-          await tx.delete(refreshTokens).where(eq(refreshTokens.sub, row.username));
-          await tx.delete(authCodes).where(eq(authCodes.sub, row.username));
-        }
-      });
-    }
+    const passwordHash = password === undefined ? undefined : scryptHash(password);
+    const result = await db.transaction(async (tx) => {
+      // Serialize all administrator lifecycle changes with bootstrap across replicas.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(762441, 2)`);
+      const [row] = await tx.select().from(users).where(eq(users.id, id)).for('update').limit(1);
+      if (!row) return 'missing';
+      const nextRole = role ?? row.role;
+      const nextDisabled = disabled ?? row.disabled;
+      if (row.role === 'admin' && !row.disabled && (nextRole !== 'admin' || nextDisabled)) {
+        const [{ value }] = await tx.select({ value: count() }).from(users).where(and(eq(users.role, 'admin'), eq(users.disabled, false)));
+        if (value <= 1) return 'last_admin';
+      }
+      const revoke = passwordHash !== undefined || (disabled === true && !row.disabled) || nextRole !== row.role;
+      await tx.update(users).set({ role: nextRole as 'admin' | 'user', disabled: nextDisabled, updatedAt: Date.now(),
+        ...(passwordHash === undefined ? {} : { passwordHash }),
+        ...(revoke ? { authVersion: sql`${users.authVersion} + 1` } : {}) }).where(eq(users.id, id));
+      if (revoke) await revokeUserAuthentication(tx, id);
+      return 'updated';
+    });
+    if (result === 'missing') return jsonError(c, 'user not found', 404);
+    if (result === 'last_admin') return jsonError(c, 'last_active_admin_required', 409);
     return c.json({ ok: true });
   });
 
   router.delete('/admin/users/:id', async (c) => {
     const id = Number(c.req.param('id'));
-    const [row] = await db.select({ id: users.id, username: users.username }).from(users).where(eq(users.id, id)).limit(1);
-    if (!row) return jsonError(c, 'user not found', 404);
-    if (row.username === 'admin') return jsonError(c, 'cannot delete the bootstrap admin');
-    await db.delete(users).where(eq(users.id, id));
+    if (!Number.isSafeInteger(id) || id <= 0) return jsonError(c, 'invalid user ID');
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(762441, 2)`);
+      const [row] = await tx.select({ role: users.role, disabled: users.disabled }).from(users).where(eq(users.id, id)).for('update').limit(1);
+      if (!row) return 'missing';
+      if (row.role === 'admin' && !row.disabled) {
+        const [{ value }] = await tx.select({ value: count() }).from(users).where(and(eq(users.role, 'admin'), eq(users.disabled, false)));
+        if (value <= 1) return 'last_admin';
+      }
+      // Foreign keys remove every cookie, code and refresh token for this immutable user ID.
+      await tx.delete(users).where(eq(users.id, id));
+      return 'deleted';
+    });
+    if (result === 'missing') return jsonError(c, 'user not found', 404);
+    if (result === 'last_admin') return jsonError(c, 'last_active_admin_required', 409);
     return c.json({ ok: true });
   });
 
@@ -479,10 +508,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const userId = Number(c.req.param('userId'));
     const serverName = c.req.param('serverName');
     if (!Number.isSafeInteger(userId) || userId <= 0 || !SERVER_NAME_RE.test(serverName)) return jsonError(c, 'invalid connection identifier');
-    const deleted = await db.delete(userMcpCredentials).where(and(
-      eq(userMcpCredentials.userId, userId), eq(userMcpCredentials.serverName, serverName),
-    )).returning({ userId: userMcpCredentials.userId });
-    if (!deleted.length) return jsonError(c, 'connection not found', 404);
+    if (!(await revokeUserConnection(userId, serverName))) return jsonError(c, 'connection not found', 404);
     return c.json({ ok: true });
   });
 
@@ -682,7 +708,10 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         if (body.enabled !== undefined) changes.enabled = body.enabled;
         if (body.signup_access !== undefined) changes.signupAccess = body.signup_access;
         // Pending upstream OAuth callbacks still point at the old route.
-        if (nextName !== name) await tx.delete(oauthConnectionStates).where(eq(oauthConnectionStates.serverName, name));
+        if (nextName !== name || credentialsChanged || (body.enabled !== undefined && body.enabled !== existing.enabled)) {
+          changes.authRevision = existing.authRevision + 1;
+          await tx.delete(oauthConnectionStates).where(eq(oauthConnectionStates.serverName, name));
+        }
         if (credentialsChanged) await tx.delete(userMcpCredentials).where(eq(userMcpCredentials.serverName, name));
         // ON UPDATE CASCADE retains instances, grants, and saved credentials.
         await tx.update(mcpServers).set(changes).where(eq(mcpServers.name, name));

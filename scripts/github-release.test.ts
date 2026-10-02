@@ -3,8 +3,10 @@ import { test } from 'node:test';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
-import { nextReleaseTag, prepareRelease, prepareVersionCommit, publishRelease, writeBackVersion } from './github-release.mjs';
+import { execFileSync, spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
+import { existingReleaseCandidate, nextReleaseTag, prepareRelease, prepareVersionCommit, publishedReleaseForCommit, publishRelease, versionCommitForSource, writeBackVersion } from './github-release.mjs';
 
 test('automatic releases use stable semantic versions and conventional commit changes', () => {
   assert.equal(nextReleaseTag([], [], ['feat: first version']), 'v0.1.0');
@@ -44,6 +46,11 @@ test('version commit synchronizes product manifests, preserves fixtures and is r
     assert.deepEqual(prepareVersionCommit(directory), release);
     git('tag', release.tag);
     assert.deepEqual(prepareVersionCommit(directory), release);
+    assert.deepEqual(existingReleaseCandidate(directory), release);
+    git('checkout', '--detach', base);
+    assert.deepEqual(existingReleaseCandidate(directory), release); // Retry the original workflow source.
+    assert.deepEqual(versionCommitForSource(release.sha, base, directory), release);
+    git('checkout', '--detach', release.sha);
     writeFileSync(join(directory, 'untracked.txt'), 'keep');
     assert.throws(() => prepareVersionCommit(directory), /clean working tree/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
@@ -77,6 +84,71 @@ test('version write-back rejects concurrent main commits and never overwrites th
     assert.equal(git(remote, 'show', 'main:new.txt'), 'retain concurrent work');
     assert.throws(() => writeBackVersion('a'.repeat(40), first), /prepared release commit/);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('the original source workflow resumes bot write-back and preserves an already published release', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mcp-release-recovery-'));
+  const remote = join(directory, 'remote.git'), checkout = join(directory, 'checkout');
+  const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  let published = false, writes = 0, sha = '';
+  const digest = `sha256:${'b'.repeat(64)}`;
+  const server = createServer((req, res) => {
+    if (req.method !== 'GET') writes++;
+    res.setHeader('content-type', 'application/json');
+    if (published && req.url?.endsWith('/releases/tags/v0.1.1')) {
+      res.end(JSON.stringify({ draft: false, body: `Digest: \`${digest}\``, html_url: 'https://github.com/owner/repo/releases/tag/v0.1.1' }));
+    } else if (published && req.url?.endsWith('/git/ref/tags/v0.1.1')) {
+      res.end(JSON.stringify({ object: { type: 'commit', sha } }));
+    } else { res.statusCode = 404; res.end('{}'); }
+  });
+  try {
+    git(directory, 'init', '--bare', '--initial-branch=main', remote); git(directory, 'clone', remote, checkout);
+    git(checkout, 'config', 'user.name', 'Release test'); git(checkout, 'config', 'user.email', 'test@example.test');
+    mkdirSync(join(checkout, 'packages/shared'), { recursive: true });
+    for (const file of ['package.json', 'packages/shared/package.json']) {
+      writeFileSync(join(checkout, file), `${JSON.stringify({ name: file, version: '0.1.0' }, null, 2)}\n`);
+    }
+    git(checkout, 'add', '.'); git(checkout, 'commit', '-m', 'feat: initial'); git(checkout, 'tag', 'v0.1.0');
+    writeFileSync(join(checkout, 'fix.txt'), 'source fix'); git(checkout, 'add', '.'); git(checkout, 'commit', '-m', 'fix: retry release');
+    git(checkout, 'push', 'origin', 'main', '--tags');
+    const source = git(checkout, 'rev-parse', 'HEAD');
+    sha = prepareVersionCommit(checkout).sha;
+    writeBackVersion(sha, checkout);
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    assert.ok(address && typeof address !== 'string');
+    const prepare = async (name: string) => {
+      const output = join(directory, `${name}.output`);
+      const child = spawn(process.execPath, [fileURLToPath(new URL('github-release.mjs', import.meta.url)), 'prepare'], {
+        cwd: checkout, env: { ...process.env, GITHUB_REPOSITORY: 'owner/repo', GITHUB_TOKEN: 'isolated-test-token',
+          GITHUB_API_URL: `http://127.0.0.1:${address.port}`, GITHUB_REF: 'refs/heads/main',
+          GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let error = '';
+      child.stdout.resume(); child.stderr.on('data', chunk => { error += chunk; });
+      const code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
+      assert.equal(code, 0, error);
+      return Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').map(line => {
+        const separator = line.indexOf('='); return [line.slice(0, separator), line.slice(separator + 1)];
+      }));
+    };
+    git(checkout, 'checkout', '--detach', source);
+    const resumed = await prepare('resume-unpublished');
+    assert.equal(resumed.tag, 'v0.1.1'); assert.equal(resumed.sha, sha); assert.equal(resumed.released, 'false');
+    assert.equal(git(checkout, 'rev-parse', 'HEAD'), sha, 'a failed API publish reuses the bot commit without another version bump');
+    assert.equal(git(remote, 'rev-parse', 'main'), sha);
+    git(checkout, 'tag', 'v0.1.1', sha); git(checkout, 'push', 'origin', 'refs/tags/v0.1.1');
+    git(checkout, 'checkout', '--detach', source); published = true;
+    const preserved = await prepare('preserve-published');
+    assert.equal(preserved.sha, sha); assert.equal(preserved.released, 'true'); assert.equal(preserved.digest, digest);
+    assert.equal(git(checkout, 'rev-parse', 'HEAD'), source, 'a completed release does not modify the original workflow checkout');
+    assert.equal(git(checkout, 'status', '--porcelain'), '');
+    assert.equal(writes, 0, 'preparation and a completed release retry only read the GitHub API');
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('version preparation refuses to change an already published tag', () => {
@@ -127,14 +199,54 @@ test('bot release records the tested commit, annotated tag and published image d
     if (path === 'releases') return json({ html_url: 'https://github.com/owner/repo/releases/tag/v0.1.0', tag_name: options.tag }, 201);
     assert.fail(path);
   };
-  await publishRelease({ ...options, fetchImpl });
+  await publishRelease({ ...options, makeLatest: 'true', fetchImpl });
   assert.equal(calls.find(call => call.path === 'git/tags')!.body.object, options.sha);
   assert.equal(calls.find(call => call.path === 'git/tags')!.body.tagger.name, 'github-actions[bot]');
   const release = calls.find(call => call.path === 'releases')!.body;
   assert.equal(release.target_commitish, options.sha);
   assert.equal(release.draft, false);
+  assert.equal(release.make_latest, 'true');
   assert.match(release.body, new RegExp(options.digest));
   assert.match(release.body, /mcp-gateway:v0\.1\.0/);
+});
+
+test('published releases with a deleted Git tag fail without recreating Git objects', async () => {
+  const calls: Array<{ path: string; method: string }> = [];
+  const fetchImpl = async (url: string, init: RequestInit) => {
+    const path = new URL(url).pathname;
+    calls.push({ path, method: init.method! });
+    if (path.includes('/releases/tags/')) return json({ draft: false, body: `Digest: \`${options.digest}\`` });
+    if (path.includes('/git/ref/')) return json({}, 404);
+    assert.fail(`Unexpected API call: ${init.method} ${path}`);
+  };
+  await assert.rejects(publishRelease({ ...options, fetchImpl }), /no matching Git tag.*refusing to recreate/);
+  assert.equal(calls[0].path, '/repos/owner/repo/releases/tags/v0.1.0');
+  assert.ok(calls.every(call => call.method === 'GET'), 'a published release must never cause tag or Release writes');
+});
+
+test('older stable releases never replace Latest and manual releases use automatic selection', async () => {
+  for (const scenario of [
+    { latest: 'v0.2.0', requested: 'legacy', expected: 'false' },
+    { latest: 'v0.2.0', requested: 'true', expected: 'false' },
+    { latest: 'v0.0.9', requested: 'legacy', expected: 'legacy' },
+    { latest: 'v0.0.9', requested: 'true', expected: 'true' },
+  ]) {
+    let payload: any;
+    const fetchImpl = async (url: string, init: RequestInit) => {
+      const path = new URL(url).pathname;
+      if (path.includes('/releases/tags/')) return json({}, 404);
+      if (path.includes('/git/ref/')) return json({ object: { type: 'commit', sha: options.sha } });
+      if (path.endsWith('/releases/latest')) return json({ tag_name: scenario.latest });
+      if (path.endsWith('/releases/generate-notes')) return json({ body: 'Changes.' });
+      if (path.endsWith('/releases') && init.method === 'POST') {
+        payload = JSON.parse(String(init.body));
+        return json({ tag_name: options.tag }, 201);
+      }
+      assert.fail(`Unexpected API call: ${init.method} ${path}`);
+    };
+    await publishRelease({ ...options, makeLatest: scenario.requested, fetchImpl });
+    assert.equal(payload.make_latest, scenario.expected, `${scenario.requested} release relative to ${scenario.latest}`);
+  }
 });
 
 test('release retry is idempotent and never moves an existing tag to another commit', async () => {
@@ -144,12 +256,35 @@ test('release retry is idempotent and never moves an existing tag to another com
     const path = new URL(url).pathname;
     if (path.includes('/git/ref/')) return json({ object: { type: 'tag', sha: 'c'.repeat(40) } });
     if (path.includes('/git/tags/')) return json({ object: { type: 'commit', sha: options.sha } });
-    return json({ draft: false, html_url: 'https://github.com/owner/repo/releases/tag/v0.1.0' });
+    return json({ draft: false, body: `Digest: \`${options.digest}\``, html_url: 'https://github.com/owner/repo/releases/tag/v0.1.0' });
   };
   await publishRelease({ ...options, fetchImpl });
+  assert.equal(writes, 0);
+  await assert.rejects(publishRelease({ ...options, digest: `sha256:${'e'.repeat(64)}`, fetchImpl }), /different image digest/);
   assert.equal(writes, 0);
   await assert.rejects(publishRelease({ ...options, sha: 'd'.repeat(40), fetchImpl }), /another commit/);
   assert.equal(writes, 0);
   await assert.rejects(publishRelease({ ...options, digest: '', fetchImpl }), /published image digest/);
   await assert.rejects(publishRelease({ ...options, fetchImpl: async () => json({}, 403) }), /HTTP 403/);
+});
+
+test('completed releases expose an immutable digest for workflows to skip rebuilding', async () => {
+  let writes = 0;
+  const fetchImpl = async (url: string, init: RequestInit) => {
+    if (init.method !== 'GET') writes++;
+    const path = new URL(url).pathname;
+    if (path.includes('/git/ref/')) return json({ object: { type: 'commit', sha: options.sha } });
+    return json({ draft: false, body: `Docker image\nDigest: \`${options.digest}\``, html_url: 'https://github.com/owner/repo/releases/tag/v0.1.0' });
+  };
+  assert.deepEqual(await publishedReleaseForCommit({ ...options, fetchImpl }), {
+    released: 'true', digest: options.digest, release_url: 'https://github.com/owner/repo/releases/tag/v0.1.0',
+  });
+  assert.equal(writes, 0);
+  assert.equal(await publishedReleaseForCommit({ ...options, fetchImpl: async () => json({}, 404) }), undefined);
+  assert.equal(await publishedReleaseForCommit({ ...options, fetchImpl: async () => json({ draft: true }) }), undefined);
+  await assert.rejects(publishedReleaseForCommit({ ...options, sha: 'f'.repeat(40), fetchImpl }), /another commit/);
+  await assert.rejects(publishedReleaseForCommit({ ...options, fetchImpl: async (url: string, init: RequestInit) => {
+    if (url.includes('/git/ref/')) return fetchImpl(url, init);
+    return json({ draft: false, body: 'Release created without an image digest.' });
+  } }), /no recorded image digest/);
 });

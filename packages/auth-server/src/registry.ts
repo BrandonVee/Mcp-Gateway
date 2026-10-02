@@ -51,10 +51,11 @@ export function createRegistryRouter(): Hono {
     }
     c.header('Cache-Control', 'no-store');
     const userId = Number(c.req.query('user_id'));
+    const authVersion = Number(c.req.query('auth_version') ?? '0');
     const serverName = c.req.query('server') ?? '';
-    if (!Number.isSafeInteger(userId) || userId <= 0 || !serverName) return c.json({ error: 'invalid_request' }, 400);
+    if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(authVersion) || authVersion < 0 || !serverName) return c.json({ error: 'invalid_request' }, 400);
     const [user] = await db.select({ id: users.id, role: users.role, disabled: users.disabled, allServers: users.allServers })
-      .from(users).where(eq(users.id, userId)).limit(1);
+      .from(users).where(and(eq(users.id, userId), eq(users.authVersion, authVersion))).limit(1);
     const [server] = await db.select({ name: mcpServers.name, enabled: mcpServers.enabled })
       .from(mcpServers).where(eq(mcpServers.name, serverName)).limit(1);
     if (!user || user.disabled || !server?.enabled) return c.json({ error: 'access_denied' }, 403);

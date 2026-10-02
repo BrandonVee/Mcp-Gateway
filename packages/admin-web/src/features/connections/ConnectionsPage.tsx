@@ -1,56 +1,59 @@
-import { useEffect, useState } from "react";
-import { App, Button, Card, Empty, Form, Input, Modal, Tag, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { App, Button, Card, Empty, Input, Modal, Tag, Typography } from "antd";
 import { ApiOutlined, CopyOutlined, DashboardOutlined, DisconnectOutlined, KeyOutlined, LinkOutlined, LogoutOutlined, ReloadOutlined } from "@ant-design/icons";
-import { api } from "../../api";
-import type { ConnectionServer } from "../../types";
+import { ApiError, apiForSession } from "../../api";
+import type { ConnectionServer, PlatformSession } from "../../types";
+import { DataLoadError } from "../../components/DataLoadState";
 import { useI18n } from "../../i18n";
 import { ServiceDescription } from "../../components/ServiceDescription";
 import { LanguageSwitcher } from "../../components/LanguageSwitcher";
 import { mcpConfig, mcpServerUrl } from "./mcp-config";
 import "./connections.css";
 
-export function ConnectionsPage() {
+export function ConnectionsPage({ session, onLogout, onSessionExpired }: {
+  session: PlatformSession;
+  onLogout: () => Promise<void>;
+  onSessionExpired: () => Promise<void>;
+}) {
+  const api = useMemo(() => apiForSession(session), [session.user_id, session.auth_version]);
   const { message, modal } = App.useApp();
   const { t } = useI18n();
-  const [username, setUsername] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const username = session.username;
+  const isAdmin = session.role === "admin";
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [servers, setServers] = useState<ConnectionServer[]>([]);
   const [selected, setSelected] = useState<ConnectionServer | null>(null);
   const [key, setKey] = useState("");
   const [resource, setResource] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const checkSession = (error: unknown) => {
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.code === "session_changed")) void onSessionExpired();
+  };
 
   const load = async () => {
-    const [session, list, gateway] = await Promise.all([api.mySession(), api.myServers(), api.gatewayResource().catch(() => ({ resource: "" }))]);
-    setResource(gateway.resource);
-    setUsername(session.username);
-    setIsAdmin(session.role === "admin");
-    setServers(list.servers);
+    setLoadError(null);
+    try {
+      const [list, gateway] = await Promise.all([api.myServers(), api.gatewayResource().catch(() => ({ resource: "" }))]);
+      setResource(gateway.resource);
+      setServers(list.servers);
+    } catch (error) {
+      checkSession(error);
+      setLoadError(error instanceof Error ? error.message : t("common.refreshFailed"));
+      throw error;
+    }
   };
 
   useEffect(() => {
-    load().catch(() => setUsername(null)).finally(() => setLoading(false));
+    load().catch(() => undefined).finally(() => setLoading(false));
     const result = new URLSearchParams(window.location.search).get("result");
     if (result) {
       if (result === "connected") message.success(t("connections.oauthConnectionEstablished"));
       else message.error(t("connections.oauthConnectionNotCompletedResult", { result }));
-      window.history.replaceState(null, "", "/connections");
+      window.history.replaceState(null, "", window.location.pathname);
     }
   }, []);
-
-  const login = async (values: { username: string; password: string }) => {
-    setBusy(true);
-    try {
-      await api.myLogin(values.username, values.password);
-      await load();
-      message.success(t("connections.signed"));
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : t("connections.signFailed"));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const saveKey = async () => {
     if (!selected || !key) return;
@@ -62,6 +65,7 @@ export function ConnectionsPage() {
       setSelected(null);
       message.success(t("connections.apiKeySaved"));
     } catch (error) {
+      checkSession(error);
       message.error(error instanceof Error ? error.message : t("connections.saveFailed"));
     } finally {
       setBusy(false);
@@ -74,6 +78,7 @@ export function ConnectionsPage() {
       const { authorization_url } = await api.startOAuth(server.name);
       window.location.assign(authorization_url);
     } catch (error) {
+      checkSession(error);
       message.error(error instanceof Error ? error.message : t("connections.couldNotStartOauth"));
       setBusy(false);
     }
@@ -84,9 +89,15 @@ export function ConnectionsPage() {
     content: t("connections.storedCredentialsDeletedReconnectionRequired"),
     okText: t("connections.disconnect"), okButtonProps: { danger: true }, cancelText: t("common.cancel"),
     onOk: async () => {
-      await api.removeCredential(server.name);
-      await load();
-      message.success(t("connections.connectionDisconnected"));
+      try {
+        await api.removeCredential(server.name);
+        await load();
+        message.success(t("connections.connectionDisconnected"));
+      } catch (error) {
+        checkSession(error);
+        message.error(error instanceof Error ? error.message : t("common.operationFailed"));
+        throw error;
+      }
     },
   });
 
@@ -108,7 +119,6 @@ export function ConnectionsPage() {
       <div className="connections-mark"><ApiOutlined /></div>
       <div><span className="connections-eyebrow">{t("connections.personalAccessEyebrow")}</span><strong>{t("connections.title")}</strong></div>
       <LanguageSwitcher />
-      {username && (
         <div className="connections-user">
           <span>{username}</span>
           {isAdmin && (
@@ -119,9 +129,7 @@ export function ConnectionsPage() {
           <Button icon={<LogoutOutlined />} loading={busy} onClick={async () => {
             setBusy(true);
             try {
-              await api.myLogout();
-              setUsername(null);
-              setIsAdmin(false);
+              await onLogout();
               setServers([]);
               setSelected(null);
               setKey("");
@@ -129,21 +137,12 @@ export function ConnectionsPage() {
             finally { setBusy(false); }
           }}>{t("connections.signOut")}</Button>
         </div>
-      )}
     </header>
 
-    {!username ? <section className="connections-login">
-      <div className="connections-eyebrow">{t("connections.identityRequired")}</div>
-      <h1>{t("connections.connectExternalServices")}</h1>
-      <p>{t("connections.signPlatformAccountConfigureOwn")}</p>
-      <Card bordered={false}>
-        <Form layout="vertical" onFinish={login} requiredMark={false}>
-          <Form.Item label={t("connections.username")} name="username" rules={[{ required: true, message: t("connections.enterUsername") }]}><Input autoComplete="username" /></Form.Item>
-          <Form.Item label={t("connections.password")} name="password" rules={[{ required: true, message: t("connections.enterPassword") }]}><Input.Password autoComplete="current-password" /></Form.Item>
-          <Button type="primary" htmlType="submit" block loading={busy}>{t("connections.login.submit")}</Button>
-        </Form>
-      </Card>
-    </section> : <section className="connections-content">
+    {loadError ? <DataLoadError message={loadError} loading={busy} onRetry={() => {
+      setBusy(true);
+      void load().catch(() => undefined).finally(() => setBusy(false));
+    }} /> : <section className="connections-content">
       <div className="connections-intro"><div><span className="connections-eyebrow">{t("connections.integrationsEyebrow")}</span><h1>{t("connections.letEveryToolWorkYou")}</h1>
         <p>{t("connections.credentialsUsedRelevantServicePlatform")}</p></div>
         <div className="connections-intro-actions">

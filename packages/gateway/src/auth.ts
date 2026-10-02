@@ -46,6 +46,13 @@ export function hasServerAccess(payload: JWTPayload | undefined, serverName: str
   return Array.isArray(allowed) && allowed.every((name) => typeof name === 'string') && (allowed.includes('*') || allowed.includes(serverName));
 }
 
+/** Tokens issued before credential revisions were introduced belong to revision zero. */
+export function tokenAuthVersion(payload: JWTPayload | undefined): number | null {
+  const version = payload?.auth_version;
+  if (version === undefined) return 0;
+  return typeof version === 'number' && Number.isSafeInteger(version) && version >= 0 ? version : null;
+}
+
 export function forbidden(reply: FastifyReply, serverName: string): FastifyReply {
   return reply
     .code(403)
@@ -93,6 +100,7 @@ export async function authHook(req: FastifyRequest, reply: FastifyReply): Promis
       issuer: env.authIssuer,
       audience: serverResource ? [...baseAudiences(), serverResource, `${serverResource}/`] : baseAudiences(),
     });
+    if (tokenAuthVersion(payload) === null) throw new Error('invalid auth_version claim');
     req.mcpAuth = payload;
   } catch (err) {
     await unauthorized(reply, 'invalid_token', err instanceof Error ? err.message : 'token validation failed', serverName);

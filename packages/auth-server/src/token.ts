@@ -3,8 +3,8 @@ import { SignJWT } from 'jose';
 import { Hono, type Context } from 'hono';
 import type { SigningKeys } from './keys.js';
 import { getClient } from './clients.js';
-import { consumeAuthCode, consumeRefreshToken, saveRefreshToken } from './stores.js';
-import { getUserAuthorization } from './db.js';
+import { consumeAuthCode, consumeRefreshToken, saveRefreshToken, type RefreshTokenEntry } from './stores.js';
+import { getUserAuthorization, withAuthenticatedUser } from './db.js';
 
 export interface TokenRouteDeps {
   keys: SigningKeys;
@@ -18,19 +18,24 @@ export function createTokenRouter(deps: TokenRouteDeps): Hono {
   const { keys, defaultAudience } = deps;
   const ttl = Number.isFinite(deps.accessTokenTtlSeconds) && deps.accessTokenTtlSeconds > 0 ? deps.accessTokenTtlSeconds : 3600;
 
-  async function issueAccessToken(sub: string, scope: string, clientId: string, resource?: string): Promise<string> {
-    const authorization = await getUserAuthorization(sub);
-    if (!authorization || authorization.disabled) throw new Error('user is missing or disabled');
-    const mcpServers = authorization.role === 'admin' ? ['*'] : authorization.servers;
-    return new SignJWT({ scope, client_id: clientId, uid: authorization.id, role: authorization.role, mcp_servers: mcpServers })
-      .setProtectedHeader({ alg: 'RS256', kid: keys.kid, typ: 'JWT' })
-      .setIssuer(deps.issuer)
-      .setAudience(resource ?? defaultAudience)
-      .setSubject(sub)
-      .setIssuedAt()
-      .setExpirationTime(Math.floor(Date.now() / 1000) + ttl)
-      .setJti(randomBytes(8).toString('hex'))
-      .sign(keys.privateKey);
+  async function issueTokens(entry: RefreshTokenEntry) {
+    return withAuthenticatedUser(entry, async (tx) => {
+      const authorization = await getUserAuthorization(entry.userId, tx);
+      if (!authorization || authorization.disabled) throw new Error('user is missing or disabled');
+      const mcpServers = authorization.role === 'admin' ? ['*'] : authorization.servers;
+      const accessToken = await new SignJWT({ scope: entry.scope, client_id: entry.client_id, uid: authorization.id,
+        auth_version: authorization.authVersion, role: authorization.role, mcp_servers: mcpServers })
+        .setProtectedHeader({ alg: 'RS256', kid: keys.kid, typ: 'JWT' })
+        .setIssuer(deps.issuer)
+        .setAudience(entry.resource ?? defaultAudience)
+        .setSubject(authorization.username)
+        .setIssuedAt()
+        .setExpirationTime(Math.floor(Date.now() / 1000) + ttl)
+        .setJti(randomBytes(8).toString('hex'))
+        .sign(keys.privateKey);
+      const refresh = await saveRefreshToken(entry, tx);
+      return { access_token: accessToken, token_type: 'Bearer', expires_in: ttl, refresh_token: refresh, scope: entry.scope };
+    });
   }
 
   const s256 = (verifier: string): string => createHash('sha256').update(verifier).digest('base64url');
@@ -60,20 +65,11 @@ export function createTokenRouter(deps: TokenRouteDeps): Hono {
         return jsonError(c, 'invalid_grant', 'PKCE verification failed');
       }
 
-      let accessToken: string;
       try {
-        accessToken = await issueAccessToken(entry.sub, entry.scope, client_id, entry.resource);
+        return c.json(await issueTokens(entry));
       } catch {
         return jsonError(c, 'invalid_grant', 'user is missing or disabled');
       }
-      const refresh = await saveRefreshToken({ client_id, scope: entry.scope, resource: entry.resource, sub: entry.sub });
-      return c.json({
-        access_token: accessToken,
-        token_type: 'Bearer',
-        expires_in: ttl,
-        refresh_token: refresh,
-        scope: entry.scope,
-      });
     }
 
     if (grantType === 'refresh_token') {
@@ -83,20 +79,11 @@ export function createTokenRouter(deps: TokenRouteDeps): Hono {
       if (entry.client_id !== client_id) return jsonError(c, 'invalid_grant', 'client_id mismatch');
 
       // Rotation: consumeRefreshToken atomically revokes the old token.
-      let accessToken: string;
       try {
-        accessToken = await issueAccessToken(entry.sub, entry.scope, client_id, entry.resource);
+        return c.json(await issueTokens(entry));
       } catch {
         return jsonError(c, 'invalid_grant', 'user is missing or disabled');
       }
-      const refresh = await saveRefreshToken({ ...entry });
-      return c.json({
-        access_token: accessToken,
-        token_type: 'Bearer',
-        expires_in: ttl,
-        refresh_token: refresh,
-        scope: entry.scope,
-      });
     }
 
     return jsonError(c, 'unsupported_grant_type');

@@ -3,7 +3,7 @@ import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { eq } from 'drizzle-orm';
 import { getClient, isRedirectUriAllowed } from './clients.js';
-import { verifyUser, createLoginSession, getSessionUser, getUserAuthorization, db } from './db.js';
+import { verifyUser, createLoginSession, getSessionUser, getUserAuthorization, db, type AuthIdentity } from './db.js';
 import { saveAuthCode } from './stores.js';
 import { authIssuer, gatewayPublicUrl, registrationEnabled } from '@mcp/shared';
 import { consumeRateLimit, limitLoginAccount } from './rate-limit.js';
@@ -41,7 +41,7 @@ authorizeRouter.get('/authorize', async (c) => {
   const details = await pageDetails(q);
   const session = await getSessionFromCookie(c);
   if (session) {
-    const authorization = await getUserAuthorization(session.sub);
+    const authorization = await getUserAuthorization(session.userId);
     if (authorization && !authorization.disabled) {
       const name = resourceServer(q.resource);
       const needsAccess = Boolean(name && !authorization.servers.includes('*') && !authorization.servers.includes(name));
@@ -92,7 +92,7 @@ authorizeRouter.post('/authorize/signup', async (c) => {
   try {
     const user = await createRegisteredUser(username, str('password'));
     if (!user) return showSignup(c, q, language, 'usernameTaken', username, 409);
-    await setBrowserSession(c, user.username);
+    await setBrowserSession(c, user.id, 0);
   } catch (error) {
     console.error('[registration] failed', error instanceof Error ? error.name : 'UnknownError');
     return showSignup(c, q, language, 'serviceUnavailable', username, 503);
@@ -111,8 +111,8 @@ authorizeRouter.post('/authorize/submit', async (c) => {
   const invalid = await validateAuthorizeParams(q);
   if (invalid) return c.json(invalid, 400);
   c.header('Content-Language', language);
-  let sub = (await getSessionFromCookie(c))?.sub;
-  if (!sub) {
+  let identity = await getSessionFromCookie(c);
+  if (!identity) {
     const username = str('username').trim();
     const password = str('password');
     if (!username || !password) return c.html(loginPage(q, language, await pageDetails(q), 'missingCredentials', username), 400);
@@ -126,32 +126,36 @@ authorizeRouter.post('/authorize/submit', async (c) => {
     }
     const user = await verifyUser(username, password);
     if (!user) return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials', username), 401);
-    sub = user.username;
-    await setBrowserSession(c, sub);
+    identity = { sub: user.username, userId: user.id, userAuthVersion: user.authVersion };
+    try { await setBrowserSession(c, user.id, user.authVersion); }
+    catch { return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials'), 401); }
   }
-  const authorization = await getUserAuthorization(sub);
+  const authorization = await getUserAuthorization(identity.userId);
   if (!authorization || authorization.disabled) return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials'), 401);
-  const code = await saveAuthCode({
-    client_id: q.client_id, redirect_uri: q.redirect_uri, scope: q.scope || 'mcp',
-    code_challenge: q.code_challenge, resource: q.resource || undefined, sub,
-    expiresAt: Date.now() + 10 * 60 * 1000,
-  });
+  let code: string;
+  try {
+    code = await saveAuthCode({
+      client_id: q.client_id, redirect_uri: q.redirect_uri, scope: q.scope || 'mcp',
+      code_challenge: q.code_challenge, resource: q.resource || undefined, ...identity,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+  } catch { return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials'), 401); }
   const target = new URL(q.redirect_uri);
   target.searchParams.set('code', code);
   if (q.state) target.searchParams.set('state', q.state);
   return c.redirect(target.toString(), 302);
 });
 
-async function getSessionFromCookie(c: Context): Promise<{ sub: string } | null> {
+async function getSessionFromCookie(c: Context): Promise<AuthIdentity | null> {
   const token = getCookie(c, SESSION_COOKIE);
   const session = token ? await getSessionUser(token) : null;
   if (!session) return null;
-  const authorization = await getUserAuthorization(session.sub);
+  const authorization = await getUserAuthorization(session.userId);
   return authorization && !authorization.disabled ? session : null;
 }
 
-async function setBrowserSession(c: Context, sub: string): Promise<void> {
-  setCookie(c, SESSION_COOKIE, await createLoginSession(sub), {
+async function setBrowserSession(c: Context, userId: number, userAuthVersion: number): Promise<void> {
+  setCookie(c, SESSION_COOKIE, await createLoginSession(userId, userAuthVersion), {
     httpOnly: true, sameSite: 'Lax', secure: authIssuer().startsWith('https://'), path: '/', maxAge: 7 * 24 * 3600,
   });
 }

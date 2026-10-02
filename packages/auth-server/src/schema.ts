@@ -10,6 +10,7 @@ export const users = pgTable('users', {
   role: userRole('role').notNull().default('user'),
   disabled: boolean('disabled').notNull().default(false),
   allServers: boolean('all_servers').notNull().default(false),
+  authVersion: integer('auth_version').notNull().default(0),
   createdAt: epoch('created_at'),
   updatedAt: epoch('updated_at'),
 });
@@ -31,6 +32,8 @@ export const authCodes = pgTable(
     codeChallenge: text('code_challenge').notNull(),
     resource: text('resource'),
     sub: text('sub').notNull(),
+    userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userAuthVersion: integer('user_auth_version').notNull(),
     expiresAt: epoch('expires_at'),
   },
   (table) => [index('idx_codes_expiry').on(table.expiresAt)],
@@ -42,6 +45,8 @@ export const refreshTokens = pgTable(
     token: text('token').primaryKey(),
     clientId: text('client_id').notNull(),
     sub: text('sub').notNull(),
+    userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userAuthVersion: integer('user_auth_version').notNull(),
     scope: text('scope').notNull(),
     resource: text('resource'),
     expiresAt: epoch('expires_at'),
@@ -54,6 +59,8 @@ export const refreshTokens = pgTable(
 export const loginSessions = pgTable('login_sessions', {
   token: text('token').primaryKey(),
   sub: text('sub').notNull(),
+  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userAuthVersion: integer('user_auth_version').notNull(),
   expiresAt: epoch('expires_at'),
 });
 
@@ -64,6 +71,7 @@ export const mcpServers = pgTable('mcp_servers', {
   enabled: boolean('enabled').notNull().default(true),
   signupAccess: boolean('signup_access').notNull().default(false),
   authMode: text('auth_mode').$type<'none' | 'api_key' | 'oauth'>().notNull().default('none'),
+  authRevision: bigint('auth_revision', { mode: 'number' }).notNull().default(0),
   apiKeyHeader: text('api_key_header').notNull().default('authorization'),
   apiKeyPrefix: text('api_key_prefix').notNull().default('Bearer '),
   oauthAuthorizeUrl: text('oauth_authorize_url'),
@@ -99,6 +107,7 @@ export const oauthConnectionStates = pgTable(
     userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
     serverName: text('server_name').notNull().references(() => mcpServers.name, { onDelete: 'cascade', onUpdate: 'cascade' }),
     verifier: text('verifier').notNull(),
+    authRevision: bigint('auth_revision', { mode: 'number' }).notNull().default(0),
     expiresAt: epoch('expires_at'),
   },
   (table) => [index('idx_oauth_connection_state_expiry').on(table.expiresAt)],

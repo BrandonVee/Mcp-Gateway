@@ -3,8 +3,18 @@ export interface AdminUser {
   username: string;
   role: "admin" | "user";
   disabled: boolean;
+  can_disable: boolean;
+  can_delete: boolean;
   servers: string[];
   created_at: number;
+}
+
+export interface PlatformSession {
+  user_id: number;
+  auth_version: number;
+  authenticated: true;
+  username: string;
+  role: "admin" | "user";
 }
 
 export interface McpInstance {

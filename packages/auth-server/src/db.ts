@@ -21,6 +21,26 @@ export const pool = new Pool({
 pool.on('error', (error) => console.error('[postgres] idle client error', error));
 
 export const db = drizzle(pool, { schema });
+export type AuthTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type AuthIdentity = { userId: number; userAuthVersion: number; sub: string };
+
+/** Lock identity while issuing credentials; reset/disable/delete waits for this transaction. */
+export async function withAuthenticatedUser<T>(identity: AuthIdentity, work: (tx: AuthTransaction) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    const [user] = await tx.select({ id: users.id }).from(users)
+      .where(and(eq(users.id, identity.userId), eq(users.username, identity.sub),
+        eq(users.authVersion, identity.userAuthVersion), eq(users.disabled, false))).for('share').limit(1);
+    if (!user) throw new Error('user identity is no longer valid');
+    return work(tx);
+  });
+}
+
+export async function revokeUserAuthentication(tx: AuthTransaction, userId: number): Promise<void> {
+  await tx.delete(loginSessions).where(eq(loginSessions.userId, userId));
+  await tx.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+  await tx.delete(authCodes).where(eq(authCodes.userId, userId));
+  await tx.delete(oauthConnectionStates).where(eq(oauthConnectionStates.userId, userId));
+}
 
 /** Apply checked-in Drizzle migrations before serving traffic. */
 export async function initializeDatabase(): Promise<void> {
@@ -61,23 +81,35 @@ export function startExpirySweep(): void {
   setInterval(() => void sweepExpired().catch((error) => console.error('[postgres] expiry sweep failed', error)), 10 * 60 * 1000).unref();
 }
 
-/** Create the initial administrator if no administrator exists yet. */
+/** Create the initial administrator; recovering an existing account requires an explicit operator opt-in. */
 export async function bootstrapAdmin(): Promise<void> {
   const bootstrap = platformConfig.auth.bootstrap;
   const username = process.env.ADMIN_USERNAME ?? bootstrap.adminUsername;
   const configuredPassword = process.env.ADMIN_PASSWORD ?? bootstrap.adminPassword;
+  let recovered = false;
   const created = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(762441, 2)`);
-    const [{ value }] = await tx.select({ value: count() }).from(users).where(eq(users.role, 'admin'));
+    const [{ value }] = await tx.select({ value: count() }).from(users).where(and(eq(users.role, 'admin'), eq(users.disabled, false)));
     if (value > 0) return null;
     if (process.env.NODE_ENV === 'production' && !process.env.ADMIN_PASSWORD) {
-      throw new Error('Production bootstrap requires ADMIN_PASSWORD when the user table is empty');
+      throw new Error('Production bootstrap requires ADMIN_PASSWORD when no active administrator exists');
     }
     if (process.env.NODE_ENV === 'production' && configuredPassword && configuredPassword.length < 16) {
       throw new Error('Production ADMIN_PASSWORD must contain at least 16 characters');
     }
     const password = configuredPassword ?? randomToken(12);
     const now = Date.now();
+    const [existing] = await tx.select({ id: users.id }).from(users).where(eq(users.username, username)).for('update').limit(1);
+    if (existing) {
+      if (process.env.ADMIN_BOOTSTRAP_RECOVERY !== 'true' || !process.env.ADMIN_PASSWORD) {
+        throw new Error('No active administrator exists. To recover the configured administrator, explicitly set ADMIN_BOOTSTRAP_RECOVERY=true and ADMIN_PASSWORD');
+      }
+      await tx.update(users).set({ passwordHash: scryptHash(password), role: 'admin', disabled: false,
+        authVersion: sql`${users.authVersion} + 1`, updatedAt: now }).where(eq(users.id, existing.id));
+      await revokeUserAuthentication(tx, existing.id);
+      recovered = true;
+      return password;
+    }
     await tx.insert(users).values({ username, passwordHash: scryptHash(password), role: 'admin', disabled: false, createdAt: now, updatedAt: now });
     return password;
   });
@@ -89,7 +121,7 @@ export async function bootstrapAdmin(): Promise<void> {
     console.log(`[bootstrap]   password: ${created}   <-- shown ONCE, store it now`);
     console.log('='.repeat(60));
   } else {
-    console.log(`[bootstrap] initial admin "${username}" created from configuration`);
+    console.log(`[bootstrap] administrator "${username}" ${recovered ? 'recovered' : 'created'} from configuration`);
   }
 }
 
@@ -103,45 +135,52 @@ export async function createUserRow(username: string, password: string, role: 'a
 }
 
 /** Validate credentials; returns the user row or null. */
-export async function verifyUser(username: string, password: string): Promise<{ id: number; username: string; role: string } | null> {
+export async function verifyUser(username: string, password: string): Promise<{ id: number; username: string; role: string; authVersion: number } | null> {
   const [row] = await db.select().from(users).where(eq(users.username, username)).limit(1);
   if (!row || row.disabled || !scryptVerify(password, row.passwordHash)) return null;
-  return { id: row.id, username: row.username, role: row.role };
+  return { id: row.id, username: row.username, role: row.role, authVersion: row.authVersion };
 }
 
 export async function getUserAuthorization(
-  username: string,
-): Promise<{ id: number; role: string; disabled: boolean; servers: string[] } | null> {
-  const [user] = await db
-    .select({ id: users.id, role: users.role, disabled: users.disabled, allServers: users.allServers })
+  userId: number,
+  executor: typeof db | AuthTransaction = db,
+): Promise<{ id: number; username: string; authVersion: number; role: string; disabled: boolean; servers: string[] } | null> {
+  const [user] = await executor
+    .select({ id: users.id, username: users.username, authVersion: users.authVersion, role: users.role, disabled: users.disabled, allServers: users.allServers })
     .from(users)
-    .where(eq(users.username, username))
+    .where(eq(users.id, userId))
     .limit(1);
   if (!user) return null;
   if (user.role === 'admin' || user.allServers) {
-    return { id: user.id, role: user.role, disabled: user.disabled, servers: ['*'] };
+    return { id: user.id, username: user.username, authVersion: user.authVersion, role: user.role, disabled: user.disabled, servers: ['*'] };
   }
-  const rows = await db
+  const rows = await executor
     .select({ name: mcpServers.name })
     .from(userServerAccess)
     .innerJoin(mcpServers, eq(mcpServers.name, userServerAccess.serverName))
     .where(and(eq(userServerAccess.userId, user.id), eq(mcpServers.enabled, true)))
     .orderBy(mcpServers.name);
-  return { id: user.id, role: user.role, disabled: user.disabled, servers: rows.map((row) => row.name) };
+  return { id: user.id, username: user.username, authVersion: user.authVersion, role: user.role, disabled: user.disabled, servers: rows.map((row) => row.name) };
 }
 
 export const SESSION_TTL_MS = 7 * 24 * 3600 * 1000;
 
-export async function createLoginSession(sub: string): Promise<string> {
+export async function createLoginSession(userId: number, userAuthVersion: number): Promise<string> {
   const token = randomToken(32);
-  await db.insert(loginSessions).values({ token, sub, expiresAt: Date.now() + SESSION_TTL_MS });
-  return token;
+  const [user] = await db.select({ username: users.username }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error('user identity is no longer valid');
+  return withAuthenticatedUser({ userId, userAuthVersion, sub: user.username }, async (tx) => {
+    await tx.insert(loginSessions).values({ token, userId, userAuthVersion, sub: user.username, expiresAt: Date.now() + SESSION_TTL_MS });
+    return token;
+  });
 }
 
-export async function getSessionUser(token: string): Promise<{ sub: string } | null> {
-  const [row] = await db.select().from(loginSessions).where(eq(loginSessions.token, token)).limit(1);
+export async function getSessionUser(token: string): Promise<AuthIdentity | null> {
+  const [row] = await db.select({ sub: users.username, userId: users.id, userAuthVersion: users.authVersion, expiresAt: loginSessions.expiresAt })
+    .from(loginSessions).innerJoin(users, and(eq(users.id, loginSessions.userId), eq(users.authVersion, loginSessions.userAuthVersion)))
+    .where(and(eq(loginSessions.token, token), eq(users.disabled, false))).limit(1);
   if (!row || row.expiresAt < Date.now()) return null;
-  return { sub: row.sub };
+  return { sub: row.sub, userId: row.userId, userAuthVersion: row.userAuthVersion };
 }
 
 export async function deleteLoginSession(token: string): Promise<void> {

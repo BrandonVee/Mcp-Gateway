@@ -73,7 +73,7 @@ app.use('*', async (c, next) => {
   await next();
 });
 app.use('*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'payload_too_large' }, 413) }));
-app.use('*', cors({ allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowHeaders: ['content-type', 'authorization'], credentials: true }));
+app.use('*', cors({ allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowHeaders: ['content-type', 'authorization', 'x-session-identity'], credentials: true }));
 
 const publicPostLimits: Record<string, [number, number]> = {
   '/authorize/submit': [30, 60],

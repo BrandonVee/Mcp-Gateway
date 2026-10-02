@@ -1,4 +1,4 @@
-import type { SystemSettings, SystemSettingsInput, UsageFilters, UsageSummary, UsageCall, AdminConnection, AdminUser, AuditEventPage, AuthHealth, ConnectionServer, CreateServerInput, GatewayHealth, McpServer, ServerAuthInput } from "./types";
+import type { PlatformSession, SystemSettings, SystemSettingsInput, UsageFilters, UsageSummary, UsageCall, AdminConnection, AdminUser, AuditEventPage, AuthHealth, ConnectionServer, CreateServerInput, GatewayHealth, McpServer, ServerAuthInput } from "./types";
 import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from "./i18n";
 
 /** Present stable, localized UI errors instead of leaking English backend strings. */
@@ -12,6 +12,8 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     invalid_system_settings: "settings.invalid",
     "username already exists": "api.usernameExists",
     "server already exists": "servers.nameExists",
+    last_active_admin_required: "users.lastAdminProtected",
+    session_changed: "api.sessionChanged",
   };
   const statusKey: Record<number, MessageKey> = {
     400: "api.invalidRequest",
@@ -33,13 +35,14 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
   ) {
     super(message);
     this.name = "ApiError";
   }
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+async function sendRequest<T>(url: string, init?: RequestInit, identity?: string): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -47,6 +50,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
       ...init,
       headers: {
         ...(init?.body ? { "content-type": "application/json" } : {}),
+        ...(identity && init?.method && !["GET", "HEAD"].includes(init.method) && !(url.endsWith("/session") && init.method === "POST")
+          ? { "x-session-identity": identity } : {}),
         ...init?.headers,
       },
     });
@@ -55,12 +60,17 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new ApiError(apiErrorMessage(response.status, body, getCurrentLanguage()), response.status);
+    throw new ApiError(apiErrorMessage(response.status, body, getCurrentLanguage()), response.status,
+      body && typeof body.error === "string" ? body.error : undefined);
   }
   return body as T;
 }
 
-export const api = {
+/** Capture the page identity so callbacks cannot write using another tab's new Cookie. */
+export function apiForSession(session?: PlatformSession) {
+  const identity = session ? `${session.user_id}:${session.auth_version}` : undefined;
+  const request = <T>(url: string, init?: RequestInit) => sendRequest<T>(url, init, identity);
+  return {
   systemSettings: () => request<SystemSettings>("/api/admin/system-settings"),
   saveSystemSettings: (body: SystemSettingsInput) => request<SystemSettings>("/api/admin/system-settings", {
     method: "PUT", body: JSON.stringify(body),
@@ -166,8 +176,8 @@ export const api = {
     if (options.method) params.set("method", options.method);
     return request<AuditEventPage>(`/api/admin/audit-events?${params}`);
   },
-  mySession: () => request<{ authenticated: boolean; username: string; role: "admin" | "user" }>("/api/me/session"),
-  myLogin: (username: string, password: string) => request<{ authenticated: boolean; username: string; role: "admin" | "user" }>("/api/me/session", {
+  mySession: () => request<PlatformSession>("/api/me/session"),
+  myLogin: (username: string, password: string) => request<PlatformSession>("/api/me/session", {
     method: "POST", body: JSON.stringify({ username, password }),
   }),
   myLogout: () => request("/api/me/session", { method: "DELETE" }),
@@ -177,4 +187,7 @@ export const api = {
   }),
   removeCredential: (name: string) => request(`/api/me/servers/${encodeURIComponent(name)}/credential`, { method: "DELETE" }),
   startOAuth: (name: string) => request<{ authorization_url: string }>(`/api/me/servers/${encodeURIComponent(name)}/oauth`, { method: "POST" }),
-};
+  };
+}
+
+export const api = apiForSession();

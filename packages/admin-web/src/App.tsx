@@ -7,8 +7,9 @@ import { BootScreen } from "./components/BootScreen";
 import { DataLoadError, PageSkeleton } from "./components/DataLoadState";
 import { useControlPlane } from "./hooks/useControlPlane";
 import { appTheme } from "./theme";
-import type { DialogState, View } from "./types";
+import type { DialogState, PlatformSession, View } from "./types";
 import { I18nProvider, useI18n } from "./i18n";
+import { usePlatformSession } from "./features/auth/usePlatformSession";
 
 const LoginPage = lazy(() =>
   import("./features/auth/LoginPage").then((module) => ({
@@ -55,17 +56,33 @@ function LocalizedApp() {
     <ConfigProvider locale={language === "zh-CN" ? zhCN : enUS} theme={appTheme}>
       <AntApp>
         <Suspense fallback={<BootScreen />}>
-          {window.location.pathname === "/connections" ? <ConnectionsPage /> : <ControlPlane />}
+          <SessionRouter />
         </Suspense>
       </AntApp>
     </ConfigProvider>
   );
 }
 
-function ControlPlane() {
+function SessionRouter() {
+  const identity = usePlatformSession();
+  if (identity.error) return <DataLoadError message={identity.error} loading={identity.checking} onRetry={() => void identity.refresh()} />;
+  if (identity.session === undefined) return <BootScreen />;
+  if (!identity.session) return <LoginPage onSuccess={identity.signedIn} />;
+  const session = identity.session;
+  const key = `${session.user_id}:${session.auth_version}:${session.role}`;
+  return <div inert={identity.checking} aria-busy={identity.checking}>
+    {session.role === "admin" && window.location.pathname !== "/connections"
+      ? <ControlPlane key={key} session={session} onLogout={identity.logout} onSessionExpired={identity.refresh} />
+      : <ConnectionsPage key={key} session={session} onLogout={identity.logout} onSessionExpired={identity.refresh} />}
+  </div>;
+}
+
+function ControlPlane({ session, onLogout, onSessionExpired }: {
+  session: PlatformSession; onLogout: () => Promise<void>; onSessionExpired: () => Promise<void>;
+}) {
   const { message, modal } = AntApp.useApp();
   const { t } = useI18n();
-  const controlPlane = useControlPlane();
+  const controlPlane = useControlPlane(session, onLogout, onSessionExpired);
   const [view, setView] = useState<View>("overview");
   useEffect(() => {
     if (controlPlane.settings?.managed && !controlPlane.settings.configured) setView("settings");
@@ -93,14 +110,6 @@ function ControlPlane() {
       message.error(error instanceof Error ? error.message : t("common.refreshFailed"));
     }
   };
-
-  if (controlPlane.authenticated === null) {
-    return <BootScreen />;
-  }
-
-  if (!controlPlane.authenticated) {
-    return <LoginPage onSuccess={controlPlane.markAuthenticated} />;
-  }
 
   const dataUnavailable =
     Boolean(controlPlane.loadError) &&

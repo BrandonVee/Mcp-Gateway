@@ -3,7 +3,6 @@ import {
   CheckCircleFilled,
   CloudServerOutlined,
   LockOutlined,
-  LinkOutlined,
   SafetyCertificateOutlined,
   UserOutlined,
 } from "@ant-design/icons";
@@ -21,23 +20,28 @@ import { useState } from "react";
 import { api } from "../../api";
 import { useI18n } from "../../i18n";
 import { LanguageSwitcher } from "../../components/LanguageSwitcher";
+import type { PlatformSession } from "../../types";
 
 interface LoginForm {
   username: string;
   password: string;
 }
 
-export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
+export function LoginPage({ onSuccess }: { onSuccess: (session: PlatformSession) => void }) {
   const { t } = useI18n();
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const submit = async (values: LoginForm) => {
     setError("");
+    setBusy(true);
     try {
-      await api.login(values.username, values.password);
-      onSuccess();
-    } catch {
-      setError(t("auth.login.invalidCredentials"));
+      const session = await api.myLogin(values.username, values.password);
+      onSuccess(session);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : t("auth.login.invalidCredentials"));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -103,7 +107,8 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
 
           <Form<LoginForm>
             layout="vertical"
-            initialValues={{ username: "admin", password: "" }}
+            initialValues={{ username: "", password: "" }}
+            disabled={busy}
             onFinish={submit}
             requiredMark={false}
           >
@@ -140,7 +145,7 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
             )}
 
             <Form.Item className="login-submit">
-              <Button type="primary" htmlType="submit" block size="large">
+              <Button type="primary" htmlType="submit" block size="large" loading={busy}>
                 {t("auth.login.submit")} <ArrowRightOutlined />
               </Button>
             </Form.Item>
@@ -149,9 +154,6 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           <div className="login-hint">
             <LockOutlined /> {t("auth.adminSessionsUseSecureHttponly")}
           </div>
-          <Button className="login-connections-link" type="link" href="/connections" icon={<LinkOutlined />} block>
-            {t("auth.notAdminOpenMcpConnections")}
-          </Button>
         </Card>
       </section>
     </main>
