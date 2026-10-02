@@ -192,7 +192,36 @@ docker compose pull mcp-server
 docker compose up -d --wait mcp-server
 ```
 
-调用限流与统计依赖真实客户端 IP；由宿主机 Nginx 代理时，把 `AUTH_TRUSTED_PROXY_IPS` 填为 Nginx 所在网络的网关地址后重建应用（见 [Docker Hub 使用说明](docs/dockerhub.md)）。该文档还包含**只启动应用、在网页里连接已有 PostgreSQL / Redis** 的方式，以及备份与固定版本说明。
+调用限流与统计依赖真实客户端 IP；由宿主机 Nginx 代理时，把 `AUTH_TRUSTED_PROXY_IPS` 填为 Nginx 所在网络的网关地址后重建应用（见 [Docker Hub 使用说明](docs/dockerhub.md)）。该文档还包含备份与固定版本说明。
+
+### 只跑应用镜像，在网页里连接已有数据库
+
+已有 PostgreSQL / Redis，或想先起容器再填连接信息时，只启动一个应用容器即可，不需要写任何环境变量：
+
+```bash
+docker volume create mcp-gateway-data
+docker run -d --name mcp-server --restart unless-stopped --stop-timeout 15 \
+  --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+  -p 127.0.0.1:8080:8080 -v mcp-gateway-data:/app/data \
+  brandonvee/mcp-gateway:latest
+docker logs mcp-server
+```
+
+也可以用仓库里的 `deploy/compose.setup.yml`（`docker compose -f deploy/compose.setup.yml up -d`），内容同上。
+
+1. 在日志中找到 `[setup] initialization key:` 后面的初始化密钥。
+2. 打开 `http://127.0.0.1:8080`；远程部署可在自己电脑上执行 `ssh -L 18080:127.0.0.1:8080 用户@服务器`，再访问 `http://127.0.0.1:18080`。
+3. 输入初始化密钥，点击“验证并继续”。
+4. 依次填写 PostgreSQL、Redis 参数，**每一步独立测试通过后才进入下一步**；可返回修改，已填内容保留。
+5. 设置管理员账号与至少 16 个字符的密码，点击“保存并启动”：程序会重测两项连接、生成应用密钥、保存配置并自动进入管理页面。
+6. 之后与上面相同：配置 HTTPS 反向代理并登录，在“系统设置”填写对外访问地址。
+
+注意事项：
+
+- **地址要从容器内访问。** `127.0.0.1` / `localhost` 指应用容器自身；另一容器用同一 Docker 网络的服务名，宿主机上的数据库可用 `host.docker.internal`（Linux 需在 `docker run` 加 `--add-host host.docker.internal:host-gateway`，并确认数据库监听地址与防火墙）。
+- 配置与凭据加密密钥保存在 `mcp-gateway-data` 卷的 `/app/data/bootstrap.json`，**必须与该卷一起备份**；初始化后网页配置接口关闭，重启或重建容器会读取同一个卷。不要用空卷连接已有业务库，否则之前保存的上游凭据无法解密。
+- 升级时保留该卷：拉取新镜像后停止并删除旧容器，再用相同参数重建，不需要重新初始化。
+- 等待初始化时 `/healthz` 返回 `mode: setup, ready: false`；初始化后才提供完整健康状态。管理员登录使用安全 Cookie，需要 HTTPS 域名（或上面的 SSH 隧道完成初始化）。
 
 ## 日常使用
 
