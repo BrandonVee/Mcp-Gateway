@@ -352,6 +352,7 @@ export const messages = {
   'monitoring.servicePulse': '服务脉搏',
   'monitoring.checksEvery10SecondsTime': '每 10 秒检测 · {time}',
   'monitoring.checking': '检测中',
+  'monitoring.recheck': '立即重新检测',
   'monitoring.authenticationService': '认证服务',
   'monitoring.primaryDataStore': '主数据存储',
   'monitoring.mcpGateway': 'MCP 统一入口',

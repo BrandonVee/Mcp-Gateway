@@ -367,6 +367,7 @@ export const messages = {
   'monitoring.servicePulse': 'Service pulse',
   'monitoring.checksEvery10SecondsTime': 'Checks every 10 seconds · {time}',
   'monitoring.checking': 'Checking',
+  'monitoring.recheck': 'Check now',
   'monitoring.authenticationService': 'Authentication service',
   'monitoring.primaryDataStore': 'Primary data store',
   'monitoring.mcpGateway': 'MCP gateway',

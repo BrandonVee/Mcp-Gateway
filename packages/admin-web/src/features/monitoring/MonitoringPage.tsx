@@ -1,7 +1,7 @@
 import { useI18n, type Language } from '../../i18n';
 import { Alert, Badge, Button, Empty, Input, Select, Spin, Tag } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../api';
 import { UsageMonitoring } from './UsageMonitoring';
 import type { AuditEvent, AuthHealth, GatewayHealth } from '../../types';
@@ -46,23 +46,37 @@ export function MonitoringPage() {
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const [healthCheckedAt, setHealthCheckedAt] = useState<number | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const loadHealth = useCallback(async () => {
+    const [authResult, gatewayResult] = await Promise.allSettled([api.authHealth(), api.gatewayHealth()]);
+    setAuth(authResult.status === 'fulfilled' ? authResult.value : null);
+    setGateway(gatewayResult.status === 'fulfilled' ? gatewayResult.value : null);
+    setHealthCheckedAt(Date.now());
+  }, []);
 
   useEffect(() => {
     let active = true;
-    const poll = async () => {
-      const [authResult, gatewayResult] = await Promise.allSettled([api.authHealth(), api.gatewayHealth()]);
+    const tick = async () => {
       if (!active) return;
-      setAuth(authResult.status === 'fulfilled' ? authResult.value : null);
-      setGateway(gatewayResult.status === 'fulfilled' ? gatewayResult.value : null);
-      setHealthCheckedAt(Date.now());
+      await loadHealth();
     };
-    void poll();
-    const timer = window.setInterval(() => void poll(), 10_000);
+    void tick();
+    const timer = window.setInterval(() => void tick(), 10_000);
     return () => {
       active = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [loadHealth]);
+
+  const recheck = async () => {
+    setChecking(true);
+    try {
+      await loadHealth();
+    } finally {
+      setChecking(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -113,11 +127,16 @@ export function MonitoringPage() {
             <span className="section-eyebrow">{t('monitoring.pulseEyebrow')}</span>
             <h3>{t('monitoring.servicePulse')}</h3>
           </div>
-          <span className="monitor-checked">
-            {t('monitoring.checksEvery10SecondsTime', {
-              time: healthCheckedAt ? timestamp(healthCheckedAt, language) : t('monitoring.checking'),
-            })}
-          </span>
+          <div className="monitor-checked-row">
+            <span className="monitor-checked">
+              {t('monitoring.checksEvery10SecondsTime', {
+                time: healthCheckedAt ? timestamp(healthCheckedAt, language) : t('monitoring.checking'),
+              })}
+            </span>
+            <Button size="small" icon={<ReloadOutlined />} loading={checking} onClick={recheck}>
+              {t('monitoring.recheck')}
+            </Button>
+          </div>
         </div>
         <div className="monitor-status-grid">
           <StatusCell

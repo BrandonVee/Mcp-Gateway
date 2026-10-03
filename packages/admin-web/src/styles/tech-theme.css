@@ -68,6 +68,11 @@
   color: #8195af;
   font: 11px var(--mono);
 }
+.monitor-checked-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 .monitor-status-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
