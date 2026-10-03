@@ -44,7 +44,7 @@ env_path="$MCP_DEPLOY_DIR/runtime.env"
 if [[ -f "$env_path" ]]; then
   while IFS='=' read -r key value; do
     case "$key" in
-      MCP_VERSION|MCP_IMAGE_PREFIX|MCP_IMAGE_NAME|COMPOSE_PROJECT_NAME|POSTGRES_PASSWORD|REDIS_PASSWORD|INTERNAL_API_TOKEN|CREDENTIAL_BROKER_TOKEN|CREDENTIAL_ENCRYPT_KEY|ADMIN_PASSWORD|AUTH_TRUSTED_PROXY_IPS|MCP_HTTP_PORT)
+      MCP_VERSION|MCP_IMAGE_PREFIX|MCP_IMAGE_NAME|COMPOSE_PROJECT_NAME|POSTGRES_PASSWORD|REDIS_PASSWORD|INTERNAL_API_TOKEN|CREDENTIAL_BROKER_TOKEN|CREDENTIAL_ENCRYPT_KEY|ADMIN_PASSWORD|AUTH_TRUSTED_PROXY_IPS|MCP_HTTP_PORT|MCP_UPDATE_ENABLED|DOCKER_GID|DOCKER_SOCKET)
         # Passwords are double-quoted for Compose; decode without evaluating input.
         if [[ "$value" == \"*\" ]]; then
           value=${value:1:${#value}-2}
@@ -170,6 +170,22 @@ if $interactive; then
 fi
 umask 077
 mkdir -p "$MCP_DEPLOY_DIR"
+# The console update button is opt-in: it gives the application container the
+# host Engine socket, which is root on the host. Off unless asked for explicitly.
+export MCP_UPDATE_ENABLED=${MCP_UPDATE_ENABLED:-false}
+if [[ "$MCP_UPDATE_ENABLED" == true ]]; then
+  export DOCKER_SOCKET=${DOCKER_SOCKET:-/var/run/docker.sock}
+  [[ -S "$DOCKER_SOCKET" ]] || fail "未找到 Docker socket：$DOCKER_SOCKET（设置 DOCKER_SOCKET 指定路径）"
+  docker_gid=$(stat -c %g "$DOCKER_SOCKET")
+  if [[ "$docker_gid" == 0 ]]; then
+    # A root-only socket is unusable for the unprivileged container user.
+    docker_gid=$(getent group docker | cut -d: -f3)
+    [[ -n "$docker_gid" ]] || fail 'Docker socket 仅 root 可写，请创建 docker 组后重试'
+  fi
+  export DOCKER_GID=$docker_gid
+  touch "$MCP_DEPLOY_DIR/update.log"
+  chmod 666 "$MCP_DEPLOY_DIR/update.log"
+fi
 save_config() {
   cat > "$env_path" <<EOF
 COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME
@@ -183,6 +199,9 @@ INTERNAL_API_TOKEN=$INTERNAL_API_TOKEN
 CREDENTIAL_BROKER_TOKEN=$CREDENTIAL_BROKER_TOKEN
 CREDENTIAL_ENCRYPT_KEY=$CREDENTIAL_ENCRYPT_KEY
 AUTH_TRUSTED_PROXY_IPS=$AUTH_TRUSTED_PROXY_IPS
+MCP_UPDATE_ENABLED=$MCP_UPDATE_ENABLED
+DOCKER_GID=${DOCKER_GID:-}
+DOCKER_SOCKET=${DOCKER_SOCKET:-}
 EOF
   # Compose expands $ in unquoted values. Preserve literal passwords, including
   # quotes, backslashes and dollar signs, for both manual Compose and this script.
@@ -210,7 +229,9 @@ EOF
   chmod 644 "$MCP_DEPLOY_DIR/config.json"
 }
 save_config
-compose() { docker compose --env-file "$env_path" -f "$root/deploy/compose.single-host.yml" "$@"; }
+compose_files=(-f "$root/deploy/compose.single-host.yml")
+if [[ "$MCP_UPDATE_ENABLED" == true ]]; then compose_files+=(-f "$root/deploy/compose.self-update.yml"); fi
+compose() { docker compose --env-file "$env_path" "${compose_files[@]}" "$@"; }
 # Validate the rendered Compose file before touching a running deployment.
 compose config --quiet
 if $prepare_only; then

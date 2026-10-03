@@ -14,6 +14,7 @@ import type {
   GatewayHealth,
   McpServer,
   ServerAuthInput,
+  SystemUpdateStatus,
 } from './types';
 import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from './i18n';
 
@@ -36,6 +37,9 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     invalid_password: 'api.invalidPassword',
     password_mismatch: 'api.passwordMismatch',
     already_authenticated: 'api.alreadyAuthenticated',
+    system_update_disabled: 'api.updateDisabled',
+    docker_unavailable: 'api.updateUnavailable',
+    system_update_failed: 'api.updateFailed',
   };
   const statusKey: Record<number, MessageKey> = {
     400: 'api.invalidRequest',
@@ -104,6 +108,12 @@ export function apiForSession(session?: PlatformSession) {
       request<SystemSettings>('/api/admin/system-settings', {
         method: 'PUT',
         body: JSON.stringify(body),
+      }),
+    systemUpdate: () => request<SystemUpdateStatus>('/api/admin/system-update'),
+    startSystemUpdate: () =>
+      request<{ status: string; container_id: string; updater_id: string }>('/api/admin/system-update', {
+        method: 'POST',
+        body: '{}',
       }),
     usageSummary: (filters: UsageFilters, dimension: string) =>
       request<UsageSummary>(

@@ -1,0 +1,19 @@
+# Opt-in overlay for the web console "update" button.
+#
+# Mounting the Engine socket into the application container grants it root on the
+# host, so this file is only added to the deployment when MCP_UPDATE_ENABLED=true
+# (scripts/deploy.sh appends it with -f). Without it the update endpoint is
+# disabled and the button never renders.
+services:
+  mcp-server:
+    # The socket is group-writable on the host; join the host docker group so the
+    # unprivileged node user can talk to the Engine.
+    group_add: ['${DOCKER_GID:?run scripts/deploy.sh first}']
+    environment:
+      MCP_UPDATE_ENABLED: 'true'
+      MCP_DOCKER_SOCKET: ${DOCKER_SOCKET:-/var/run/docker.sock}
+      MCP_UPDATE_LOG: /app/update.log
+    volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:${DOCKER_SOCKET:-/var/run/docker.sock}
+      # Kept outside the read-only root so the updater's log survives AutoRemove.
+      - ${MCP_DEPLOY_DIR}/update.log:/app/update.log

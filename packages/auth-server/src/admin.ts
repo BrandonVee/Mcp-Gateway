@@ -36,6 +36,7 @@ import {
   upstreamAllowlistEnabled,
 } from '@mcp/shared';
 import { encryptCredential } from './credential-crypto.js';
+import { getUpdateStatus, startUpdate, updateEnabled } from './system-update.js';
 import { limitLoginAccount } from './rate-limit.js';
 import { trustedAdminBearerClient } from './admin-bearer.js';
 import { currentSystemSettings, saveSystemSettings } from './system-settings.js';
@@ -413,6 +414,23 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     if (!settings) return c.json({ error: 'invalid_system_settings' }, 400);
     await saveSystemSettings(settings);
     return c.json({ managed: true, configured: true, ...settings });
+  });
+
+  router.get('/admin/system-update', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    if (!updateEnabled()) return c.json({ error: 'system_update_disabled' }, 503);
+    return c.json(await getUpdateStatus());
+  });
+
+  router.post('/admin/system-update', async (c) => {
+    if (!updateEnabled()) return c.json({ error: 'system_update_disabled' }, 503);
+    try {
+      // Returns as soon as the updater container exists: pulling the image
+      // happens there, well past the proxy's response timeout.
+      return c.json(await startUpdate(), 202);
+    } catch (error) {
+      return c.json({ error: 'system_update_failed' }, 503);
+    }
   });
 
   /** Paginated, metadata-only admin audit stream. No request bodies or secrets. */

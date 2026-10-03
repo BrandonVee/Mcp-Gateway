@@ -114,6 +114,50 @@ function ControlPlane({
     if (controlPlane.settings?.managed && !controlPlane.settings.configured) setView('settings');
   }, [controlPlane.settings]);
   const [dialog, setDialog] = useState<DialogState>({ type: null });
+  const [updating, setUpdating] = useState(false);
+
+  // An update replaces this container, so wait for a new container id instead of
+  // trusting the response: the page reloads when the replacement answers.
+  const waitForReplacement = async (containerId: string) => {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+      try {
+        const status = await controlPlane.api.systemUpdate();
+        if (status.container_id && status.container_id !== containerId) return true;
+      } catch {
+        /* The application is restarting. */
+      }
+    }
+    return false;
+  };
+
+  const startUpdate = () => {
+    const before = controlPlane.update?.container_id ?? '';
+    modal.confirm({
+      title: t('settings.updateConfirmTitle'),
+      content: t('settings.updateConfirmBody'),
+      okText: t('settings.updateOk'),
+      okButtonProps: { danger: true },
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        setUpdating(true);
+        try {
+          const started = await controlPlane.api.startSystemUpdate();
+          message.success(t('settings.updateRunning'));
+          if (!(await waitForReplacement(started.container_id || before))) {
+            message.error(t('settings.updateTimeout'));
+            return;
+          }
+          message.success(t('settings.updateReloading'));
+          window.location.reload();
+        } catch (error) {
+          message.error(error instanceof Error ? error.message : t('common.operationFailed'));
+        } finally {
+          setUpdating(false);
+        }
+      },
+    });
+  };
 
   const execute = async (operation: () => Promise<unknown>, success: string) => {
     try {
@@ -168,7 +212,10 @@ function ControlPlane({
           {view === 'settings' && controlPlane.settings && (
             <SettingsPage
               settings={controlPlane.settings}
+              update={controlPlane.update}
+              updating={updating}
               onSave={(body) => execute(() => controlPlane.api.saveSystemSettings(body), t('settings.saved'))}
+              onUpdate={startUpdate}
             />
           )}
           {view === 'overview' && (

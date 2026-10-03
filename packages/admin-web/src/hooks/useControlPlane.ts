@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, apiForSession } from '../api';
 import { getCurrentLanguage, getTranslation } from '../i18n';
-import type { PlatformSession, SystemSettings, AdminConnection, AdminUser, GatewayHealth, McpServer } from '../types';
+import type {
+  PlatformSession,
+  SystemSettings,
+  AdminConnection,
+  AdminUser,
+  GatewayHealth,
+  McpServer,
+  SystemUpdateStatus,
+} from '../types';
 
 export function useControlPlane(
   session: PlatformSession,
@@ -14,6 +22,7 @@ export function useControlPlane(
   const [servers, setServers] = useState<McpServer[]>([]);
   const [connections, setConnections] = useState<AdminConnection[]>([]);
   const [health, setHealth] = useState<GatewayHealth | null>(null);
+  const [update, setUpdate] = useState<SystemUpdateStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -23,7 +32,7 @@ export function useControlPlane(
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [userData, serverData, connectionData, gatewayHealth, settingsData] = await Promise.all([
+      const [userData, serverData, connectionData, gatewayHealth, settingsData, updateData] = await Promise.all([
         api.users(),
         api.servers(),
         api.adminConnections(),
@@ -38,12 +47,15 @@ export function useControlPlane(
           },
         })),
         api.systemSettings(),
+        // Self-update is opt-in; a deployment without it answers 503.
+        api.systemUpdate().catch(() => null),
       ]);
       setSettings(settingsData);
       setUsers(userData.users);
       setServers(serverData.servers);
       setConnections(connectionData.connections);
       setHealth(gatewayHealth);
+      setUpdate(updateData);
       setLastUpdatedAt(Date.now());
     } catch (error) {
       setLoadError(
@@ -113,6 +125,7 @@ export function useControlPlane(
       setServers([]);
       setConnections([]);
       setHealth(null);
+      setUpdate(null);
       setLoadError(null);
       setLastUpdatedAt(null);
     } finally {
@@ -127,6 +140,7 @@ export function useControlPlane(
     servers,
     connections,
     health,
+    update,
     busy,
     loggingOut,
     initializing,

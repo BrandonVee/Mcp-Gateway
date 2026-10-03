@@ -42,7 +42,7 @@ COPY --from=builder /app/packages/admin-web/dist /usr/share/nginx/html
 COPY deploy/nginx-app-main.conf /app/deploy/nginx-main.conf
 COPY deploy/nginx-app.conf /app/deploy/nginx-app.conf
 COPY deploy/app.json /app/config/app.json
-COPY scripts/start-app.mjs scripts/setup-server.mjs /app/scripts/
+COPY scripts/start-app.mjs scripts/setup-server.mjs scripts/update-container.mjs /app/scripts/
 COPY scripts/setup /app/scripts/setup
 USER node
 ENV NODE_ENV=production SYSTEM_CONFIG_MODE=database CONFIG_FILE=/app/config/app.json

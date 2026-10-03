@@ -4,6 +4,7 @@ import {
   BarChartOutlined,
   BellOutlined,
   CheckCircleOutlined,
+  CloudUploadOutlined,
   GlobalOutlined,
   InfoCircleOutlined,
   LinkOutlined,
@@ -13,7 +14,7 @@ import {
   TeamOutlined,
 } from '@ant-design/icons';
 import { useI18n } from '../../i18n';
-import type { SystemSettings, SystemSettingsInput } from '../../types';
+import type { SystemSettings, SystemSettingsInput, SystemUpdateStatus } from '../../types';
 import './settings.css';
 
 type SettingsFormValues = Omit<SystemSettingsInput, 'upstream_hosts'> & { upstream_hosts: string };
@@ -79,10 +80,16 @@ function SettingToggle({ name, label, description }: { name: ToggleName; label: 
 
 export function SettingsPage({
   settings,
+  update,
+  updating,
   onSave,
+  onUpdate,
 }: {
   settings: SystemSettings;
+  update: SystemUpdateStatus | null;
+  updating: boolean;
   onSave: (body: SystemSettingsInput) => Promise<void>;
+  onUpdate: () => void;
 }) {
   const { t } = useI18n();
   const [form] = Form.useForm<SettingsFormValues>();
@@ -315,6 +322,45 @@ export function SettingsPage({
               </div>
             </SettingsModule>
           </div>
+
+          {update?.enabled && (
+            <div className="settings-module-wide">
+              <SettingsModule
+                id="settings-update"
+                icon={<CloudUploadOutlined />}
+                title={t('settings.updateModule')}
+                description={t('settings.updateDescription')}
+                number="06"
+                tone="slate"
+              >
+                <div className="settings-alert-layout">
+                  <div className="settings-update-note">
+                    <CloudUploadOutlined />
+                    <div>
+                      <strong>
+                        {update.version
+                          ? t('settings.updateVersion', { version: update.version })
+                          : t('settings.updateVersionUnknown')}
+                      </strong>
+                      <p>{t('settings.updateImage', { image: update.image || '—' })}</p>
+                      <p>{t('settings.updateContainer', { container: update.container_name || '—' })}</p>
+                    </div>
+                  </div>
+                  <div className="settings-update-action">
+                    <Button
+                      icon={<CloudUploadOutlined />}
+                      onClick={onUpdate}
+                      loading={updating}
+                      disabled={!update.socket_available}
+                    >
+                      {t('settings.updateButton')}
+                    </Button>
+                    <p>{t('settings.updateHelp')}</p>
+                  </div>
+                </div>
+              </SettingsModule>
+            </div>
+          )}
         </div>
         <footer className={`settings-save-bar ${dirty ? 'has-changes' : ''}`}>
           <div className="settings-save-status">

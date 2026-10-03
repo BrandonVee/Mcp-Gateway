@@ -44,6 +44,16 @@ export interface McpServer {
   instances: McpInstance[];
 }
 
+export interface SystemUpdateStatus {
+  enabled: boolean;
+  socket_available: boolean;
+  version: string;
+  image: string;
+  image_id: string;
+  container_id: string;
+  container_name: string;
+}
+
 export interface GatewayHealth {
   ok: boolean;
   redis: boolean;
