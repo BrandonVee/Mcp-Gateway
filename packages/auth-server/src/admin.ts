@@ -35,7 +35,7 @@ import {
   upstreamAllowlistEnabled,
 } from '@mcp/shared';
 import { encryptCredential } from './credential-crypto.js';
-import { DockerError, getUpdateStatus, startUpdate, updateEnabled } from './system-update.js';
+import { DockerError, getUpdateStatus, getUpdateTaskStatus, startUpdate, updateEnabled } from './system-update.js';
 import { limitLoginAccount } from './rate-limit.js';
 import { trustedAdminBearerClient } from './admin-bearer.js';
 import { addUpstreamHost, currentSystemSettings, saveSystemSettings } from './system-settings.js';
@@ -450,6 +450,19 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     c.header('Cache-Control', 'no-store');
     if (!updateEnabled()) return c.json({ error: 'system_update_disabled' }, 503);
     return c.json(await getUpdateStatus(process.env, c.req.query('check') === 'true'));
+  });
+
+  router.get('/admin/system-update/tasks/:id', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    if (!updateEnabled()) return c.json({ error: 'system_update_disabled' }, 503);
+    try {
+      return c.json(await getUpdateTaskStatus(c.req.param('id')));
+    } catch (error) {
+      return c.json(
+        { error: error instanceof DockerError ? error.message : 'system_update_failed' },
+        error instanceof DockerError && error.status === 400 ? 400 : 503,
+      );
+    }
   });
 
   router.post('/admin/system-update', async (c) => {

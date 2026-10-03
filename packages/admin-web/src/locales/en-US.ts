@@ -263,6 +263,9 @@ export const messages = {
   'settings.updateCheck': 'Check for updates',
   'settings.updateTarget': 'Select update version',
   'settings.updateTargetImage': 'Update target: {image}',
+  'api.updateSocketMount': 'The Docker socket is not mounted into the container. Cannot start the updater.',
+  'settings.updateTaskFailed':
+    'The updater exited without completing the update. Check update.log or the updater logs for the failure and rollback status.',
   'settings.updateModule': 'System update',
   'settings.updateDescription': 'Check versions and choose an image to restart the application container',
   'settings.updateVersion': 'Installed version {version}',

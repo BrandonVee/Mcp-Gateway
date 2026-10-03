@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { posix } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { hostname } from 'node:os';
 import { compareVersions, getUpdateReleases, stableVersion, type UpdateRelease } from './update-releases.js';
@@ -135,6 +136,7 @@ export interface ContainerInspect {
   Name?: string;
   Config?: { Image?: string; Env?: string[]; Labels?: Record<string, string> };
   HostConfig?: Record<string, unknown>;
+  Mounts?: Array<{ Source?: string; Destination?: string; RW?: boolean }>;
   NetworkSettings?: { Networks?: Record<string, { Aliases?: string[]; IPAddress?: string }> };
 }
 
@@ -166,12 +168,38 @@ export function buildCreateSpec(inspect: ContainerInspect, imageId: string): Rec
   };
 }
 
+/** Engine bind sources belong to the host, not this container's filesystem. */
+export function mountedSource(inspect: ContainerInspect, path: string): string | undefined {
+  const normalized = posix.normalize(path);
+  const mount = inspect.Mounts?.filter(
+    (item) =>
+      item.Source &&
+      item.Destination &&
+      (normalized === item.Destination || normalized.startsWith(`${item.Destination.replace(/\/$/, '')}/`)),
+  ).sort((a, b) => b.Destination!.length - a.Destination!.length)[0];
+  if (!mount?.Source || !mount.Destination) return undefined;
+  return posix.join(mount.Source, posix.relative(mount.Destination, normalized));
+}
+
+export function updaterGroups(inspect: ContainerInspect, socketPath: string, env: NodeJS.ProcessEnv): string[] {
+  const groups = Array.isArray(inspect.HostConfig?.GroupAdd) ? inspect.HostConfig.GroupAdd.map(String) : [];
+  if (env.DOCKER_GID) groups.push(env.DOCKER_GID);
+  try {
+    groups.push(String(statSync(socketPath).gid));
+  } catch {
+    /* Existing groups remain usable. */
+  }
+  return [...new Set(groups)];
+}
+
 export function buildUpdaterSpec(options: {
   imageId: string;
   oldId: string;
   targetImage: string;
   socketPath: string;
+  socketSource: string;
   logPath: string;
+  logSource?: string;
   env?: string[];
   groupIds?: string[];
 }): Record<string, unknown> {
@@ -184,17 +212,22 @@ export function buildUpdaterSpec(options: {
     HostConfig: {
       NetworkMode: 'host',
       AutoRemove: true,
-      Binds: [`${options.socketPath}:${options.socketPath}`, `${options.logPath}:${options.logPath}`],
+      Mounts: [
+        { Type: 'bind', Source: options.socketSource, Target: options.socketPath },
+        ...(options.logSource ? [{ Type: 'bind', Source: options.logSource, Target: options.logPath }] : []),
+      ],
       // The socket is group-writable on the host; without the host docker group
       // the unprivileged updater cannot talk to the Engine.
       ...(options.groupIds?.length ? { GroupAdd: options.groupIds } : {}),
     },
     Env: [
-      ...(options.env ?? []),
+      ...(options.env ?? []).filter(
+        (entry) => !/^(MCP_DOCKER_SOCKET|MCP_UPDATE_OLD_ID|MCP_UPDATE_IMAGE|MCP_UPDATE_LOG)=/.test(entry),
+      ),
       `MCP_DOCKER_SOCKET=${options.socketPath}`,
       `MCP_UPDATE_OLD_ID=${options.oldId}`,
       `MCP_UPDATE_IMAGE=${options.targetImage}`,
-      `MCP_UPDATE_LOG=${options.logPath}`,
+      `MCP_UPDATE_LOG=${options.logSource ? options.logPath : ''}`,
     ],
     Labels: { 'com.mcp.role': 'updater' },
   };
@@ -339,6 +372,8 @@ export async function startUpdate(env: NodeJS.ProcessEnv = process.env, tag = 'l
     targetImage = `${imageRepository(targetImage)}@${release.digest}`;
   }
   const logPath = env.MCP_UPDATE_LOG ?? '/app/update.log';
+  const socketSource = mountedSource(inspect, socketPath);
+  if (!socketSource) throw new DockerError('system_update_socket_not_mounted', 503);
   const updater = await dockerRequest('POST', '/containers/create', {
     socketPath,
     query: { name: `mcp-updater-${String(inspect.Id ?? id)}` },
@@ -348,8 +383,10 @@ export async function startUpdate(env: NodeJS.ProcessEnv = process.env, tag = 'l
       targetImage,
       socketPath,
       logPath,
+      socketSource,
+      logSource: mountedSource(inspect, logPath),
       env: inspect.Config?.Env ?? [],
-      groupIds: env.DOCKER_GID ? [env.DOCKER_GID] : [],
+      groupIds: updaterGroups(inspect, socketPath, env),
     }),
   });
   if (updater.status === 409) throw new DockerError('system_update_in_progress', 409);
@@ -371,4 +408,32 @@ export async function startUpdate(env: NodeJS.ProcessEnv = process.env, tag = 'l
     image: targetImage,
     updater_id: updaterId,
   };
+}
+
+export interface UpdateTaskStatus {
+  status: 'running' | 'succeeded' | 'failed' | 'missing' | 'unknown';
+}
+
+/** Read only managed updater containers; never expose their environment or logs. */
+export async function getUpdateTaskStatus(id: string, env: NodeJS.ProcessEnv = process.env): Promise<UpdateTaskStatus> {
+  if (!/^[a-f\d]{64}$/.test(id)) throw new DockerError('invalid_update_task', 400);
+  try {
+    const response = await dockerRequest('GET', `/containers/${id}/json`, {
+      socketPath: dockerSocket(env),
+      timeoutMs: 2_000,
+    });
+    if (response.status === 404) return { status: 'missing' };
+    if (response.status !== 200) return { status: 'unknown' };
+    const inspect = response.json as ContainerInspect & {
+      State?: { Status?: string; Running?: boolean; ExitCode?: number };
+    };
+    if (inspect.Config?.Labels?.['com.mcp.role'] !== 'updater') throw new DockerError('invalid_update_task', 400);
+    if (inspect.State?.Running || ['created', 'restarting'].includes(inspect.State?.Status ?? ''))
+      return { status: 'running' };
+    if (inspect.State?.Status === 'exited') return { status: inspect.State.ExitCode === 0 ? 'succeeded' : 'failed' };
+    return { status: 'unknown' };
+  } catch (error) {
+    if (error instanceof DockerError) throw error;
+    return { status: 'unknown' };
+  }
 }

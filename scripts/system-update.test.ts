@@ -4,6 +4,8 @@ import { test } from 'node:test';
 import {
   buildCreateSpec,
   buildUpdaterSpec,
+  mountedSource,
+  updaterGroups,
   dockerSocket,
   parsePullProgress,
   selfId,
@@ -55,6 +57,8 @@ test('the updater runs on the host network with the socket and the log bind-moun
     oldId: 'old-container-id',
     targetImage: 'brandonvee/mcp-gateway:latest',
     socketPath: '/var/run/docker.sock',
+    socketSource: '/run/docker.sock',
+    logSource: '/srv/mcp/update.log',
     logPath: '/app/update.log',
     env: ['NODE_ENV=production'],
     groupIds: ['999'],
@@ -64,7 +68,10 @@ test('the updater runs on the host network with the socket and the log bind-moun
   const hostConfig = spec.HostConfig as Record<string, unknown>;
   assert.equal(hostConfig.NetworkMode, 'host');
   assert.equal(hostConfig.AutoRemove, true);
-  assert.deepEqual(hostConfig.Binds, ['/var/run/docker.sock:/var/run/docker.sock', '/app/update.log:/app/update.log']);
+  assert.deepEqual(hostConfig.Mounts, [
+    { Type: 'bind', Source: '/run/docker.sock', Target: '/var/run/docker.sock' },
+    { Type: 'bind', Source: '/srv/mcp/update.log', Target: '/app/update.log' },
+  ]);
   assert.deepEqual(hostConfig.GroupAdd, ['999']);
   const env = spec.Env as string[];
   assert.ok(env.includes('MCP_UPDATE_OLD_ID=old-container-id'));
@@ -116,4 +123,46 @@ test('digest and replaced-container references retain the correct update reposit
     'example.com/team/app:latest',
   );
   assert.equal(updateTargetImage({ Config: { Image: 'sha256:abc' } }, {}), 'brandonvee/mcp-gateway:latest');
+});
+
+test('updaters resolve host mounts and inherit Docker groups without requiring a new environment variable', () => {
+  const mounted = {
+    HostConfig: { GroupAdd: ['998'] },
+    Mounts: [
+      { Source: '/run/docker.sock', Destination: '/var/run/docker.sock' },
+      { Source: '/srv/mcp', Destination: '/app/data' },
+      { Source: '/srv/other', Destination: '/app/data/nested' },
+      { Source: '/srv/mcp/update.log', Destination: '/app/update.log' },
+    ],
+  };
+  assert.equal(mountedSource(mounted, '/app/update.log'), '/srv/mcp/update.log');
+  assert.equal(mountedSource(mounted, '/var/run/docker.sock'), '/run/docker.sock');
+  assert.equal(mountedSource(mounted, '/app/data/nested/state'), '/srv/other/state');
+  assert.equal(mountedSource(mounted, '/app/database/not-mounted'), undefined);
+  assert.equal(mountedSource(mounted, '/app/data/../other'), undefined);
+  assert.deepEqual(updaterGroups(mounted, '/missing-socket', {}), ['998']);
+  assert.deepEqual(updaterGroups(mounted, '/missing-socket', { DOCKER_GID: '998' }), ['998']);
+  const spec = buildUpdaterSpec({
+    imageId: 'old',
+    oldId: 'old-container',
+    targetImage: 'repo:new',
+    socketPath: '/var/run/docker.sock',
+    socketSource: '/run/docker.sock',
+    logPath: '/app/update.log',
+    env: [
+      'SECRET=retained',
+      'MCP_UPDATE_IMAGE=repo:old',
+      'MCP_UPDATE_OLD_ID=stale',
+      'MCP_UPDATE_LOG=/old/path',
+      'MCP_DOCKER_SOCKET=/old/socket',
+    ],
+  });
+  const env = spec.Env as string[];
+  assert.deepEqual(env, [
+    'SECRET=retained',
+    'MCP_DOCKER_SOCKET=/var/run/docker.sock',
+    'MCP_UPDATE_OLD_ID=old-container',
+    'MCP_UPDATE_IMAGE=repo:new',
+    'MCP_UPDATE_LOG=',
+  ]);
 });

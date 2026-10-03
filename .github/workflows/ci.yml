@@ -53,6 +53,8 @@ jobs:
         run: ./scripts/deploy.sh --yes
       - name: Verify setup, OAuth and persistent settings
         run: pnpm exec tsx scripts/smoke-system-settings.ts
+      - name: Verify updater socket permissions and persistent logs
+        run: UPDATER_TEST_IMAGE="mcp-app:$(git rev-parse --short=12 HEAD)" pnpm exec tsx scripts/smoke-updater-runtime.ts
       - name: Verify first-run browser database setup
         run: SETUP_TEST_IMAGE="mcp-app:$(git rev-parse --short=12 HEAD)" pnpm exec tsx scripts/smoke-web-setup.ts
       - name: Verify unified process lifecycle

@@ -74,7 +74,8 @@ git pull --ff-only
 - 选择具体版本时按该 Release 的不可变镜像摘要拉取；选择旧版本也会重建容器，管理员需自行确保数据库兼容。
 - 更新复用当前容器的环境变量、挂载和网络配置，**不复制**旧镜像的启动命令；若 `deploy.sh` 之后新增了环境变量，仍需重跑 `./scripts/deploy.sh` 才会生效。
 - 更新时应用会短暂中断（通常十几秒）。新容器在 90 秒内未通过健康检查时，更新脚本会删除新容器并恢复原来的容器；若连回滚都失败，需到服务器执行 `./scripts/deploy.sh`。
-- 更新过程记录在 `deploy/single-host/update.log`。
+- 更新过程记录在 `deploy/single-host/update.log`。更新器继承主容器的 Docker 用户组，并从容器挂载信息中解析日志与 socket 的实际宿主机路径，不依赖额外环境变量。页面会检测更新器是否退出，任务提前失败时不再一直等待容器替换。
+- 从 v0.5.3 或更早版本升级时，如果网页更新返回 202 后没有重建容器，请查看更新器日志；这些版本的更新器可能缺少 Docker socket 用户组。可先用 `MCP_VERSION=v0.5.4 ./scripts/deploy.sh --yes` 升级一次，之后网页更新会使用修复后的更新器。
 - 关闭该能力：`MCP_UPDATE_ENABLED=false ./scripts/deploy.sh --yes` 会重新部署应用并移除 socket 挂载，页面上的卡片会自动消失。显式关闭的设置会保存，后续部署沿用；重新开启时用 `MCP_UPDATE_ENABLED=true ./scripts/deploy.sh --yes`。
 
 ### 升级影响与管理员恢复

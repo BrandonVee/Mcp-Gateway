@@ -13,6 +13,7 @@ import {
 } from '../packages/auth-server/src/update-releases';
 import {
   getUpdateStatus,
+  getUpdateTaskStatus,
   officialUpdateImage,
   runningVersion,
   startUpdate,
@@ -80,7 +81,9 @@ test('status, cached release checks and selected updates use the running image a
   let checks = 0,
     failCheck = false,
     createConflict = false;
-  let createdBody: { Env?: string[] } | undefined;
+  let createdBody:
+    | { Env?: string[]; HostConfig?: { GroupAdd?: string[]; Mounts?: Array<{ Source: string; Target: string }> } }
+    | undefined;
   let currentDigest = oldDigest;
   globalThis.fetch = async () => {
     checks++;
@@ -100,6 +103,11 @@ test('status, cached release checks and selected updates use the running image a
         Name: '/app',
         State: { Running: true, Health: { Status: 'healthy' } },
         Config: { Image: 'brandonvee/mcp-gateway:latest', Env: ['SECRET=retained'] },
+        HostConfig: { GroupAdd: ['998'] },
+        Mounts: [
+          { Source: socket, Destination: socket },
+          { Source: '/srv/mcp/update.log', Destination: '/tmp/update.log' },
+        ],
       });
     if (url.pathname.startsWith('/v1.44/images/'))
       return reply({ RepoDigests: [`brandonvee/mcp-gateway@${currentDigest}`] });
@@ -131,6 +139,12 @@ test('status, cached release checks and selected updates use the running image a
     assert.equal(started.image, `brandonvee/mcp-gateway@${digest}`);
     assert.ok(createdBody?.Env?.includes(`MCP_UPDATE_IMAGE=brandonvee/mcp-gateway@${digest}`));
     assert.ok(createdBody?.Env?.includes('SECRET=retained'));
+    assert.ok(createdBody?.HostConfig?.GroupAdd?.includes('998'));
+    assert.ok(
+      createdBody?.HostConfig?.Mounts?.some(
+        (mount) => mount.Source === '/srv/mcp/update.log' && mount.Target === '/tmp/update.log',
+      ),
+    );
     createConflict = true;
     await assert.rejects(startUpdate(env), /system_update_in_progress/);
     createConflict = false;
@@ -189,4 +203,40 @@ test('GitHub failures fall back to published Docker Hub digests without requirin
     }),
     /network unavailable/,
   );
+});
+
+test('worker status distinguishes running, failed, removed and unrelated Docker containers', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mcp-update-task-'));
+  const socket = join(directory, 'docker.sock');
+  const id = 'd'.repeat(64);
+  let status = 'running',
+    code = 0,
+    removed = false,
+    managed = true;
+  const server = createServer((_request, response) => {
+    response.writeHead(removed ? 404 : 200, { 'content-type': 'application/json' }).end(
+      JSON.stringify({
+        Config: { Labels: managed ? { 'com.mcp.role': 'updater' } : {} },
+        State: { Status: status, Running: status === 'running', ExitCode: code },
+      }),
+    );
+  });
+  await new Promise<void>((resolve) => server.listen(socket, resolve));
+  const env = { MCP_DOCKER_SOCKET: socket };
+  try {
+    assert.deepEqual(await getUpdateTaskStatus(id, env), { status: 'running' });
+    status = 'exited';
+    code = 1;
+    assert.deepEqual(await getUpdateTaskStatus(id, env), { status: 'failed' });
+    code = 0;
+    assert.deepEqual(await getUpdateTaskStatus(id, env), { status: 'succeeded' });
+    managed = false;
+    await assert.rejects(getUpdateTaskStatus(id, env), /invalid_update_task/);
+    removed = true;
+    assert.deepEqual(await getUpdateTaskStatus(id, env), { status: 'missing' });
+    await assert.rejects(getUpdateTaskStatus('../other', env), /invalid_update_task/);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

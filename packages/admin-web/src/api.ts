@@ -92,6 +92,8 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     system_update_failed: 'api.updateFailed',
     system_update_in_progress: 'api.updateInProgress',
     invalid_update_version: 'api.invalidUpdateVersion',
+    system_update_socket_not_mounted: 'api.updateSocketMount',
+    invalid_update_task: 'api.updateFailed',
   };
   const statusKey: Record<number, MessageKey> = {
     400: 'api.invalidRequest',
@@ -168,6 +170,10 @@ export function apiForSession(session?: PlatformSession) {
       }),
     systemUpdate: (check = false) =>
       request<SystemUpdateStatus>(`/api/admin/system-update${check ? '?check=true' : ''}`),
+    systemUpdateTask: (id: string) =>
+      request<{ status: 'running' | 'succeeded' | 'failed' | 'missing' | 'unknown' }>(
+        `/api/admin/system-update/tasks/${encodeURIComponent(id)}`,
+      ),
     startSystemUpdate: (tag: string) =>
       request<{ status: string; container_id: string; updater_id: string }>('/api/admin/system-update', {
         method: 'POST',

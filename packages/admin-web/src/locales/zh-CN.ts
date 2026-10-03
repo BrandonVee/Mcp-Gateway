@@ -237,6 +237,8 @@ export const messages = {
   'settings.updateCheck': '检查更新',
   'settings.updateTarget': '选择更新版本',
   'settings.updateTargetImage': '更新目标：{image}',
+  'api.updateSocketMount': 'Docker socket 没有挂载到容器，无法启动更新器',
+  'settings.updateTaskFailed': '更新器已退出，更新未完成。请查看 update.log 或更新器日志确认失败原因和回滚状态。',
   'settings.updateModule': '系统更新',
   'settings.updateDescription': '检查版本并选择镜像更新，重启期间服务会短暂中断',
   'settings.updateVersion': '当前版本 {version}',

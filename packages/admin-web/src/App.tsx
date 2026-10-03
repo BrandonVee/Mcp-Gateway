@@ -9,6 +9,7 @@ import { useControlPlane } from './hooks/useControlPlane';
 import { appTheme } from './theme';
 import type { DialogState, PlatformSession, SystemSettings, View } from './types';
 import { I18nProvider, useI18n } from './i18n';
+import { waitForSystemUpdate } from './features/settings/update-task';
 import { usePlatformSession } from './features/auth/usePlatformSession';
 
 const LoginPage = lazy(() =>
@@ -117,21 +118,6 @@ function ControlPlane({
   const [updating, setUpdating] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
 
-  // An update replaces this container, so wait for a new container id instead of
-  // trusting the response: the page reloads when the replacement answers.
-  const waitForReplacement = async (containerId: string) => {
-    for (let attempt = 0; attempt < 200; attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, 3_000));
-      try {
-        const status = await controlPlane.api.systemUpdate();
-        if (status.container_id && status.container_id !== containerId && status.container_ready !== false) return true;
-      } catch {
-        /* The application is restarting. */
-      }
-    }
-    return false;
-  };
-
   const startUpdate = (tag: string) => {
     const before = controlPlane.update?.container_id ?? '';
     modal.confirm({
@@ -147,8 +133,13 @@ function ControlPlane({
         try {
           const started = await controlPlane.api.startSystemUpdate(tag);
           message.success(t('settings.updateRunning'));
-          if (!(await waitForReplacement(started.container_id || before))) {
-            message.error(t('settings.updateTimeout'));
+          const outcome = await waitForSystemUpdate(
+            controlPlane.api,
+            started.container_id || before,
+            started.updater_id,
+          );
+          if (outcome !== 'completed') {
+            message.error(t(outcome === 'failed' ? 'settings.updateTaskFailed' : 'settings.updateTimeout'));
             return;
           }
           message.success(t('settings.updateReloading'));
