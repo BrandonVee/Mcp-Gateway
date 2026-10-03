@@ -1,4 +1,4 @@
-import { useI18n } from "../../i18n";
+import { useI18n } from '../../i18n';
 import {
   ApiOutlined,
   CloudServerOutlined,
@@ -7,9 +7,9 @@ import {
   LockOutlined,
   SearchOutlined,
   TeamOutlined,
-} from "@ant-design/icons";
-import { Alert, Button, Checkbox, Empty, Form, Input, Modal, Segmented, Select, Switch } from "antd";
-import { useMemo, useState } from "react";
+} from '@ant-design/icons';
+import { Alert, Button, Checkbox, Empty, Form, Input, Modal, Segmented, Select, Switch } from 'antd';
+import { useMemo, useState } from 'react';
 import type {
   AddInstanceInput,
   AdminUser,
@@ -18,7 +18,7 @@ import type {
   McpServer,
   McpInstance,
   ServerAuthInput,
-} from "../../types";
+} from '../../types';
 
 interface ServerDialogsProps {
   state: DialogState;
@@ -40,7 +40,7 @@ interface ServerFormValues {
   signup_access: boolean;
   instanceId?: string;
   url: string;
-  auth_mode: "none" | "api_key" | "oauth";
+  auth_mode: 'none' | 'api_key' | 'oauth';
   api_key_header?: string;
   api_key_prefix?: string;
   oauth_authorize_url?: string;
@@ -50,32 +50,39 @@ interface ServerFormValues {
   oauth_scopes?: string;
   oauth_resource?: string;
   oauth_issuer?: string;
-  oauth_client_auth_method?: "none" | "client_secret_basic" | "client_secret_post";
+  oauth_client_auth_method?: 'none' | 'client_secret_basic' | 'client_secret_post';
 }
 
 export function ServerDialogs(props: ServerDialogsProps) {
-  if (props.state.type === "edit-server") return <EditServerDialog key={props.state.server.name} {...props} server={props.state.server} />;
-  if (props.state.type === "edit-instance") return <EditInstanceDialog key={props.state.instance.id} {...props} server={props.state.server} instance={props.state.instance} />;
-  if (props.state.type === "create-server") {
+  if (props.state.type === 'edit-server')
+    return <EditServerDialog key={props.state.server.name} {...props} server={props.state.server} />;
+  if (props.state.type === 'edit-instance')
+    return (
+      <EditInstanceDialog
+        key={props.state.instance.id}
+        {...props}
+        server={props.state.server}
+        instance={props.state.instance}
+      />
+    );
+  if (props.state.type === 'create-server') {
     return <CreateServerDialog {...props} />;
   }
 
-  if (props.state.type === "add-instance") {
+  if (props.state.type === 'add-instance') {
     return <AddInstanceDialog {...props} server={props.state.server} />;
   }
 
-  if (props.state.type === "configure-server-auth") return <ConfigureAuthDialog {...props} server={props.state.server} />;
+  if (props.state.type === 'configure-server-auth')
+    return <ConfigureAuthDialog {...props} server={props.state.server} />;
 
-  if (props.state.type === "configure-server-users") return <ConfigureUsersDialog key={props.state.server.name} {...props} server={props.state.server} />;
+  if (props.state.type === 'configure-server-users')
+    return <ConfigureUsersDialog key={props.state.server.name} {...props} server={props.state.server} />;
 
   return null;
 }
 
-function CreateServerDialog({
-  busy,
-  onClose,
-  onCreate,
-}: Pick<ServerDialogsProps, "busy" | "onClose" | "onCreate">) {
+function CreateServerDialog({ busy, onClose, onCreate }: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onCreate'>) {
   const { t } = useI18n();
   const [form] = Form.useForm<ServerFormValues>();
 
@@ -84,7 +91,7 @@ function CreateServerDialog({
     onCreate({
       name: values.name,
       display_name: values.displayName || values.name,
-      description: values.description?.trim() ?? "",
+      description: values.description?.trim() ?? '',
       signup_access: values.signup_access,
       instances: [{ id: values.instanceId || undefined, url: values.url }],
       ...authFields(values),
@@ -98,12 +105,12 @@ function CreateServerDialog({
       title={
         <ModalTitle
           icon={<CloudServerOutlined />}
-          eyebrow={t("serverDialog.routeOnboarding")}
-          title={t("serverDialog.registerMcpServer")}
+          eyebrow={t('serverDialog.routeOnboarding')}
+          title={t('serverDialog.registerMcpServer')}
         />
       }
-      okText={t("serverDialog.registerSync")}
-      cancelText={t("common.cancel")}
+      okText={t('serverDialog.registerSync')}
+      cancelText={t('common.cancel')}
       confirmLoading={busy}
       onCancel={onClose}
       onOk={submit}
@@ -112,49 +119,57 @@ function CreateServerDialog({
         type="info"
         showIcon
         icon={<ApiOutlined />}
-        message={t("serverDialog.useHttpHttpsStreamableMcp")}
+        message={t('serverDialog.useHttpHttpsStreamableMcp')}
         className="dialog-alert"
       />
-      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ signup_access: false, auth_mode: "none", api_key_header: "authorization", api_key_prefix: "Bearer " }}>
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        initialValues={{
+          signup_access: false,
+          auth_mode: 'none',
+          api_key_header: 'authorization',
+          api_key_prefix: 'Bearer ',
+        }}
+      >
         <Form.Item
           name="name"
-          label={t("serverDialog.serverId")}
+          label={t('serverDialog.serverId')}
           rules={[
-            { required: true, message: t("serverDialog.enterServerId") },
+            { required: true, message: t('serverDialog.enterServerId') },
             {
               pattern: /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/,
-              message: t("serverDialog.useLettersNumbersPeriodsUnderscores"),
+              message: t('serverDialog.useLettersNumbersPeriodsUnderscores'),
             },
           ]}
         >
-          <Input
-            prefix={<DeploymentUnitOutlined />}
-            placeholder="external-search"
-            autoFocus
-          />
+          <Input prefix={<DeploymentUnitOutlined />} placeholder="external-search" autoFocus />
         </Form.Item>
-        <Form.Item name="displayName" label={t("serverDialog.displayName")}>
-          <Input placeholder={t("serverDialog.exampleExternalSearch")} />
+        <Form.Item name="displayName" label={t('serverDialog.displayName')}>
+          <Input placeholder={t('serverDialog.exampleExternalSearch')} />
         </Form.Item>
         <DescriptionField />
-        <Form.Item name="signup_access" label={t("serverDialog.signupAccess")} valuePropName="checked" extra={t("serverDialog.signupAccessHelp")}>
+        <Form.Item
+          name="signup_access"
+          label={t('serverDialog.signupAccess')}
+          valuePropName="checked"
+          extra={t('serverDialog.signupAccessHelp')}
+        >
           <Switch />
         </Form.Item>
-        <Form.Item name="instanceId" label={t("serverDialog.instanceIdOptional")}>
-          <Input placeholder={t("serverDialog.leaveBlankGenerateUuid")} />
+        <Form.Item name="instanceId" label={t('serverDialog.instanceIdOptional')}>
+          <Input placeholder={t('serverDialog.leaveBlankGenerateUuid')} />
         </Form.Item>
         <Form.Item
           name="url"
-          label={t("serverDialog.mcpEndpointUrl")}
+          label={t('serverDialog.mcpEndpointUrl')}
           rules={[
-            { required: true, message: t("serverDialog.enterEndpointUrl") },
-            { type: "url", message: t("serverDialog.enterValidHttpHttpsUrl") },
+            { required: true, message: t('serverDialog.enterEndpointUrl') },
+            { type: 'url', message: t('serverDialog.enterValidHttpHttpsUrl') },
           ]}
         >
-          <Input
-            prefix={<LinkOutlined />}
-            placeholder="https://mcp.example.com/mcp"
-          />
+          <Input prefix={<LinkOutlined />} placeholder="https://mcp.example.com/mcp" />
         </Form.Item>
         <AuthFormFields />
       </Form>
@@ -164,192 +179,454 @@ function CreateServerDialog({
 
 function DescriptionField() {
   const { t } = useI18n();
-  return <Form.Item name="description" label={t("serverDialog.description")} extra={t("serverDialog.descriptionHelp")} rules={[{ max: 2000, message: t("serverDialog.descriptionMax") }]}>
-    <Input.TextArea rows={3} maxLength={2000} showCount placeholder={t("serverDialog.descriptionPlaceholder")} />
-  </Form.Item>;
+  return (
+    <Form.Item
+      name="description"
+      label={t('serverDialog.description')}
+      extra={t('serverDialog.descriptionHelp')}
+      rules={[{ max: 2000, message: t('serverDialog.descriptionMax') }]}
+    >
+      <Input.TextArea rows={3} maxLength={2000} showCount placeholder={t('serverDialog.descriptionPlaceholder')} />
+    </Form.Item>
+  );
 }
 
-function EditServerDialog({ server, busy, onClose, onEdit }: Pick<ServerDialogsProps, "busy" | "onClose" | "onEdit"> & { server: McpServer }) {
+function EditServerDialog({
+  server,
+  busy,
+  onClose,
+  onEdit,
+}: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onEdit'> & { server: McpServer }) {
   const { t } = useI18n();
   const [form] = Form.useForm<{ name: string; display_name: string; description: string }>();
-  return <Modal open width={560} title={t("serverDialog.editServer")} okText={t("serverDialog.saveSettings")} cancelText={t("common.cancel")} confirmLoading={busy}
-    onCancel={onClose} onOk={() => form.validateFields().then((values) => onEdit(server, { name: values.name.trim(), display_name: values.display_name.trim(), description: values.description.trim() }))}>
-    <Form form={form} layout="vertical" requiredMark={false} initialValues={{ name: server.name, display_name: server.display_name, description: server.description ?? "" }}>
-      <Form.Item name="name" label={t("serverDialog.serverId")} extra={t("serverDialog.serverIdEditable")} rules={[{ required: true, message: t("serverDialog.enterServerId") }, { pattern: /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/, message: t("serverDialog.serverIdFormat") }]}><Input prefix={<DeploymentUnitOutlined />} maxLength={64} /></Form.Item>
-      <Form.Item noStyle shouldUpdate={(previous, next) => previous.name !== next.name}>
-        {({ getFieldValue }) => <div className="server-route-preview">
-          <span>{t("serverDialog.routePreview")}</span><code>{`/mcp/${getFieldValue("name") || ""}`}</code>
-          {getFieldValue("name")?.trim() !== server.name && <Alert type="warning" showIcon message={t("serverDialog.renameHelp")} description={server.auth_mode === "oauth" ? t("serverDialog.renameOAuthHelp") : undefined} />}
-        </div>}
-      </Form.Item>
-      <Form.Item name="display_name" label={t("serverDialog.displayName")} rules={[{ required: true, whitespace: true, message: t("serverDialog.enterDisplayName") }]}><Input autoFocus /></Form.Item>
-      <DescriptionField />
-    </Form>
-  </Modal>;
+  return (
+    <Modal
+      open
+      width={560}
+      title={t('serverDialog.editServer')}
+      okText={t('serverDialog.saveSettings')}
+      cancelText={t('common.cancel')}
+      confirmLoading={busy}
+      onCancel={onClose}
+      onOk={() =>
+        form.validateFields().then((values) =>
+          onEdit(server, {
+            name: values.name.trim(),
+            display_name: values.display_name.trim(),
+            description: values.description.trim(),
+          }),
+        )
+      }
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        initialValues={{ name: server.name, display_name: server.display_name, description: server.description ?? '' }}
+      >
+        <Form.Item
+          name="name"
+          label={t('serverDialog.serverId')}
+          extra={t('serverDialog.serverIdEditable')}
+          rules={[
+            { required: true, message: t('serverDialog.enterServerId') },
+            { pattern: /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/, message: t('serverDialog.serverIdFormat') },
+          ]}
+        >
+          <Input prefix={<DeploymentUnitOutlined />} maxLength={64} />
+        </Form.Item>
+        <Form.Item noStyle shouldUpdate={(previous, next) => previous.name !== next.name}>
+          {({ getFieldValue }) => (
+            <div className="server-route-preview">
+              <span>{t('serverDialog.routePreview')}</span>
+              <code>{`/mcp/${getFieldValue('name') || ''}`}</code>
+              {getFieldValue('name')?.trim() !== server.name && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={t('serverDialog.renameHelp')}
+                  description={server.auth_mode === 'oauth' ? t('serverDialog.renameOAuthHelp') : undefined}
+                />
+              )}
+            </div>
+          )}
+        </Form.Item>
+        <Form.Item
+          name="display_name"
+          label={t('serverDialog.displayName')}
+          rules={[{ required: true, whitespace: true, message: t('serverDialog.enterDisplayName') }]}
+        >
+          <Input autoFocus />
+        </Form.Item>
+        <DescriptionField />
+      </Form>
+    </Modal>
+  );
 }
 
-function EditInstanceDialog({ server, instance, busy, onClose, onEditInstance }: Pick<ServerDialogsProps, "busy" | "onClose" | "onEditInstance"> & { server: McpServer; instance: McpInstance }) {
+function EditInstanceDialog({
+  server,
+  instance,
+  busy,
+  onClose,
+  onEditInstance,
+}: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onEditInstance'> & { server: McpServer; instance: McpInstance }) {
   const { t } = useI18n();
   const [form] = Form.useForm<{ url: string }>();
-  return <Modal open width={560} title={t("serverDialog.editInstance")} okText={t("serverDialog.saveSettings")} cancelText={t("common.cancel")} confirmLoading={busy}
-    onCancel={onClose} onOk={() => form.validateFields().then((values) => onEditInstance(server, instance, { url: values.url.trim() }))}>
-    <Form form={form} layout="vertical" requiredMark={false} initialValues={{ url: instance.url }}>
-      <Form.Item label={t("serverDialog.instanceId")}><Input value={instance.id} disabled /></Form.Item>
-      <Form.Item name="url" label={t("serverDialog.endpointUrl")} extra={t("serverDialog.endpointChangeHelp")} rules={[{ required: true, message: t("serverDialog.enterEndpointUrl") }, { type: "url", message: t("serverDialog.enterValidHttpHttpsUrl") }]}><Input prefix={<LinkOutlined />} autoFocus /></Form.Item>
-    </Form>
-  </Modal>;
+  return (
+    <Modal
+      open
+      width={560}
+      title={t('serverDialog.editInstance')}
+      okText={t('serverDialog.saveSettings')}
+      cancelText={t('common.cancel')}
+      confirmLoading={busy}
+      onCancel={onClose}
+      onOk={() => form.validateFields().then((values) => onEditInstance(server, instance, { url: values.url.trim() }))}
+    >
+      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ url: instance.url }}>
+        <Form.Item label={t('serverDialog.instanceId')}>
+          <Input value={instance.id} disabled />
+        </Form.Item>
+        <Form.Item
+          name="url"
+          label={t('serverDialog.endpointUrl')}
+          extra={t('serverDialog.endpointChangeHelp')}
+          rules={[
+            { required: true, message: t('serverDialog.enterEndpointUrl') },
+            { type: 'url', message: t('serverDialog.enterValidHttpHttpsUrl') },
+          ]}
+        >
+          <Input prefix={<LinkOutlined />} autoFocus />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
 }
 
 function authFields(values: ServerFormValues): ServerAuthInput {
   return {
     auth_mode: values.auth_mode,
-    ...(values.auth_mode === "api_key" ? { api_key_header: values.api_key_header, api_key_prefix: values.api_key_prefix } : {}),
-    ...(values.auth_mode === "oauth" ? {
-      oauth_authorize_url: values.oauth_authorize_url,
-      oauth_token_url: values.oauth_token_url,
-      oauth_client_id: values.oauth_client_id,
-      oauth_client_secret: values.oauth_client_secret || undefined,
-      oauth_scopes: values.oauth_scopes,
-      oauth_resource: values.oauth_resource,
-      oauth_issuer: values.oauth_issuer,
-      oauth_client_auth_method: values.oauth_client_auth_method,
-    } : {}),
+    ...(values.auth_mode === 'api_key'
+      ? { api_key_header: values.api_key_header, api_key_prefix: values.api_key_prefix }
+      : {}),
+    ...(values.auth_mode === 'oauth'
+      ? {
+          oauth_authorize_url: values.oauth_authorize_url,
+          oauth_token_url: values.oauth_token_url,
+          oauth_client_id: values.oauth_client_id,
+          oauth_client_secret: values.oauth_client_secret || undefined,
+          oauth_scopes: values.oauth_scopes,
+          oauth_resource: values.oauth_resource,
+          oauth_issuer: values.oauth_issuer,
+          oauth_client_auth_method: values.oauth_client_auth_method,
+        }
+      : {}),
   };
 }
 
 function AuthFormFields() {
   const { t } = useI18n();
-  return <>
-    <Form.Item name="auth_mode" label={t("serverDialog.userConnectionMethod")}><Select options={[
-      { value: "none", label: t("serverDialog.noAdditionalAuth") }, { value: "api_key", label: t("serverDialog.userApiKey") }, { value: "oauth", label: t("serverDialog.userOauth") },
-    ]} /></Form.Item>
-    <Form.Item noStyle shouldUpdate={(prev, next) => prev.auth_mode !== next.auth_mode}>
-      {({ getFieldValue }) => getFieldValue("auth_mode") === "api_key" ? <>
-        <Form.Item name="api_key_header" label={t("serverDialog.upstreamHeader")} rules={[{ required: true, message: t("serverDialog.enterUpstreamHeader") }]}><Input placeholder={t("serverDialog.authorizationXApiKey")} /></Form.Item>
-        <Form.Item name="api_key_prefix" label={t("serverDialog.valuePrefix")}><Input placeholder={t("serverDialog.bearerOptional")} /></Form.Item>
-        <Alert type="info" showIcon message={t("serverDialog.usersEnterOwnKeyConnections")} />
-      </> : getFieldValue("auth_mode") === "oauth" ? <>
-        <Form.Item name="oauth_authorize_url" label={t("serverDialog.authorizationEndpoint")} rules={[{ required: true }, { type: "url" }]}><Input placeholder="https://provider.example/authorize" /></Form.Item>
-        <Form.Item name="oauth_token_url" label={t("serverDialog.tokenEndpoint")} rules={[{ required: true }, { type: "url" }]}><Input placeholder="https://provider.example/token" /></Form.Item>
-        <Form.Item name="oauth_client_id" label={t("serverDialog.clientId")} rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name="oauth_client_secret" label={t("serverDialog.clientSecretOptionalPublicClients")}><Input.Password autoComplete="off" /></Form.Item>
-        <Form.Item name="oauth_client_auth_method" label={t("serverDialog.tokenEndpointClientAuth")} initialValue="none"><Select options={[
-          { value: "none", label: t("serverDialog.nonePublicClient") }, { value: "client_secret_basic", label: t("serverDialog.clientSecretBasic") },
-          { value: "client_secret_post", label: t("serverDialog.clientSecretPost") },
-        ]} /></Form.Item>
-        <Form.Item name="oauth_scopes" label={t("serverDialog.scopes")}><Input placeholder="read write" /></Form.Item>
-        <Form.Item name="oauth_resource" label={t("serverDialog.resourceUrlOptional")}><Input placeholder="https://mcp.example.com/mcp" /></Form.Item>
-        <Form.Item name="oauth_issuer" label={t("serverDialog.responseIssuerOptionalUseWhen")}><Input placeholder="https://provider.example" /></Form.Item>
-        <Alert type="info" showIcon message={t("serverDialog.registerCallbackProviderHttpsAuth")} />
-      </> : null}
-    </Form.Item>
-  </>;
+  return (
+    <>
+      <Form.Item name="auth_mode" label={t('serverDialog.userConnectionMethod')}>
+        <Select
+          options={[
+            { value: 'none', label: t('serverDialog.noAdditionalAuth') },
+            { value: 'api_key', label: t('serverDialog.userApiKey') },
+            { value: 'oauth', label: t('serverDialog.userOauth') },
+          ]}
+        />
+      </Form.Item>
+      <Form.Item noStyle shouldUpdate={(prev, next) => prev.auth_mode !== next.auth_mode}>
+        {({ getFieldValue }) =>
+          getFieldValue('auth_mode') === 'api_key' ? (
+            <>
+              <Form.Item
+                name="api_key_header"
+                label={t('serverDialog.upstreamHeader')}
+                rules={[{ required: true, message: t('serverDialog.enterUpstreamHeader') }]}
+              >
+                <Input placeholder={t('serverDialog.authorizationXApiKey')} />
+              </Form.Item>
+              <Form.Item name="api_key_prefix" label={t('serverDialog.valuePrefix')}>
+                <Input placeholder={t('serverDialog.bearerOptional')} />
+              </Form.Item>
+              <Alert type="info" showIcon message={t('serverDialog.usersEnterOwnKeyConnections')} />
+            </>
+          ) : getFieldValue('auth_mode') === 'oauth' ? (
+            <>
+              <Form.Item
+                name="oauth_authorize_url"
+                label={t('serverDialog.authorizationEndpoint')}
+                rules={[{ required: true }, { type: 'url' }]}
+              >
+                <Input placeholder="https://provider.example/authorize" />
+              </Form.Item>
+              <Form.Item
+                name="oauth_token_url"
+                label={t('serverDialog.tokenEndpoint')}
+                rules={[{ required: true }, { type: 'url' }]}
+              >
+                <Input placeholder="https://provider.example/token" />
+              </Form.Item>
+              <Form.Item name="oauth_client_id" label={t('serverDialog.clientId')} rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="oauth_client_secret" label={t('serverDialog.clientSecretOptionalPublicClients')}>
+                <Input.Password autoComplete="off" />
+              </Form.Item>
+              <Form.Item
+                name="oauth_client_auth_method"
+                label={t('serverDialog.tokenEndpointClientAuth')}
+                initialValue="none"
+              >
+                <Select
+                  options={[
+                    { value: 'none', label: t('serverDialog.nonePublicClient') },
+                    { value: 'client_secret_basic', label: t('serverDialog.clientSecretBasic') },
+                    { value: 'client_secret_post', label: t('serverDialog.clientSecretPost') },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="oauth_scopes" label={t('serverDialog.scopes')}>
+                <Input placeholder="read write" />
+              </Form.Item>
+              <Form.Item name="oauth_resource" label={t('serverDialog.resourceUrlOptional')}>
+                <Input placeholder="https://mcp.example.com/mcp" />
+              </Form.Item>
+              <Form.Item name="oauth_issuer" label={t('serverDialog.responseIssuerOptionalUseWhen')}>
+                <Input placeholder="https://provider.example" />
+              </Form.Item>
+              <Alert type="info" showIcon message={t('serverDialog.registerCallbackProviderHttpsAuth')} />
+            </>
+          ) : null
+        }
+      </Form.Item>
+    </>
+  );
 }
 
-function ConfigureAuthDialog({ server, busy, onClose, onConfigureAuth }: Pick<ServerDialogsProps, "busy" | "onClose" | "onConfigureAuth"> & { server: McpServer }) {
+function ConfigureAuthDialog({
+  server,
+  busy,
+  onClose,
+  onConfigureAuth,
+}: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onConfigureAuth'> & { server: McpServer }) {
   const { t } = useI18n();
   const [form] = Form.useForm<ServerFormValues>();
-  return <Modal open width={600} title={t("serverDialog.configureUserConnectionServer", { server: server.display_name })} okText={t("serverDialog.saveSettings")} cancelText={t("common.cancel")} confirmLoading={busy}
-    onCancel={onClose} onOk={() => form.validateFields().then((values) => onConfigureAuth(server, authFields(values)))}>
-    <Form form={form} layout="vertical" requiredMark={false} initialValues={{
-      auth_mode: server.auth_mode, api_key_header: server.api_key_header, api_key_prefix: server.api_key_prefix,
-      oauth_authorize_url: server.oauth_authorize_url, oauth_token_url: server.oauth_token_url,
-      oauth_client_id: server.oauth_client_id, oauth_scopes: server.oauth_scopes, oauth_resource: server.oauth_resource,
-      oauth_issuer: server.oauth_issuer,
-      oauth_client_auth_method: server.oauth_client_auth_method,
-    }}><AuthFormFields /></Form>
-  </Modal>;
+  return (
+    <Modal
+      open
+      width={600}
+      title={t('serverDialog.configureUserConnectionServer', { server: server.display_name })}
+      okText={t('serverDialog.saveSettings')}
+      cancelText={t('common.cancel')}
+      confirmLoading={busy}
+      onCancel={onClose}
+      onOk={() => form.validateFields().then((values) => onConfigureAuth(server, authFields(values)))}
+    >
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark={false}
+        initialValues={{
+          auth_mode: server.auth_mode,
+          api_key_header: server.api_key_header,
+          api_key_prefix: server.api_key_prefix,
+          oauth_authorize_url: server.oauth_authorize_url,
+          oauth_token_url: server.oauth_token_url,
+          oauth_client_id: server.oauth_client_id,
+          oauth_scopes: server.oauth_scopes,
+          oauth_resource: server.oauth_resource,
+          oauth_issuer: server.oauth_issuer,
+          oauth_client_auth_method: server.oauth_client_auth_method,
+        }}
+      >
+        <AuthFormFields />
+      </Form>
+    </Modal>
+  );
 }
 
-function ConfigureUsersDialog({ server, users, busy, onClose, onConfigureUsers }: Pick<ServerDialogsProps, "users" | "busy" | "onClose" | "onConfigureUsers"> & { server: McpServer }) {
+function ConfigureUsersDialog({
+  server,
+  users,
+  busy,
+  onClose,
+  onConfigureUsers,
+}: Pick<ServerDialogsProps, 'users' | 'busy' | 'onClose' | 'onConfigureUsers'> & { server: McpServer }) {
   const { t } = useI18n();
-  const [keyword, setKeyword] = useState("");
-  const [filter, setFilter] = useState<"all" | "granted" | "ungranted">("all");
-  const initialIds = useMemo(() => users
-    .filter((user) => user.role === "user" && !user.servers.includes("*") && user.servers.includes(server.name))
-    .map((user) => user.id), [server.name, users]);
+  const [keyword, setKeyword] = useState('');
+  const [filter, setFilter] = useState<'all' | 'granted' | 'ungranted'>('all');
+  const initialIds = useMemo(
+    () =>
+      users
+        .filter((user) => user.role === 'user' && !user.servers.includes('*') && user.servers.includes(server.name))
+        .map((user) => user.id),
+    [server.name, users],
+  );
   const [selectedIds, setSelectedIds] = useState<number[]>(initialIds);
   const [signupAccess, setSignupAccess] = useState(server.signup_access ?? false);
   const selected = new Set(selectedIds);
-  const fixedUsers = users.filter((user) => user.role === "admin" || user.servers.includes("*"));
-  const ordinaryUsers = users.filter((user) => user.role === "user" && !user.servers.includes("*"));
+  const fixedUsers = users.filter((user) => user.role === 'admin' || user.servers.includes('*'));
+  const ordinaryUsers = users.filter((user) => user.role === 'user' && !user.servers.includes('*'));
   const normalizedKeyword = keyword.trim().toLocaleLowerCase();
   const visibleUsers = [...fixedUsers, ...ordinaryUsers]
     .filter((user) => user.username.toLocaleLowerCase().includes(normalizedKeyword))
-    .filter((user) => filter === "all" || (filter === "granted" ? user.role === "admin" || user.servers.includes("*") || selected.has(user.id) : user.role === "user" && !user.servers.includes("*") && !selected.has(user.id)));
-  const visibleEditableIds = visibleUsers.filter((user) => user.role === "user" && !user.servers.includes("*")).map((user) => user.id);
-  const changed = signupAccess !== (server.signup_access ?? false) || selectedIds.length !== initialIds.length || initialIds.some((id) => !selected.has(id));
+    .filter(
+      (user) =>
+        filter === 'all' ||
+        (filter === 'granted'
+          ? user.role === 'admin' || user.servers.includes('*') || selected.has(user.id)
+          : user.role === 'user' && !user.servers.includes('*') && !selected.has(user.id)),
+    );
+  const visibleEditableIds = visibleUsers
+    .filter((user) => user.role === 'user' && !user.servers.includes('*'))
+    .map((user) => user.id);
+  const changed =
+    signupAccess !== (server.signup_access ?? false) ||
+    selectedIds.length !== initialIds.length ||
+    initialIds.some((id) => !selected.has(id));
 
   const toggleUser = (id: number, checked: boolean) => {
-    setSelectedIds((current) => checked ? [...current, id] : current.filter((item) => item !== id));
+    setSelectedIds((current) => (checked ? [...current, id] : current.filter((item) => item !== id)));
   };
   const setVisible = (checked: boolean) => {
-    setSelectedIds((current) => checked
-      ? [...new Set([...current, ...visibleEditableIds])]
-      : current.filter((id) => !visibleEditableIds.includes(id)));
+    setSelectedIds((current) =>
+      checked
+        ? [...new Set([...current, ...visibleEditableIds])]
+        : current.filter((id) => !visibleEditableIds.includes(id)),
+    );
   };
 
-  return <Modal
-    open
-    width={660}
-    title={<ModalTitle icon={<TeamOutlined />} eyebrow={t("serverDialog.accessManagement")} title={t("serverDialog.assignServerAccessServer", { server: server.display_name })} />}
-    okText={t("serverDialog.saveGrants")}
-    cancelText={t("common.cancel")}
-    okButtonProps={{ disabled: !changed }}
-    confirmLoading={busy}
-    onCancel={onClose}
-    onOk={() => onConfigureUsers(server, selectedIds, signupAccess)}
-  >
-    <div className="signup-access-setting">
-      <div><strong>{t("serverDialog.signupAccess")}</strong><p>{t("serverDialog.signupAccessHelp")}</p></div>
-      <Switch checked={signupAccess} onChange={setSignupAccess} aria-label={t("serverDialog.signupAccess")} />
-    </div>
-    <div className="access-summary">
-      <div><strong>{selectedIds.length}</strong><span>{t("serverDialog.directGrants")}</span></div>
-      <div><strong>{fixedUsers.length}</strong><span>{t("serverDialog.inheritedGrants")}</span></div>
-      <p>{t("serverDialog.grantChangesHint")}</p>
-    </div>
-    <div className="access-toolbar">
-      <Input
-        allowClear
-        prefix={<SearchOutlined />}
-        value={keyword}
-        onChange={(event) => setKeyword(event.target.value)}
-        placeholder={t("serverDialog.searchUsers")}
-        aria-label={t("serverDialog.searchUsers")}
-      />
-      <Segmented
-        value={filter}
-        onChange={(value) => setFilter(value as typeof filter)}
-        options={[
-          { value: "all", label: t("common.all") },
-          { value: "granted", label: t("serverDialog.granted") },
-          { value: "ungranted", label: t("serverDialog.ungranted") },
-        ]}
-      />
-    </div>
-    <div className="access-list-heading">
-      <span>{t("serverDialog.userResults", { count: visibleUsers.length })}</span>
-      {visibleEditableIds.length > 0 && <span className="access-bulk-actions">
-        {visibleEditableIds.some((id) => !selected.has(id)) && <Button type="link" size="small" onClick={() => setVisible(true)}>{t("serverDialog.grantVisible")}</Button>}
-        {visibleEditableIds.some((id) => selected.has(id)) && <Button type="link" size="small" onClick={() => setVisible(false)}>{t("serverDialog.revokeVisible")}</Button>}
-      </span>}
-    </div>
-    <div className="access-user-list">
-      {visibleUsers.length ? visibleUsers.map((user) => {
-        const inherited = user.role === "admin" || user.servers.includes("*");
-        const accessType = user.role === "admin" ? t("serverDialog.adminAccess") : user.servers.includes("*") ? t("serverDialog.wildcardAccess") : t("common.standardUser");
-        const identity = <span className="access-user-detail">
-          <span className="access-user-avatar" aria-hidden="true">{user.username.slice(0, 1).toLocaleUpperCase()}</span>
-          <span className="access-user-name"><strong>{user.username}</strong><small>{accessType}{user.disabled ? t("serverDialog.signDisabled") : ""}</small></span>
-          <span className={`access-user-state ${inherited ? "is-inherited" : selected.has(user.id) ? "is-granted" : ""}`}>{inherited ? t("serverDialog.inherited") : selected.has(user.id) ? t("serverDialog.granted") : t("serverDialog.ungranted")}</span>
-        </span>;
-        return inherited
-          ? <div className="access-user-row is-fixed" key={user.id}><LockOutlined className="access-user-lock" />{identity}</div>
-          : <Checkbox className="access-user-row" key={user.id} checked={selected.has(user.id)} onChange={(event) => toggleUser(user.id, event.target.checked)}>{identity}</Checkbox>;
-      }) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("serverDialog.noMatchingUsers")} />}
-    </div>
-  </Modal>;
+  return (
+    <Modal
+      open
+      width={660}
+      title={
+        <ModalTitle
+          icon={<TeamOutlined />}
+          eyebrow={t('serverDialog.accessManagement')}
+          title={t('serverDialog.assignServerAccessServer', { server: server.display_name })}
+        />
+      }
+      okText={t('serverDialog.saveGrants')}
+      cancelText={t('common.cancel')}
+      okButtonProps={{ disabled: !changed }}
+      confirmLoading={busy}
+      onCancel={onClose}
+      onOk={() => onConfigureUsers(server, selectedIds, signupAccess)}
+    >
+      <div className="signup-access-setting">
+        <div>
+          <strong>{t('serverDialog.signupAccess')}</strong>
+          <p>{t('serverDialog.signupAccessHelp')}</p>
+        </div>
+        <Switch checked={signupAccess} onChange={setSignupAccess} aria-label={t('serverDialog.signupAccess')} />
+      </div>
+      <div className="access-summary">
+        <div>
+          <strong>{selectedIds.length}</strong>
+          <span>{t('serverDialog.directGrants')}</span>
+        </div>
+        <div>
+          <strong>{fixedUsers.length}</strong>
+          <span>{t('serverDialog.inheritedGrants')}</span>
+        </div>
+        <p>{t('serverDialog.grantChangesHint')}</p>
+      </div>
+      <div className="access-toolbar">
+        <Input
+          allowClear
+          prefix={<SearchOutlined />}
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+          placeholder={t('serverDialog.searchUsers')}
+          aria-label={t('serverDialog.searchUsers')}
+        />
+        <Segmented
+          value={filter}
+          onChange={(value) => setFilter(value as typeof filter)}
+          options={[
+            { value: 'all', label: t('common.all') },
+            { value: 'granted', label: t('serverDialog.granted') },
+            { value: 'ungranted', label: t('serverDialog.ungranted') },
+          ]}
+        />
+      </div>
+      <div className="access-list-heading">
+        <span>{t('serverDialog.userResults', { count: visibleUsers.length })}</span>
+        {visibleEditableIds.length > 0 && (
+          <span className="access-bulk-actions">
+            {visibleEditableIds.some((id) => !selected.has(id)) && (
+              <Button type="link" size="small" onClick={() => setVisible(true)}>
+                {t('serverDialog.grantVisible')}
+              </Button>
+            )}
+            {visibleEditableIds.some((id) => selected.has(id)) && (
+              <Button type="link" size="small" onClick={() => setVisible(false)}>
+                {t('serverDialog.revokeVisible')}
+              </Button>
+            )}
+          </span>
+        )}
+      </div>
+      <div className="access-user-list">
+        {visibleUsers.length ? (
+          visibleUsers.map((user) => {
+            const inherited = user.role === 'admin' || user.servers.includes('*');
+            const accessType =
+              user.role === 'admin'
+                ? t('serverDialog.adminAccess')
+                : user.servers.includes('*')
+                  ? t('serverDialog.wildcardAccess')
+                  : t('common.standardUser');
+            const identity = (
+              <span className="access-user-detail">
+                <span className="access-user-avatar" aria-hidden="true">
+                  {user.username.slice(0, 1).toLocaleUpperCase()}
+                </span>
+                <span className="access-user-name">
+                  <strong>{user.username}</strong>
+                  <small>
+                    {accessType}
+                    {user.disabled ? t('serverDialog.signDisabled') : ''}
+                  </small>
+                </span>
+                <span
+                  className={`access-user-state ${inherited ? 'is-inherited' : selected.has(user.id) ? 'is-granted' : ''}`}
+                >
+                  {inherited
+                    ? t('serverDialog.inherited')
+                    : selected.has(user.id)
+                      ? t('serverDialog.granted')
+                      : t('serverDialog.ungranted')}
+                </span>
+              </span>
+            );
+            return inherited ? (
+              <div className="access-user-row is-fixed" key={user.id}>
+                <LockOutlined className="access-user-lock" />
+                {identity}
+              </div>
+            ) : (
+              <Checkbox
+                className="access-user-row"
+                key={user.id}
+                checked={selected.has(user.id)}
+                onChange={(event) => toggleUser(user.id, event.target.checked)}
+              >
+                {identity}
+              </Checkbox>
+            );
+          })
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('serverDialog.noMatchingUsers')} />
+        )}
+      </div>
+    </Modal>
+  );
 }
 
 function AddInstanceDialog({
@@ -357,7 +634,7 @@ function AddInstanceDialog({
   busy,
   onClose,
   onAddInstance,
-}: Pick<ServerDialogsProps, "busy" | "onClose" | "onAddInstance"> & {
+}: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onAddInstance'> & {
   server: McpServer;
 }) {
   const { t } = useI18n();
@@ -369,12 +646,12 @@ function AddInstanceDialog({
       title={
         <ModalTitle
           icon={<DeploymentUnitOutlined />}
-          eyebrow={t("serverDialog.upstreamCapacity")}
-          title={t("serverDialog.addInstanceServer", { server: server.name })}
+          eyebrow={t('serverDialog.upstreamCapacity')}
+          title={t('serverDialog.addInstanceServer', { server: server.name })}
         />
       }
-      okText={t("serverDialog.addPool")}
-      cancelText={t("common.cancel")}
+      okText={t('serverDialog.addPool')}
+      cancelText={t('common.cancel')}
       confirmLoading={busy}
       onCancel={onClose}
       onOk={() =>
@@ -387,36 +664,25 @@ function AddInstanceDialog({
       }
     >
       <Form form={form} layout="vertical" requiredMark={false}>
-        <Form.Item name="id" label={t("serverDialog.instanceIdOptional")}>
-          <Input placeholder={t("serverDialog.leaveBlankGenerateUuid")} autoFocus />
+        <Form.Item name="id" label={t('serverDialog.instanceIdOptional')}>
+          <Input placeholder={t('serverDialog.leaveBlankGenerateUuid')} autoFocus />
         </Form.Item>
         <Form.Item
           name="url"
-          label={t("serverDialog.endpointUrl")}
+          label={t('serverDialog.endpointUrl')}
           rules={[
-            { required: true, message: t("serverDialog.enterEndpointUrl") },
-            { type: "url", message: t("serverDialog.enterValidHttpHttpsUrl") },
+            { required: true, message: t('serverDialog.enterEndpointUrl') },
+            { type: 'url', message: t('serverDialog.enterValidHttpHttpsUrl') },
           ]}
         >
-          <Input
-            prefix={<LinkOutlined />}
-            placeholder="https://host.example/mcp"
-          />
+          <Input prefix={<LinkOutlined />} placeholder="https://host.example/mcp" />
         </Form.Item>
       </Form>
     </Modal>
   );
 }
 
-function ModalTitle({
-  icon,
-  eyebrow,
-  title,
-}: {
-  icon: React.ReactNode;
-  eyebrow: string;
-  title: string;
-}) {
+function ModalTitle({ icon, eyebrow, title }: { icon: React.ReactNode; eyebrow: string; title: string }) {
   return (
     <span className="modal-title">
       <span>{icon}</span>

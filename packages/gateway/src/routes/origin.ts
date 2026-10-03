@@ -27,7 +27,8 @@ export function mcpCorsHeaders(origin: string | undefined, resourceBaseUrl: stri
   return {
     'access-control-allow-origin': origin,
     'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
-    'access-control-allow-headers': 'Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID',
+    'access-control-allow-headers':
+      'Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID',
     'access-control-expose-headers': 'Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate',
     vary: 'Origin',
   };

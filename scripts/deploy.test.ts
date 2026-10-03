@@ -7,35 +7,55 @@ import { test } from 'node:test';
 import { readDeploymentEnvironment } from './deploy-env.js';
 
 const script = resolve('scripts/deploy.sh');
-const environmentKeys = ['MCP_DEPLOY_DIR', 'MCP_HTTP_PORT', 'MCP_IMAGE_PREFIX', 'MCP_IMAGE_NAME', 'MCP_VERSION', 'COMPOSE_PROJECT_NAME',
-  'POSTGRES_PASSWORD', 'REDIS_PASSWORD', 'INTERNAL_API_TOKEN', 'CREDENTIAL_BROKER_TOKEN',
-  'CREDENTIAL_ENCRYPT_KEY', 'ADMIN_PASSWORD', 'AUTH_TRUSTED_PROXY_IPS'];
+const environmentKeys = [
+  'MCP_DEPLOY_DIR',
+  'MCP_HTTP_PORT',
+  'MCP_IMAGE_PREFIX',
+  'MCP_IMAGE_NAME',
+  'MCP_VERSION',
+  'COMPOSE_PROJECT_NAME',
+  'POSTGRES_PASSWORD',
+  'REDIS_PASSWORD',
+  'INTERNAL_API_TOKEN',
+  'CREDENTIAL_BROKER_TOKEN',
+  'CREDENTIAL_ENCRYPT_KEY',
+  'ADMIN_PASSWORD',
+  'AUTH_TRUSTED_PROXY_IPS',
+];
 
 function sandbox() {
   const directory = mkdtempSync(join(tmpdir(), 'mcp-installer-test-'));
   const deployment = join(directory, 'deployment');
   const log = join(directory, 'docker.log');
   // No containers are created. Record whether the installer selects build or pull.
-  writeFileSync(join(directory, 'docker'), [
-    '#!/usr/bin/env bash',
-    'printf "%s\\n" "$*" >> "$MOCK_DOCKER_LOG"',
-    'if [[ "$1" == network ]]; then echo "172.88.0.0/24,"; fi',
-    'if [[ "$*" == *"build mcp-server"* && ${MOCK_BUILD_FAIL:-0} == 1 ]]; then exit 42; fi',
-    'if [[ "$1" == ps && ${MOCK_LEGACY_APPS:-0} == 1 ]]; then',
-    '  for service in auth gateway admin-web app; do if [[ "$*" == *"service=$service"* ]]; then echo "legacy-$service"; fi; done',
-    'fi',
-    'exit 0',
-  ].join('\n'), { mode: 0o700 });
+  writeFileSync(
+    join(directory, 'docker'),
+    [
+      '#!/usr/bin/env bash',
+      'printf "%s\\n" "$*" >> "$MOCK_DOCKER_LOG"',
+      'if [[ "$1" == network ]]; then echo "172.88.0.0/24,"; fi',
+      'if [[ "$*" == *"build mcp-server"* && ${MOCK_BUILD_FAIL:-0} == 1 ]]; then exit 42; fi',
+      'if [[ "$1" == ps && ${MOCK_LEGACY_APPS:-0} == 1 ]]; then',
+      '  for service in auth gateway admin-web app; do if [[ "$*" == *"service=$service"* ]]; then echo "legacy-$service"; fi; done',
+      'fi',
+      'exit 0',
+    ].join('\n'),
+    { mode: 0o700 },
+  );
   const env = { ...process.env };
   for (const key of environmentKeys) delete env[key];
-  Object.assign(env, { PATH: directory + delimiter + process.env.PATH,
-    MOCK_DOCKER_LOG: log, MCP_DEPLOY_DIR: deployment, COMPOSE_PROJECT_NAME: 'mcp-installer-test' });
+  Object.assign(env, {
+    PATH: directory + delimiter + process.env.PATH,
+    MOCK_DOCKER_LOG: log,
+    MCP_DEPLOY_DIR: deployment,
+    COMPOSE_PROJECT_NAME: 'mcp-installer-test',
+  });
   return {
     deployment,
     envFile: join(deployment, 'runtime.env'),
     run: (args: string[], input = '', extra: Record<string, string> = {}) =>
       spawnSync('bash', [script, ...args], { env: { ...env, ...extra }, input, encoding: 'utf8', timeout: 5000 }),
-    commands: () => existsSync(log) ? readFileSync(log, 'utf8') : '',
+    commands: () => (existsSync(log) ? readFileSync(log, 'utf8') : ''),
     cleanup: () => rmSync(directory, { recursive: true, force: true }),
   };
 }
@@ -44,10 +64,12 @@ test('interactive setup validates input and preserves a literal hidden password 
   const setup = sandbox();
   try {
     const password = 'A long-$HOME-$(never_execute)-"quoted"\\secret\'=literal 密码';
-    const result = setup.run(['--prepare-only', '--interactive'], [
-      'invalid', '0', '18081', '3', '1', 'short', password, 'different-password',
-      password, password, 'y', '',
-    ].join('\n'));
+    const result = setup.run(
+      ['--prepare-only', '--interactive'],
+      ['invalid', '0', '18081', '3', '1', 'short', password, 'different-password', password, password, 'y', ''].join(
+        '\n',
+      ),
+    );
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stderr, /端口须为/);
     assert.match(result.stderr, /两次密码不一致/);
@@ -63,15 +85,20 @@ test('interactive setup validates input and preserves a literal hidden password 
     assert.equal(setup.run(['--yes', '--prepare-only']).status, 0);
     assert.deepEqual(readDeploymentEnvironment(setup.envFile), saved);
     assert.ok(!setup.commands().includes(' up '));
-  } finally { setup.cleanup(); }
+  } finally {
+    setup.cleanup();
+  }
 });
 
 test('interactive image deployment selects the tag without asking for the repository', () => {
   const setup = sandbox();
   try {
     const password = 'known-installer-test-password';
-    const result = setup.run(['--interactive'], ['18082', '2', 'invalid/tag', 'v1.2.3', 'y', ''].join('\n'),
-      { ADMIN_PASSWORD: password, MCP_IMAGE_PREFIX: 'ghcr.io/example/', MCP_IMAGE_NAME: 'mcp-app' });
+    const result = setup.run(['--interactive'], ['18082', '2', 'invalid/tag', 'v1.2.3', 'y', ''].join('\n'), {
+      ADMIN_PASSWORD: password,
+      MCP_IMAGE_PREFIX: 'ghcr.io/example/',
+      MCP_IMAGE_NAME: 'mcp-app',
+    });
     assert.equal(result.status, 0, result.stderr);
     assert.ok(!result.stderr.includes('镜像仓库前缀') && !result.stderr.includes('镜像名称'));
     const saved = readDeploymentEnvironment(setup.envFile);
@@ -82,7 +109,9 @@ test('interactive image deployment selects the tag without asking for the reposi
     assert.match(setup.commands(), /pull mcp-server/);
     assert.ok(!setup.commands().includes('build mcp-server'));
     assert.ok(!result.stdout.includes(password) && !result.stderr.includes(password));
-  } finally { setup.cleanup(); }
+  } finally {
+    setup.cleanup();
+  }
 });
 
 test('cancelling installation or an upgrade leaves saved configuration untouched', () => {
@@ -98,7 +127,9 @@ test('cancelling installation or an upgrade leaves saved configuration untouched
     assert.equal(readFileSync(setup.envFile, 'utf8'), saved);
     assert.ok(!result.stderr.includes('首次管理员密码'));
     assert.ok(!setup.commands().includes(' up '));
-  } finally { setup.cleanup(); }
+  } finally {
+    setup.cleanup();
+  }
 });
 
 test('noninteractive deployment keeps defaults and existing credentials and rejects invalid settings before writing', () => {
@@ -119,7 +150,9 @@ test('noninteractive deployment keeps defaults and existing credentials and reje
     assert.equal(setup.run(['--prepare-only']).status, 0);
     assert.deepEqual(readDeploymentEnvironment(setup.envFile), saved);
     assert.ok(!first.stderr.includes('HTTP 端口'));
-  } finally { setup.cleanup(); }
+  } finally {
+    setup.cleanup();
+  }
 });
 
 test('exhausted interactive input aborts without saving, while help has no side effects', () => {
@@ -131,7 +164,9 @@ test('exhausted interactive input aborts without saving, while help has no side 
     assert.equal(existsSync(setup.deployment), false);
     assert.equal(setup.run(['--help']).status, 0);
     assert.equal(existsSync(setup.deployment), false);
-  } finally { setup.cleanup(); }
+  } finally {
+    setup.cleanup();
+  }
 });
 
 test('upgrade prepares the app image before replacing legacy containers and preserves data services', () => {
@@ -144,32 +179,50 @@ test('upgrade prepares the app image before replacing legacy containers and pres
     assert.ok(commands.indexOf('rm legacy-auth') < commands.indexOf('up -d --no-build'));
     assert.match(commands, /stop --time 15 legacy-auth legacy-gateway legacy-admin-web legacy-app/);
     assert.ok(!commands.includes('down') && !commands.includes('stop postgres'));
-  } finally { setup.cleanup(); }
+  } finally {
+    setup.cleanup();
+  }
   const failed = sandbox();
   try {
-    const result = failed.run(['--yes'], '', { ADMIN_PASSWORD: 'known-installer-test-password', MOCK_LEGACY_APPS: '1', MOCK_BUILD_FAIL: '1', MCP_IMAGE_PREFIX: '' });
+    const result = failed.run(['--yes'], '', {
+      ADMIN_PASSWORD: 'known-installer-test-password',
+      MOCK_LEGACY_APPS: '1',
+      MOCK_BUILD_FAIL: '1',
+      MCP_IMAGE_PREFIX: '',
+    });
     assert.equal(result.status, 42);
     assert.ok(!failed.commands().includes('stop --time'));
-  } finally { failed.cleanup(); }
+  } finally {
+    failed.cleanup();
+  }
 });
 
 test('local image deployment skips build/pull and uses the imported tag', () => {
   const setup = sandbox();
   try {
-    const result = setup.run(['--yes', '--use-local-image'], '', { ADMIN_PASSWORD: 'known-installer-test-password', MCP_VERSION: 'local', MCP_IMAGE_PREFIX: 'ghcr.io/previous/' });
+    const result = setup.run(['--yes', '--use-local-image'], '', {
+      ADMIN_PASSWORD: 'known-installer-test-password',
+      MCP_VERSION: 'local',
+      MCP_IMAGE_PREFIX: 'ghcr.io/previous/',
+    });
     assert.equal(result.status, 0, result.stderr);
     const saved = readDeploymentEnvironment(setup.envFile);
-    assert.equal(saved.MCP_VERSION, 'local');assert.equal(saved.MCP_IMAGE_PREFIX, '');
+    assert.equal(saved.MCP_VERSION, 'local');
+    assert.equal(saved.MCP_IMAGE_PREFIX, '');
     assert.match(setup.commands(), /image inspect mcp-gateway:local/);
     assert.ok(!setup.commands().includes('build mcp-server') && !setup.commands().includes('pull mcp-server'));
     assert.match(setup.commands(), /up -d --no-build --pull never --wait/);
-  } finally { setup.cleanup(); }
+  } finally {
+    setup.cleanup();
+  }
 });
 
 test('published repository is the default and persists across upgrades and imported images', () => {
   const setup = sandbox();
   try {
-    const result = setup.run(['--interactive'], ['18082', '2', 'latest', 'y', ''].join('\n'), { ADMIN_PASSWORD: 'known-installer-test-password' });
+    const result = setup.run(['--interactive'], ['18082', '2', 'latest', 'y', ''].join('\n'), {
+      ADMIN_PASSWORD: 'known-installer-test-password',
+    });
     assert.equal(result.status, 0, result.stderr);
     assert.ok(!result.stderr.includes('镜像仓库前缀') && !result.stderr.includes('镜像名称'));
     assert.match(result.stderr, /brandonvee\/mcp-gateway:latest/);
@@ -181,12 +234,16 @@ test('published repository is the default and persists across upgrades and impor
     assert.deepEqual(readDeploymentEnvironment(setup.envFile), saved);
     assert.equal(setup.run(['--yes', '--use-local-image']).status, 0);
     assert.match(setup.commands(), /image inspect mcp-gateway:latest/);
-  } finally { setup.cleanup(); }
+  } finally {
+    setup.cleanup();
+  }
   const invalid = sandbox();
   try {
     assert.equal(invalid.run(['--yes', '--prepare-only'], '', { MCP_IMAGE_NAME: 'Invalid/Name' }).status, 1);
     assert.equal(existsSync(invalid.deployment), false);
-  } finally { invalid.cleanup(); }
+  } finally {
+    invalid.cleanup();
+  }
 });
 
 test('pulled deployments follow the newest release unless MCP_VERSION pins one', () => {
@@ -197,9 +254,15 @@ test('pulled deployments follow the newest release unless MCP_VERSION pins one',
     assert.equal(pinned.status, 0, pinned.stderr);
     assert.equal(readDeploymentEnvironment(setup.envFile).MCP_VERSION, 'v0.2.0');
     assert.equal(setup.run(['--yes', '--prepare-only'], '', extra).status, 0);
-    assert.equal(readDeploymentEnvironment(setup.envFile).MCP_VERSION, 'latest', 'a rerun upgrades instead of reusing the saved tag');
+    assert.equal(
+      readDeploymentEnvironment(setup.envFile).MCP_VERSION,
+      'latest',
+      'a rerun upgrades instead of reusing the saved tag',
+    );
     const repinned = setup.run(['--yes', '--prepare-only'], '', { ...extra, MCP_VERSION: 'v0.2.0' });
     assert.equal(repinned.status, 0, repinned.stderr);
     assert.equal(readDeploymentEnvironment(setup.envFile).MCP_VERSION, 'v0.2.0');
-  } finally { setup.cleanup(); }
+  } finally {
+    setup.cleanup();
+  }
 });

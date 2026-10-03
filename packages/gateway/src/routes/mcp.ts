@@ -17,10 +17,18 @@ export function registerMcpRoutes(app: FastifyInstance): void {
 
 async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   req.monitoring?.parse();
-  try { await proxyRequest(req, reply); }
-  finally { req.monitoring?.finish(reply.raw.statusCode, reply.raw.destroyed && !reply.raw.writableFinished); }
+  try {
+    await proxyRequest(req, reply);
+  } finally {
+    req.monitoring?.finish(reply.raw.statusCode, reply.raw.destroyed && !reply.raw.writableFinished);
+  }
 }
 
+/**
+ * One MCP request: authorize, then resolve the target instance, then proxy.
+ * Sessions are pinned to an instance (see lb.ts), so a request carrying a session
+ * id can only be retried on the instance that already owns it.
+ */
 async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const { serverName } = req.params as { serverName: string };
   let cfg = getServerConfig(serverName);
@@ -88,7 +96,9 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
         signal: AbortSignal.timeout(10_000),
       });
       if (result.status === 409) {
-        await reply.code(409).send({ error: 'connection_required', server: serverName, connect_url: env.connectionsWebUrl });
+        await reply
+          .code(409)
+          .send({ error: 'connection_required', server: serverName, connect_url: env.connectionsWebUrl });
         return;
       }
       if (result.status === 403) {
@@ -96,9 +106,14 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
         return;
       }
       if (!result.ok) throw new Error(`credential broker HTTP ${result.status}`);
-      const body = await result.json() as { header?: unknown; value?: unknown };
-      if (typeof body.header !== 'string' || !/^(authorization|x-[a-z0-9-]{1,60})$/i.test(body.header)
-        || typeof body.value !== 'string' || !body.value || /[\x00-\x1f\x7f]/.test(body.value)) {
+      const body = (await result.json()) as { header?: unknown; value?: unknown };
+      if (
+        typeof body.header !== 'string' ||
+        !/^(authorization|x-[a-z0-9-]{1,60})$/i.test(body.header) ||
+        typeof body.value !== 'string' ||
+        !body.value ||
+        /[\x00-\x1f\x7f]/.test(body.value)
+      ) {
         throw new Error('credential broker returned invalid header');
       }
       upstreamCredential = { header: body.header.toLowerCase(), value: body.value };
@@ -109,19 +124,25 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
     }
   }
 
-  const incomingSessionId = typeof req.headers['mcp-session-id'] === 'string' ? req.headers['mcp-session-id'] : undefined;
+  const incomingSessionId =
+    typeof req.headers['mcp-session-id'] === 'string' ? req.headers['mcp-session-id'] : undefined;
   const sessionOwner = String(req.mcpAuth?.uid ?? req.mcpAuth?.sub ?? '');
   if (incomingSessionId && !(await sessionOwnedBy(serverName, incomingSessionId, sessionOwner))) {
     await reply.code(404).send({ error: 'session_not_found' });
     return;
   }
-  const hashSeed = incomingSessionId ? undefined : Buffer.from((req.body as Buffer | undefined) ?? `${serverName}:${Math.random()}`).toString('base64');
+  // New sessions are hashed to an instance. Without a body (GET/SSE handshake)
+  // every replica must still agree on the instance, so the seed stays random per
+  // request rather than derived from nothing.
+  const hashSeed = incomingSessionId
+    ? undefined
+    : Buffer.from((req.body as Buffer | undefined) ?? `${serverName}:${Math.random()}`).toString('base64');
   const target = await pickInstance(cfg, incomingSessionId, hashSeed);
   if (incomingSessionId && !target.sticky) {
     await reply.code(404).send({ error: 'session_not_found' });
     return;
   }
-  if (incomingSessionId && !await touchSession(serverName, incomingSessionId, sessionOwner)) {
+  if (incomingSessionId && !(await touchSession(serverName, incomingSessionId, sessionOwner))) {
     await reply.code(404).send({ error: 'session_not_found' });
     return;
   }
@@ -154,19 +175,29 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
   }
 
   let stopSessionRenewal: (() => void) | undefined;
+  // Sessions expire on a TTL, so a long-lived SSE or streamable HTTP response has
+  // to renew its own binding while the client keeps it open.
   const renewWhileActive = (sessionId: string): void => {
     stopSessionRenewal?.();
     if (reply.raw.destroyed) return;
     let renewing = false;
-    const timer = setInterval(() => {
-      if (renewing) return;
-      renewing = true;
-      void touchSession(serverName, sessionId, sessionOwner).then(renewed => {
-        if (!renewed) clearInterval(timer);
-      }).catch(error => {
-        req.log.warn({ err: error, server: serverName }, 'active session renewal failed');
-      }).finally(() => { renewing = false; });
-    }, Math.max(250, Math.min(30_000, env.sessionTtlSeconds * 1000 / 3)));
+    const timer = setInterval(
+      () => {
+        if (renewing) return;
+        renewing = true;
+        void touchSession(serverName, sessionId, sessionOwner)
+          .then((renewed) => {
+            if (!renewed) clearInterval(timer);
+          })
+          .catch((error) => {
+            req.log.warn({ err: error, server: serverName }, 'active session renewal failed');
+          })
+          .finally(() => {
+            renewing = false;
+          });
+      },
+      Math.max(250, Math.min(30_000, (env.sessionTtlSeconds * 1000) / 3)),
+    );
     timer.unref();
     stopSessionRenewal = () => clearInterval(timer);
   };
@@ -194,7 +225,10 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
       }).catch((error: unknown) => {
         if (req.monitoring) req.monitoring.error = 'upstream_transport_error';
         upstreamHealth.recordFailure(targetUrl, 'transport');
-        req.log.warn({ error: error instanceof Error ? error.name : 'UnknownError', server: serverName }, 'upstream request failed');
+        req.log.warn(
+          { error: error instanceof Error ? error.name : 'UnknownError', server: serverName },
+          'upstream request failed',
+        );
         return null;
       });
       if (!upstream) continue;
@@ -211,21 +245,30 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
 
       if (cfg.authMode !== 'none' && (upstream.statusCode === 401 || upstream.statusCode === 403)) {
         await upstream.body.dump();
-        await reply.code(409).send({ error: 'upstream_credential_rejected', server: serverName, connect_url: env.connectionsWebUrl });
+        await reply
+          .code(409)
+          .send({ error: 'upstream_credential_rejected', server: serverName, connect_url: env.connectionsWebUrl });
         return;
       }
 
       // A successful DELETE or upstream 404 ends the session. Otherwise renew
       // the verified incoming ID even when subsequent responses do not echo it.
-      const sessionEnded = incomingSessionId && (upstream.statusCode === 404
-        || (req.method === 'DELETE' && upstream.statusCode >= 200 && upstream.statusCode < 300));
+      const sessionEnded =
+        incomingSessionId &&
+        (upstream.statusCode === 404 ||
+          (req.method === 'DELETE' && upstream.statusCode >= 200 && upstream.statusCode < 300));
       const sessionId = upstream.headers['mcp-session-id'];
       try {
         if (sessionEnded) {
           stopSessionRenewal?.();
           await removeSession(serverName, incomingSessionId, sessionOwner);
-        } else if (!incomingSessionId && typeof sessionId === 'string' && sessionId
-          && upstream.statusCode >= 200 && upstream.statusCode < 300) {
+        } else if (
+          !incomingSessionId &&
+          typeof sessionId === 'string' &&
+          sessionId &&
+          upstream.statusCode >= 200 &&
+          upstream.statusCode < 300
+        ) {
           await bindSession(cfg.name, sessionId, targetUrl, sessionOwner);
           renewWhileActive(sessionId);
         }
@@ -234,8 +277,14 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
         throw error;
       }
 
-      const resHeaders = { ...filterResponseHeaders(upstream.headers), ...mcpCorsHeaders(req.headers.origin, env.resourceBaseUrl) };
-      if (req.monitoring) { req.monitoring.status = upstream.statusCode; req.monitoring.error = ''; }
+      const resHeaders = {
+        ...filterResponseHeaders(upstream.headers),
+        ...mcpCorsHeaders(req.headers.origin, env.resourceBaseUrl),
+      };
+      if (req.monitoring) {
+        req.monitoring.status = upstream.statusCode;
+        req.monitoring.error = '';
+      }
 
       // Hand the raw response over so we can stream (SSE-safe).
       reply.hijack();
@@ -248,7 +297,10 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
       }
       try {
         const observer = req.monitoring?.observer(String(upstream.headers['content-type'] || ''));
-        if (observer) { upstream.body.on('data', chunk => observer.write(Buffer.from(chunk))); upstream.body.once('end', () => observer.end()); }
+        if (observer) {
+          upstream.body.on('data', (chunk) => observer.write(Buffer.from(chunk)));
+          upstream.body.once('end', () => observer.end());
+        }
         await pipeline(upstream.body, raw); // undici body is already a Node Readable
       } catch (err) {
         // Client aborted or upstream died mid-stream; nothing sensible to send now.

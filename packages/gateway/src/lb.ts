@@ -38,9 +38,27 @@ end
 return 1
 `;
 
-async function updateSession(action: 'bind' | 'touch' | 'remove', server: string, sessionId: string, owner: string, instanceUrl = ''): Promise<boolean> {
-  return Number(await redis.eval(sessionScript, 2, bindKey(server, sessionId), ownerKey(server, sessionId),
-    action, owner, env.sessionTtlSeconds, instanceUrl)) === 1;
+async function updateSession(
+  action: 'bind' | 'touch' | 'remove',
+  server: string,
+  sessionId: string,
+  owner: string,
+  instanceUrl = '',
+): Promise<boolean> {
+  return (
+    Number(
+      await redis.eval(
+        sessionScript,
+        2,
+        bindKey(server, sessionId),
+        ownerKey(server, sessionId),
+        action,
+        owner,
+        env.sessionTtlSeconds,
+        instanceUrl,
+      ),
+    ) === 1
+  );
 }
 
 export async function sessionOwnedBy(serverName: string, sessionId: string, owner: string): Promise<boolean> {
@@ -62,7 +80,11 @@ export interface PickedInstance {
  *   pure function, so concurrent gateway replicas agree without coordination,
  *   and duplicated initialize requests land on the same instance.
  */
-export async function pickInstance(cfg: McpServerConfig, sessionId?: string, hashSeed?: string): Promise<PickedInstance> {
+export async function pickInstance(
+  cfg: McpServerConfig,
+  sessionId?: string,
+  hashSeed?: string,
+): Promise<PickedInstance> {
   if (sessionId) {
     const bound = await redis.get(bindKey(cfg.name, sessionId));
     const urlIndex = bound ? cfg.instances.indexOf(bound) : -1;
@@ -79,8 +101,14 @@ export async function pickInstance(cfg: McpServerConfig, sessionId?: string, has
 }
 
 /** Remember which instance created an MCP session without changing its owner. */
-export async function bindSession(serverName: string, sessionId: string, instanceUrl: string, owner: string): Promise<void> {
-  if (!await updateSession('bind', serverName, sessionId, owner, instanceUrl)) throw new Error('MCP session owner mismatch');
+export async function bindSession(
+  serverName: string,
+  sessionId: string,
+  instanceUrl: string,
+  owner: string,
+): Promise<void> {
+  if (!(await updateSession('bind', serverName, sessionId, owner, instanceUrl)))
+    throw new Error('MCP session owner mismatch');
 }
 
 /** Extend an existing owned session, including when upstream omits its header. */

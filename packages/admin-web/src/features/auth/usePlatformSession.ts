@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, api, apiForSession } from "../../api";
-import type { PlatformSession } from "../../types";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ApiError, api, apiForSession } from '../../api';
+import type { PlatformSession } from '../../types';
 
 /** One browser identity for both the administration and personal portal. */
 export function usePlatformSession() {
@@ -13,9 +13,17 @@ export function usePlatformSession() {
   // Older backends have no signup route; treat every failure as a closed entry.
   useEffect(() => {
     let active = true;
-    api.signupStatus().then((status) => { if (active) setRegistrationEnabled(status.registration_enabled); })
-      .catch(() => { if (active) setRegistrationEnabled(false); });
-    return () => { active = false; };
+    api
+      .signupStatus()
+      .then((status) => {
+        if (active) setRegistrationEnabled(status.registration_enabled);
+      })
+      .catch(() => {
+        if (active) setRegistrationEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const refresh = useCallback(async () => {
@@ -37,14 +45,14 @@ export function usePlatformSession() {
   useEffect(() => {
     void refresh();
     const revalidate = () => {
-      if (document.visibilityState === "visible") void refresh();
+      if (document.visibilityState === 'visible') void refresh();
     };
-    window.addEventListener("focus", revalidate);
-    document.addEventListener("visibilitychange", revalidate);
+    window.addEventListener('focus', revalidate);
+    document.addEventListener('visibilitychange', revalidate);
     return () => {
       generation.current++;
-      window.removeEventListener("focus", revalidate);
-      document.removeEventListener("visibilitychange", revalidate);
+      window.removeEventListener('focus', revalidate);
+      document.removeEventListener('visibilitychange', revalidate);
     };
   }, [refresh]);
 
@@ -54,21 +62,21 @@ export function usePlatformSession() {
     setChecking(false);
     setSession(current);
     // Both roles share the same default login and home address.
-    window.history.replaceState(null, "", `/${window.location.search}`);
+    window.history.replaceState(null, '', `/${window.location.search}`);
   };
 
   const logout = async () => {
     try {
       await apiForSession(session ?? undefined).myLogout();
     } catch (failure) {
-      if (failure instanceof ApiError && failure.code === "session_changed") await refresh();
+      if (failure instanceof ApiError && failure.code === 'session_changed') await refresh();
       throw failure;
     }
     generation.current++;
     setSession(null);
     setError(null);
     setChecking(false);
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState(null, '', '/');
   };
 
   return { session, error, checking, refresh, signedIn, logout, registrationEnabled };

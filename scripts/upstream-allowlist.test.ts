@@ -14,7 +14,12 @@ test('explicit allowlist policy applies in both production and development', () 
     const disabled = { ...enabled, MCP_UPSTREAM_ALLOWLIST_ENABLED: 'false' };
     assert.equal(normalizeUpstreamEndpoint('https://other.example.com', disabled), 'https://other.example.com/mcp');
     assert.equal(normalizeUpstreamEndpoint(endpoint, { ...disabled, MCP_UPSTREAM_ALLOWED_HOSTS: '' }), endpoint);
-    for (const invalid of ['not a URL', 'file:///etc/passwd', 'https://user:secret@other.example.com/mcp', `${endpoint}#fragment`]) {
+    for (const invalid of [
+      'not a URL',
+      'file:///etc/passwd',
+      'https://user:secret@other.example.com/mcp',
+      `${endpoint}#fragment`,
+    ]) {
       assert.equal(normalizeUpstreamEndpoint(invalid, disabled), null);
     }
   }
@@ -23,14 +28,22 @@ test('explicit allowlist policy applies in both production and development', () 
 test('missing switch preserves the existing environment policy', () => {
   assert.equal(normalizeUpstreamEndpoint(endpoint, { NODE_ENV: 'production' }), null);
   assert.equal(normalizeUpstreamEndpoint(endpoint, { NODE_ENV: 'development' }), endpoint);
-  assert.equal(normalizeUpstreamEndpoint(endpoint, { NODE_ENV: 'development', MCP_UPSTREAM_ALLOWED_HOSTS: 'other.example.com' }), null);
+  assert.equal(
+    normalizeUpstreamEndpoint(endpoint, { NODE_ENV: 'development', MCP_UPSTREAM_ALLOWED_HOSTS: 'other.example.com' }),
+    null,
+  );
 });
 
 test('gateway refresh applies the persisted switch, removes blocked routes, and restores them on disable', async (t) => {
   const originalFetch = globalThis.fetch;
   const originalSettings = currentSystemSettings();
   const originalServers = new Map(serverConfigs);
-  const keys = ['NODE_ENV', 'SYSTEM_CONFIG_MODE', 'MCP_UPSTREAM_ALLOWED_HOSTS', 'MCP_UPSTREAM_ALLOWLIST_ENABLED'] as const;
+  const keys = [
+    'NODE_ENV',
+    'SYSTEM_CONFIG_MODE',
+    'MCP_UPSTREAM_ALLOWED_HOSTS',
+    'MCP_UPSTREAM_ALLOWLIST_ENABLED',
+  ] as const;
   const originalEnv = new Map(keys.map((key) => [key, process.env[key]]));
   t.after(() => {
     globalThis.fetch = originalFetch;
@@ -45,17 +58,27 @@ test('gateway refresh applies the persisted switch, removes blocked routes, and 
   process.env.NODE_ENV = 'production';
   process.env.SYSTEM_CONFIG_MODE = 'database';
   let settings: Record<string, unknown> = {
-    public_url: 'https://mcp.example.com', upstream_allowlist_enabled: false, upstream_hosts: ['trusted.example.com'],
+    public_url: 'https://mcp.example.com',
+    upstream_allowlist_enabled: false,
+    upstream_hosts: ['trusted.example.com'],
   };
   const trusted = 'https://trusted.example.com/mcp';
-  globalThis.fetch = async () => Response.json({
-    system_settings: settings,
-    servers: [
-      { name: 'hscode', authMode: 'none', instances: [{ id: '1', url: endpoint }] },
-      { name: 'mixed', authMode: 'none', instances: [{ id: '2', url: trusted }, { id: '3', url: endpoint }] },
-      { name: 'invalid', authMode: 'none', instances: [{ id: '4', url: 'file:///etc/passwd' }] },
-    ],
-  });
+  globalThis.fetch = async () =>
+    Response.json({
+      system_settings: settings,
+      servers: [
+        { name: 'hscode', authMode: 'none', instances: [{ id: '1', url: endpoint }] },
+        {
+          name: 'mixed',
+          authMode: 'none',
+          instances: [
+            { id: '2', url: trusted },
+            { id: '3', url: endpoint },
+          ],
+        },
+        { name: 'invalid', authMode: 'none', instances: [{ id: '4', url: 'file:///etc/passwd' }] },
+      ],
+    });
   await refreshServerConfigs();
   assert.deepEqual(serverConfigs.get('hscode')?.instances, [endpoint]);
   assert.deepEqual(serverConfigs.get('mixed')?.instances, [trusted, endpoint]);

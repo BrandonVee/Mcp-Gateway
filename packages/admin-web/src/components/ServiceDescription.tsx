@@ -1,12 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Button } from "antd";
-import { FileTextOutlined } from "@ant-design/icons";
-import { useI18n } from "../i18n";
-import "./service-description.css";
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Button } from 'antd';
+import { FileTextOutlined } from '@ant-design/icons';
+import { useI18n } from '../i18n';
+import './service-description.css';
 
 export function ServiceDescription({ description }: { description?: string }) {
   const { t } = useI18n();
-  const text = description?.trim() ?? "";
+  const text = description?.trim() ?? '';
   const paragraph = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [truncated, setTruncated] = useState(false);
@@ -22,11 +22,23 @@ export function ServiceDescription({ description }: { description?: string }) {
     return () => observer.disconnect();
   }, [text, expanded]);
 
-  return <section className={`service-description${text ? "" : " service-description-empty"}`} aria-label={t("connections.description")}>
-    <div className="service-description-heading"><FileTextOutlined /><span>{t("connections.description")}</span></div>
-    <p ref={paragraph} className={expanded ? "is-expanded" : "is-collapsed"}>{text || t("connections.noDescription")}</p>
-    {truncated && <Button type="link" size="small" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
-      {t(expanded ? "connections.collapseDescription" : "connections.expandDescription")}
-    </Button>}
-  </section>;
+  return (
+    <section
+      className={`service-description${text ? '' : ' service-description-empty'}`}
+      aria-label={t('connections.description')}
+    >
+      <div className="service-description-heading">
+        <FileTextOutlined />
+        <span>{t('connections.description')}</span>
+      </div>
+      <p ref={paragraph} className={expanded ? 'is-expanded' : 'is-collapsed'}>
+        {text || t('connections.noDescription')}
+      </p>
+      {truncated && (
+        <Button type="link" size="small" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
+          {t(expanded ? 'connections.collapseDescription' : 'connections.expandDescription')}
+        </Button>
+      )}
+    </section>
+  );
 }

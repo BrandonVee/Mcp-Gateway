@@ -17,36 +17,65 @@ async function main() {
   const updatedUrl = 'https://changed.example.test';
   let cookie = '';
   const request = async (path: string, method = 'GET', body?: unknown, origin = originalUrl, bearer?: string) => {
-    return await new Promise<{ response: { status: number; headers: Headers }; data: any; text: string }>((done, reject) => {
-      const outgoing = httpRequest(`${base}${path}`, { method, headers: {
-        host: new URL(originalUrl).host, origin,
-        ...(cookie ? { cookie } : {}), ...(body ? { 'content-type': 'application/json' } : {}),
-        ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
-      } }, (incoming) => {
-        const chunks: Buffer[] = [];
-        incoming.on('data', (chunk) => chunks.push(chunk));
-        incoming.on('end', () => {
-          const headers = new Headers();
-          for (const [key, value] of Object.entries(incoming.headers)) {
-            if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(', ') : value);
-          }
-          let data: any = {};
-          try { data = JSON.parse(Buffer.concat(chunks).toString()); } catch { /* HTML 404 or empty response. */ }
-          done({ response: { status: incoming.statusCode!, headers }, data, text:Buffer.concat(chunks).toString() });
-        });
-      });
-      outgoing.on('error', reject);
-      outgoing.end(body ? JSON.stringify(body) : undefined);
-    });
+    return await new Promise<{ response: { status: number; headers: Headers }; data: any; text: string }>(
+      (done, reject) => {
+        const outgoing = httpRequest(
+          `${base}${path}`,
+          {
+            method,
+            headers: {
+              host: new URL(originalUrl).host,
+              origin,
+              ...(cookie ? { cookie } : {}),
+              ...(body ? { 'content-type': 'application/json' } : {}),
+              ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
+            },
+          },
+          (incoming) => {
+            const chunks: Buffer[] = [];
+            incoming.on('data', (chunk) => chunks.push(chunk));
+            incoming.on('end', () => {
+              const headers = new Headers();
+              for (const [key, value] of Object.entries(incoming.headers)) {
+                if (value !== undefined) headers.set(key, Array.isArray(value) ? value.join(', ') : value);
+              }
+              let data: any = {};
+              try {
+                data = JSON.parse(Buffer.concat(chunks).toString());
+              } catch {
+                /* HTML 404 or empty response. */
+              }
+              done({
+                response: { status: incoming.statusCode!, headers },
+                data,
+                text: Buffer.concat(chunks).toString(),
+              });
+            });
+          },
+        );
+        outgoing.on('error', reject);
+        outgoing.end(body ? JSON.stringify(body) : undefined);
+      },
+    );
   };
-  for (const path of ['/authorize', '/token', '/register', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/mcp/example']) {
+  for (const path of [
+    '/authorize',
+    '/token',
+    '/register',
+    '/.well-known/oauth-authorization-server',
+    '/.well-known/oauth-protected-resource',
+    '/mcp/example',
+  ]) {
     const post = ['/token', '/register'].includes(path);
     const { response } = await request(path, post ? 'POST' : 'GET', post ? {} : undefined);
     assert.equal(response.status, 503, `${path} stays closed before setup`);
   }
   assert.equal((await request('/api/admin/system-settings')).response.status, 403);
   const credentials = { username: 'admin', password: saved.ADMIN_PASSWORD };
-  assert.equal((await request('/api/admin/session', 'POST', credentials, 'https://attacker.example.test')).response.status, 403);
+  assert.equal(
+    (await request('/api/admin/session', 'POST', credentials, 'https://attacker.example.test')).response.status,
+    403,
+  );
   const login = await request('/api/admin/session', 'POST', credentials);
   assert.equal(login.response.status, 200);
   const setCookie = login.response.headers.get('set-cookie')!;
@@ -56,32 +85,83 @@ async function main() {
     assert.equal((await request(path)).response.status, 200, `${path} is available during initial setup`);
   }
   assert.equal((await request('/api/admin/system-settings')).data.configured, false);
-  assert.equal((await request('/api/admin/system-settings', 'PUT', { public_url: 'http://setup.example.test', upstream_hosts: [] })).response.status, 400);
-  assert.equal((await request('/api/admin/system-settings', 'PUT', { public_url: originalUrl, upstream_hosts: ['upstream.example.test'] })).response.status, 200);
+  assert.equal(
+    (
+      await request('/api/admin/system-settings', 'PUT', {
+        public_url: 'http://setup.example.test',
+        upstream_hosts: [],
+      })
+    ).response.status,
+    400,
+  );
+  assert.equal(
+    (
+      await request('/api/admin/system-settings', 'PUT', {
+        public_url: originalUrl,
+        upstream_hosts: ['upstream.example.test'],
+      })
+    ).response.status,
+    200,
+  );
   assert.equal((await request('/.well-known/oauth-authorization-server')).data.issuer, originalUrl);
   assert.equal((await request('/.well-known/oauth-protected-resource')).data.resource, originalUrl);
   assert.equal((await request('/internal/mcp-servers')).response.status, 404);
   assert.equal((await request('/api/internal/mcp-servers')).response.status, 404);
 
-  const registration = await request('/register','POST',{redirect_uris:['http://127.0.0.1:55945/oauth/callback']});
-  assert.equal(registration.response.status,201);
-  const signupQuery=new URLSearchParams({response_type:'code',client_id:registration.data.client_id,redirect_uri:'http://127.0.0.1:55945/oauth/callback',code_challenge:'a'.repeat(43),code_challenge_method:'S256'});
-  assert.equal((await request('/api/admin/system-settings','PUT',{public_url:originalUrl,upstream_hosts:[],registration_enabled:false})).response.status,200);
-  const adminCookie=cookie;cookie='';
-  assert.equal((await request('/authorize/signup?'+signupQuery)).response.status,403);
-  assert.equal((await request('/authorize?'+signupQuery)).text.includes('/authorize/signup'),false);
-  const blockedSignup=await fetch(base+'/authorize/signup',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded',origin:originalUrl},body:signupQuery});
-  assert.equal(blockedSignup.status,403);
-  const closedStatus=await request('/api/me/signup');
-  assert.equal(closedStatus.response.status,200);
-  assert.equal(closedStatus.data.registration_enabled,false,'the console entry reads the same switch');
-  const closedConsole=await request('/api/me/signup','POST',{username:'switch-closed',password:'switch-test-password',confirm_password:'switch-test-password'});
-  assert.equal(closedConsole.response.status,403);
-  assert.equal(closedConsole.data.error,'registration_disabled');
-  cookie=adminCookie;
-  assert.equal((await request('/api/admin/system-settings','PUT',{public_url:originalUrl,upstream_hosts:[],registration_enabled:true})).response.status,200);
-  cookie='';assert.equal((await request('/authorize/signup?'+signupQuery)).response.status,200);
-  assert.equal((await request('/api/me/signup')).data.registration_enabled,true);cookie=adminCookie;
+  const registration = await request('/register', 'POST', { redirect_uris: ['http://127.0.0.1:55945/oauth/callback'] });
+  assert.equal(registration.response.status, 201);
+  const signupQuery = new URLSearchParams({
+    response_type: 'code',
+    client_id: registration.data.client_id,
+    redirect_uri: 'http://127.0.0.1:55945/oauth/callback',
+    code_challenge: 'a'.repeat(43),
+    code_challenge_method: 'S256',
+  });
+  assert.equal(
+    (
+      await request('/api/admin/system-settings', 'PUT', {
+        public_url: originalUrl,
+        upstream_hosts: [],
+        registration_enabled: false,
+      })
+    ).response.status,
+    200,
+  );
+  const adminCookie = cookie;
+  cookie = '';
+  assert.equal((await request('/authorize/signup?' + signupQuery)).response.status, 403);
+  assert.equal((await request('/authorize?' + signupQuery)).text.includes('/authorize/signup'), false);
+  const blockedSignup = await fetch(base + '/authorize/signup', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', origin: originalUrl },
+    body: signupQuery,
+  });
+  assert.equal(blockedSignup.status, 403);
+  const closedStatus = await request('/api/me/signup');
+  assert.equal(closedStatus.response.status, 200);
+  assert.equal(closedStatus.data.registration_enabled, false, 'the console entry reads the same switch');
+  const closedConsole = await request('/api/me/signup', 'POST', {
+    username: 'switch-closed',
+    password: 'switch-test-password',
+    confirm_password: 'switch-test-password',
+  });
+  assert.equal(closedConsole.response.status, 403);
+  assert.equal(closedConsole.data.error, 'registration_disabled');
+  cookie = adminCookie;
+  assert.equal(
+    (
+      await request('/api/admin/system-settings', 'PUT', {
+        public_url: originalUrl,
+        upstream_hosts: [],
+        registration_enabled: true,
+      })
+    ).response.status,
+    200,
+  );
+  cookie = '';
+  assert.equal((await request('/authorize/signup?' + signupQuery)).response.status, 200);
+  assert.equal((await request('/api/me/signup')).data.registration_enabled, true);
+  cookie = adminCookie;
   console.log('PASS: registration switch gates GET/POST, hides signup, and preserves existing login');
 
   process.env.AUTH_URL = base;
@@ -91,47 +171,93 @@ async function main() {
   const claims = JSON.parse(Buffer.from(tokens.access_token.split('.')[1], 'base64url').toString());
   assert.equal(claims.iss, originalUrl);
   assert.equal((await request('/servers', 'GET', undefined, originalUrl, tokens.access_token)).response.status, 200);
-  assert.equal((await request('/api/admin/system-settings', 'PUT', { public_url: updatedUrl, upstream_hosts: ['upstream.example.test'] })).response.status, 200);
+  assert.equal(
+    (
+      await request('/api/admin/system-settings', 'PUT', {
+        public_url: updatedUrl,
+        upstream_hosts: ['upstream.example.test'],
+      })
+    ).response.status,
+    200,
+  );
   assert.equal((await request('/mcp/example', 'OPTIONS', undefined, updatedUrl)).response.status, 204);
   assert.equal((await request('/.well-known/oauth-protected-resource')).data.resource, updatedUrl);
   assert.equal((await request('/.well-known/oauth-authorization-server')).data.issuer, updatedUrl);
   assert.equal((await request('/servers', 'GET', undefined, updatedUrl, tokens.access_token)).response.status, 401);
-  assert.equal((await request('/api/admin/system-settings', 'PUT', { public_url: originalUrl, upstream_hosts: [] }, 'https://attacker.example.test')).response.status, 403);
+  assert.equal(
+    (
+      await request(
+        '/api/admin/system-settings',
+        'PUT',
+        { public_url: originalUrl, upstream_hosts: [] },
+        'https://attacker.example.test',
+      )
+    ).response.status,
+    403,
+  );
 
-  execFileSync('docker', ['compose', '--env-file', envFile, '-f', 'deploy/compose.single-host.yml', 'restart', 'mcp-server'], { stdio: 'pipe' });
+  execFileSync(
+    'docker',
+    ['compose', '--env-file', envFile, '-f', 'deploy/compose.single-host.yml', 'restart', 'mcp-server'],
+    { stdio: 'pipe' },
+  );
   let restored = false;
   for (let attempt = 0; attempt < 50; attempt++) {
     try {
       const [auth, gateway] = await Promise.all([
-        request('/.well-known/oauth-authorization-server'), request('/.well-known/oauth-protected-resource'),
+        request('/.well-known/oauth-authorization-server'),
+        request('/.well-known/oauth-protected-resource'),
       ]);
       restored = auth.data.issuer === updatedUrl && gateway.data.resource === updatedUrl;
       if (restored) break;
-    } catch { /* Containers are restarting. */ }
+    } catch {
+      /* Containers are restarting. */
+    }
     await new Promise((done) => setTimeout(done, 200));
   }
   assert.ok(restored, 'system URL persists across container restarts');
   assert.equal((await request('/api/admin/system-settings', 'GET', undefined, updatedUrl)).data.public_url, updatedUrl);
   execFileSync('bash', ['scripts/deploy.sh', '--yes', '--prepare-only'], { stdio: 'pipe' });
   const after = readEnv();
-  for (const key of ['POSTGRES_PASSWORD', 'REDIS_PASSWORD', 'INTERNAL_API_TOKEN', 'CREDENTIAL_BROKER_TOKEN', 'CREDENTIAL_ENCRYPT_KEY', 'ADMIN_PASSWORD']) {
+  for (const key of [
+    'POSTGRES_PASSWORD',
+    'REDIS_PASSWORD',
+    'INTERNAL_API_TOKEN',
+    'CREDENTIAL_BROKER_TOKEN',
+    'CREDENTIAL_ENCRYPT_KEY',
+    'ADMIN_PASSWORD',
+  ]) {
     assert.ok(after[key] === saved[key], `${key} persists across repeat deployment`);
   }
   assert.equal(after.PUBLIC_URL, undefined);
-  assert.equal((await request('/api/admin/session', 'DELETE', undefined, 'http://localhost:5173')).response.status, 403,
-    'production does not trust the development frontend origin');
-  assert.equal((await request('/api/admin/session', 'GET', undefined, updatedUrl)).response.status, 200,
-    'rejected logout keeps the session valid');
+  assert.equal(
+    (await request('/api/admin/session', 'DELETE', undefined, 'http://localhost:5173')).response.status,
+    403,
+    'production does not trust the development frontend origin',
+  );
+  assert.equal(
+    (await request('/api/admin/session', 'GET', undefined, updatedUrl)).response.status,
+    200,
+    'rejected logout keeps the session valid',
+  );
   const logout = await request('/api/admin/session', 'DELETE', undefined, updatedUrl);
   assert.equal(logout.response.status, 200);
   assert.equal(logout.data.authenticated, false);
   assert.match(logout.response.headers.get('set-cookie') ?? '', /Max-Age=0/);
-  assert.equal((await request('/api/admin/session', 'GET', undefined, updatedUrl)).response.status, 401,
-    'refresh with the old cookie cannot restore the revoked session');
+  assert.equal(
+    (await request('/api/admin/session', 'GET', undefined, updatedUrl)).response.status,
+    401,
+    'refresh with the old cookie cannot restore the revoked session',
+  );
   assert.equal((await request('/api/me/session', 'GET', undefined, updatedUrl)).response.status, 401);
   assert.equal((await request('/api/admin/users', 'GET', undefined, updatedUrl)).response.status, 403);
   console.log('PASS: browser logout expires the cookie, revokes the server session and preserves origin checks');
-  console.log('PASS: initial setup, browser origin checks, OAuth and MCP discovery, JWT issuer change, restart persistence, stable deployment secrets');
+  console.log(
+    'PASS: initial setup, browser origin checks, OAuth and MCP discovery, JWT issuer change, restart persistence, stable deployment secrets',
+  );
 }
 
-main().catch((error) => { console.error(error.stack ?? error.message); process.exitCode = 1; });
+main().catch((error) => {
+  console.error(error.stack ?? error.message);
+  process.exitCode = 1;
+});

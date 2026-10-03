@@ -15,7 +15,11 @@ async function main() {
   async function request(path: string, method = 'GET', body?: unknown) {
     const response = await fetch(new URL(path, base), {
       method,
-      headers: { origin, ...(cookie ? { cookie } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+      headers: {
+        origin,
+        ...(cookie ? { cookie } : {}),
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(10_000),
     });
@@ -31,10 +35,16 @@ async function main() {
     cookie = login.response.headers.get('set-cookie')!.split(';')[0];
     const list = await request('/admin/servers');
     assert.equal(list.response.status, 200, 'registry is readable after migration');
-    const upstream = list.data.servers.flatMap((server: any) => server.instances).find((instance: any) => instance.url)?.url;
+    const upstream = list.data.servers
+      .flatMap((server: any) => server.instances)
+      .find((instance: any) => instance.url)?.url;
 
     const registered = await request('/admin/servers', 'POST', {
-      name, display_name: 'Editable service', description: ' Initial description ', instances: [], auth_mode: 'api_key',
+      name,
+      display_name: 'Editable service',
+      description: ' Initial description ',
+      instances: [],
+      auth_mode: 'api_key',
     });
     created = registered.response.status === 201;
     assert.equal(registered.response.status, 201);
@@ -45,7 +55,10 @@ async function main() {
       assert.equal(result.response.status, 200);
       return result.data.servers.find((server: any) => server.name === name);
     };
-    assert.equal((await patch({ display_name: ' Updated service ', description: ' 第一行\n第二行 ' })).response.status, 200);
+    assert.equal(
+      (await patch({ display_name: ' Updated service ', description: ' 第一行\n第二行 ' })).response.status,
+      200,
+    );
     let saved = await readServer();
     assert.equal(saved.display_name, 'Updated service');
     assert.equal(saved.description, '第一行\n第二行');
@@ -54,15 +67,27 @@ async function main() {
     assert.equal(personal.data.servers.find((server: any) => server.name === name).description, saved.description);
 
     for (const body of [
-      { description: null }, { description: 123 }, { description: 'x'.repeat(2001) },
+      { description: null },
+      { description: 123 },
+      { description: 'x'.repeat(2001) },
       { display_name: '   ', description: 'Must not be saved' },
       { display_name: 'Must not be saved', description: [] },
-    ]) assert.equal((await patch(body)).response.status, 400, 'invalid info is rejected before saving');
+    ])
+      assert.equal((await patch(body)).response.status, 400, 'invalid info is rejected before saving');
     saved = await readServer();
     assert.equal(saved.display_name, 'Updated service');
     assert.equal(saved.description, '第一行\n第二行');
-    assert.equal((await request(`/me/servers/${name}/credential`, 'PUT', { api_key: `test-only-${randomUUID()}` })).response.status, 200);
-    const testUser = await request('/admin/users', 'POST', { username: name, password: randomUUID(), role: 'user', servers: [name] });
+    assert.equal(
+      (await request(`/me/servers/${name}/credential`, 'PUT', { api_key: `test-only-${randomUUID()}` })).response
+        .status,
+      200,
+    );
+    const testUser = await request('/admin/users', 'POST', {
+      username: name,
+      password: randomUUID(),
+      role: 'user',
+      servers: [name],
+    });
     if (testUser.response.status === 201) testUserId = testUser.data.id;
     assert.equal(testUser.response.status, 201);
     assert.equal((await request(`/admin/users/${testUserId}`, 'PATCH', { disabled: true })).response.status, 200);
@@ -78,7 +103,11 @@ async function main() {
       assert.equal((await request(endpoint, 'PATCH', { url: changed.toString() })).response.status, 200);
       assert.equal((await readServer()).instances[0].url, changed.toString());
       assert.equal((await request(endpoint, 'PATCH', { url: 'file:///tmp/mcp' })).response.status, 400);
-      assert.equal((await readServer()).instances[0].url, changed.toString(), 'invalid endpoint leaves the instance unchanged');
+      assert.equal(
+        (await readServer()).instances[0].url,
+        changed.toString(),
+        'invalid endpoint leaves the instance unchanged',
+      );
     }
     const oldName = name;
     const nextName = `renamed-${randomUUID()}`;
@@ -100,16 +129,38 @@ async function main() {
     assert.equal(afterRename.description, 'After rename');
     assert.deepEqual(afterRename.instances, beforeRename.instances, 'instance IDs and URLs survive rename');
     assert.equal((await request(`/admin/servers/${oldName}/users`)).response.status, 404, 'old ID is removed');
-    assert.deepEqual((await request(`/admin/servers/${nextName}/users`)).data.user_ids, [testUserId], 'user grants survive rename');
+    assert.deepEqual(
+      (await request(`/admin/servers/${nextName}/users`)).data.user_ids,
+      [testUserId],
+      'user grants survive rename',
+    );
     const connections = (await request('/admin/connections')).data.connections;
-    assert.ok(connections.some((connection: any) => connection.server_name === nextName), 'saved credential survives rename');
+    assert.ok(
+      connections.some((connection: any) => connection.server_name === nextName),
+      'saved credential survives rename',
+    );
     assert.ok(!connections.some((connection: any) => connection.server_name === oldName));
-    console.log(`PASS: transactional server renames retain grants, credentials, and instances; server name/description edits persist, personal portal receives descriptions, invalid edits are rejected${upstream ? ', instance URL edits persist' : ''}`);
+    console.log(
+      `PASS: transactional server renames retain grants, credentials, and instances; server name/description edits persist, personal portal receives descriptions, invalid edits are rejected${upstream ? ', instance URL edits persist' : ''}`,
+    );
   } finally {
-    if (testUserId !== undefined) assert.equal((await request(`/admin/users/${testUserId}`, 'DELETE')).response.status, 200, 'temporary user removed');
-    if (created) assert.equal((await request(`/admin/servers/${name}`, 'DELETE')).response.status, 200, 'temporary service removed');
+    if (testUserId !== undefined)
+      assert.equal(
+        (await request(`/admin/users/${testUserId}`, 'DELETE')).response.status,
+        200,
+        'temporary user removed',
+      );
+    if (created)
+      assert.equal(
+        (await request(`/admin/servers/${name}`, 'DELETE')).response.status,
+        200,
+        'temporary service removed',
+      );
     if (cookie) assert.equal((await request('/admin/session', 'DELETE')).response.status, 200, 'test login revoked');
   }
 }
 
-main().catch((error) => { console.error(error); process.exitCode = 1; });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

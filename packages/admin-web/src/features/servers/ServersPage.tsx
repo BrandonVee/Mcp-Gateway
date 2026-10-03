@@ -1,4 +1,4 @@
-import { useI18n } from "../../i18n";
+import { useI18n } from '../../i18n';
 import {
   ApiOutlined,
   CopyOutlined,
@@ -10,7 +10,7 @@ import {
   PoweroffOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
-} from "@ant-design/icons";
+} from '@ant-design/icons';
 import {
   App,
   Badge,
@@ -27,11 +27,11 @@ import {
   Tag,
   Tooltip,
   Typography,
-} from "antd";
-import { useMemo, useState } from "react";
-import { ServiceDescription } from "../../components/ServiceDescription";
-import { PageToolbar } from "../../components/PageToolbar";
-import type { AdminUser, McpInstance, McpServer } from "../../types";
+} from 'antd';
+import { useMemo, useState } from 'react';
+import { ServiceDescription } from '../../components/ServiceDescription';
+import { PageToolbar } from '../../components/PageToolbar';
+import type { AdminUser, McpInstance, McpServer } from '../../types';
 
 interface ServersPageProps {
   servers: McpServer[];
@@ -51,8 +51,8 @@ interface ServersPageProps {
 export function ServersPage(props: ServersPageProps) {
   const { t } = useI18n();
   const { message } = App.useApp();
-  const [keyword, setKeyword] = useState("");
-  const [status, setStatus] = useState<"all" | "enabled" | "paused">("all");
+  const [keyword, setKeyword] = useState('');
+  const [status, setStatus] = useState<'all' | 'enabled' | 'paused'>('all');
 
   const filteredServers = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -61,21 +61,17 @@ export function ServersPage(props: ServersPageProps) {
         !normalizedKeyword ||
         server.name.toLowerCase().includes(normalizedKeyword) ||
         server.display_name.toLowerCase().includes(normalizedKeyword) ||
-        (server.description ?? "").toLowerCase().includes(normalizedKeyword) ||
-        server.instances.some((instance) =>
-          instance.url.toLowerCase().includes(normalizedKeyword),
-        );
+        (server.description ?? '').toLowerCase().includes(normalizedKeyword) ||
+        server.instances.some((instance) => instance.url.toLowerCase().includes(normalizedKeyword));
       const matchesStatus =
-        status === "all" ||
-        (status === "enabled" && server.enabled) ||
-        (status === "paused" && !server.enabled);
+        status === 'all' || (status === 'enabled' && server.enabled) || (status === 'paused' && !server.enabled);
       return matchesKeyword && matchesStatus;
     });
   }, [keyword, props.servers, status]);
 
   const copyUrl = async (url: string) => {
     await navigator.clipboard.writeText(url);
-    message.success(t("servers.endpointUrlCopied"));
+    message.success(t('servers.endpointUrlCopied'));
   };
 
   return (
@@ -85,12 +81,8 @@ export function ServersPage(props: ServersPageProps) {
         title="servers.oneRegistryInternalExternalServers"
         description="servers.registerStreamableHttpEndpointsGateway"
         primaryAction={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={props.onCreate}
-          >
-            {t("servers.registerServer")}
+          <Button type="primary" icon={<PlusOutlined />} onClick={props.onCreate}>
+            {t('servers.registerServer')}
           </Button>
         }
         filters={
@@ -98,7 +90,7 @@ export function ServersPage(props: ServersPageProps) {
             <Input.Search
               allowClear
               className="toolbar-search"
-              placeholder={t("servers.searchNameIdEndpoint")}
+              placeholder={t('servers.searchNameIdEndpoint')}
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
             />
@@ -106,13 +98,13 @@ export function ServersPage(props: ServersPageProps) {
               value={status}
               onChange={(value) => setStatus(value as typeof status)}
               options={[
-                { value: "all", label: t("common.all") },
-                { value: "enabled", label: t("servers.running") },
-                { value: "paused", label: t("servers.paused") },
+                { value: 'all', label: t('common.all') },
+                { value: 'enabled', label: t('servers.running') },
+                { value: 'paused', label: t('servers.paused') },
               ]}
             />
             <Typography.Text type="secondary" className="filter-result-count">
-              {t("common.resultCount", { count: filteredServers.length })}
+              {t('common.resultCount', { count: filteredServers.length })}
             </Typography.Text>
           </>
         }
@@ -124,18 +116,16 @@ export function ServersPage(props: ServersPageProps) {
             <Col xs={24} xl={12} key={server.name}>
               <Card className="server-card" bordered={false}>
                 <header className="server-card-header">
-                  <span className="server-number">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
+                  <span className="server-number">{String(index + 1).padStart(2, '0')}</span>
                   <span className="server-heading">
-                    <small>{t("servers.logicalEndpoint")}</small>
+                    <small>{t('servers.logicalEndpoint')}</small>
                     <strong title={server.display_name}>{server.display_name}</strong>
                     <code title={`/mcp/${server.name}`}>/mcp/{server.name}</code>
                   </span>
                   <Switch
                     checked={server.enabled}
-                    checkedChildren={t("status.routable")}
-                    unCheckedChildren={t("status.paused")}
+                    checkedChildren={t('status.routable')}
+                    unCheckedChildren={t('status.paused')}
                     onChange={() => props.onToggle(server)}
                   />
                 </header>
@@ -143,16 +133,26 @@ export function ServersPage(props: ServersPageProps) {
                 <ServiceDescription description={server.description} />
                 <div className="server-policy">
                   <div>
-                    <small>{t("users.userSign")}</small>
-                    <strong>{server.auth_mode === "none" ? t("servers.platformSign") : server.auth_mode === "api_key" ? t("servers.platformSignApiKey") : t("servers.platformSignOauth")}</strong>
+                    <small>{t('users.userSign')}</small>
+                    <strong>
+                      {server.auth_mode === 'none'
+                        ? t('servers.platformSign')
+                        : server.auth_mode === 'api_key'
+                          ? t('servers.platformSignApiKey')
+                          : t('servers.platformSignOauth')}
+                    </strong>
                   </div>
-                  <Button icon={<SafetyCertificateOutlined />} onClick={() => props.onConfigureAuth(server)}>{t("servers.configureAuth")}</Button>
+                  <Button icon={<SafetyCertificateOutlined />} onClick={() => props.onConfigureAuth(server)}>
+                    {t('servers.configureAuth')}
+                  </Button>
                   <div>
-                    <small>{t("servers.accessGrants")}</small>
-                    <strong>{t("servers.countUsers", { count: server.user_count })}</strong>
-                    {server.signup_access && <Tag color="blue">{t("servers.signupAccess")}</Tag>}
+                    <small>{t('servers.accessGrants')}</small>
+                    <strong>{t('servers.countUsers', { count: server.user_count })}</strong>
+                    {server.signup_access && <Tag color="blue">{t('servers.signupAccess')}</Tag>}
                   </div>
-                  <Button icon={<TeamOutlined />} onClick={() => props.onConfigureUsers(server)}>{t("servers.assignAccess")}</Button>
+                  <Button icon={<TeamOutlined />} onClick={() => props.onConfigureUsers(server)}>
+                    {t('servers.assignAccess')}
+                  </Button>
                 </div>
 
                 <div className="instance-list">
@@ -161,90 +161,72 @@ export function ServersPage(props: ServersPageProps) {
                       <div className="instance-row" key={instance.id}>
                         <div className="instance-copy">
                           <Flex align="center" gap={8}>
-                            <Badge
-                              status={instance.enabled ? "success" : "default"}
-                            />
+                            <Badge status={instance.enabled ? 'success' : 'default'} />
                             <strong title={instance.id}>{instance.id}</strong>
-                            <Tag bordered={false}>
-                              {instance.enabled ? t("servers.online") : t("servers.disabled")}
-                            </Tag>
+                            <Tag bordered={false}>{instance.enabled ? t('servers.online') : t('servers.disabled')}</Tag>
                           </Flex>
-                          <Typography.Text>
-                            {instance.url}
-                          </Typography.Text>
+                          <Typography.Text>{instance.url}</Typography.Text>
                         </div>
                         <Space size={2} wrap>
-                          <Tooltip title={t("servers.editInstance")}><Button type="text" aria-label={t("servers.editInstance")} icon={<EditOutlined />} onClick={() => props.onEditInstance(server, instance)} /></Tooltip>
-                          <Tooltip title={t("servers.copyUrl")}>
+                          <Tooltip title={t('servers.editInstance')}>
                             <Button
                               type="text"
-                              icon={<CopyOutlined />}
-                              onClick={() => copyUrl(instance.url)}
+                              aria-label={t('servers.editInstance')}
+                              icon={<EditOutlined />}
+                              onClick={() => props.onEditInstance(server, instance)}
                             />
                           </Tooltip>
-                          <Tooltip title={t("servers.openNewTab")}>
+                          <Tooltip title={t('servers.copyUrl')}>
+                            <Button type="text" icon={<CopyOutlined />} onClick={() => copyUrl(instance.url)} />
+                          </Tooltip>
+                          <Tooltip title={t('servers.openNewTab')}>
                             <Button
                               type="text"
                               icon={<ExportOutlined />}
-                              onClick={() =>
-                                window.open(
-                                  instance.url,
-                                  "_blank",
-                                  "noopener,noreferrer",
-                                )
-                              }
+                              onClick={() => window.open(instance.url, '_blank', 'noopener,noreferrer')}
                             />
                           </Tooltip>
                           <Tooltip
-                            title={instance.enabled ? t("servers.disableInstance") : t("servers.enableInstance")}
+                            title={instance.enabled ? t('servers.disableInstance') : t('servers.enableInstance')}
                           >
                             <Button
                               type="text"
                               icon={<PoweroffOutlined />}
-                              onClick={() =>
-                                props.onToggleInstance(server, instance)
-                              }
+                              onClick={() => props.onToggleInstance(server, instance)}
                             />
                           </Tooltip>
-                          <Tooltip title={t("servers.deleteInstance")}>
+                          <Tooltip title={t('servers.deleteInstance')}>
                             <Button
                               type="text"
                               danger
                               icon={<DeleteOutlined />}
-                              onClick={() =>
-                                props.onDeleteInstance(server, instance)
-                              }
+                              onClick={() => props.onDeleteInstance(server, instance)}
                             />
                           </Tooltip>
                         </Space>
                       </div>
                     ))
                   ) : (
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description={t("servers.noUpstreamInstances")}
-                    />
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('servers.noUpstreamInstances')} />
                   )}
                 </div>
 
                 <footer className="server-card-footer">
-                  <span><TeamOutlined /> {t("servers.adminsAccessDefaultCountIdentities", { count: props.users.filter((user) => user.role === "admin" || user.servers.includes("*")).length })}</span>
+                  <span>
+                    <TeamOutlined />{' '}
+                    {t('servers.adminsAccessDefaultCountIdentities', {
+                      count: props.users.filter((user) => user.role === 'admin' || user.servers.includes('*')).length,
+                    })}
+                  </span>
                   <Space size={4} wrap>
-                    <Button type="link" icon={<EditOutlined />} onClick={() => props.onEdit(server)}>{t("servers.editInfo")}</Button>
-                    <Button
-                      type="link"
-                      icon={<PlusOutlined />}
-                      onClick={() => props.onAddInstance(server)}
-                    >
-                      {t("servers.addInstance")}
+                    <Button type="link" icon={<EditOutlined />} onClick={() => props.onEdit(server)}>
+                      {t('servers.editInfo')}
                     </Button>
-                    <Button
-                      type="link"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => props.onDelete(server)}
-                    >
-                      {t("common.delete")}
+                    <Button type="link" icon={<PlusOutlined />} onClick={() => props.onAddInstance(server)}>
+                      {t('servers.addInstance')}
+                    </Button>
+                    <Button type="link" danger icon={<DeleteOutlined />} onClick={() => props.onDelete(server)}>
+                      {t('common.delete')}
                     </Button>
                   </Space>
                 </footer>
@@ -256,28 +238,20 @@ export function ServersPage(props: ServersPageProps) {
         <Card className="empty-card" bordered={false}>
           <Empty
             image={<ApiOutlined className="empty-server-icon" />}
-            description={
-              props.servers.length
-                ? t("servers.noMatchingServers")
-                : t("servers.noMcpServersRegistered")
-            }
+            description={props.servers.length ? t('servers.noMatchingServers') : t('servers.noMcpServersRegistered')}
           >
             {props.servers.length ? (
               <Button
                 onClick={() => {
-                  setKeyword("");
-                  setStatus("all");
+                  setKeyword('');
+                  setStatus('all');
                 }}
               >
-                {t("servers.clearFilters")}
+                {t('servers.clearFilters')}
               </Button>
             ) : (
-              <Button
-                type="primary"
-                icon={<DeploymentUnitOutlined />}
-                onClick={props.onCreate}
-              >
-                {t("servers.registerFirstServer")}
+              <Button type="primary" icon={<DeploymentUnitOutlined />} onClick={props.onCreate}>
+                {t('servers.registerFirstServer')}
               </Button>
             )}
           </Empty>

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 import {
   SettingOutlined,
   AppstoreOutlined,
@@ -14,55 +14,43 @@ import {
   ReloadOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
-} from "@ant-design/icons";
-import {
-  Badge,
-  Button,
-  Flex,
-  Layout,
-  Menu,
-  Space,
-  Tag,
-  Typography,
-} from "antd";
-import { useState } from "react";
-import type { View } from "../types";
-import { formatTime } from "../utils/format";
-import { CommandPalette } from "./CommandPalette";
-import { LanguageSwitcher } from "./LanguageSwitcher";
-import { useI18n, type MessageKey } from "../i18n";
+} from '@ant-design/icons';
+import { Badge, Button, Flex, Layout, Menu, Space, Tag, Typography } from 'antd';
+import { useState } from 'react';
+import type { View } from '../types';
+import { formatTime } from '../utils/format';
+import { CommandPalette } from './CommandPalette';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { useI18n, type MessageKey } from '../i18n';
 
 const { Header, Sider, Content } = Layout;
 
-const titles: Record<
-  View,
-  { eyebrow: MessageKey; title: MessageKey; description: MessageKey }
-> = {
-  settings: { eyebrow: "settings.eyebrow", title: "settings.title", description: "settings.description" },
+const titles: Record<View, { eyebrow: MessageKey; title: MessageKey; description: MessageKey }> = {
+  settings: { eyebrow: 'settings.eyebrow', title: 'settings.title', description: 'settings.description' },
   overview: {
-    eyebrow: "nav.overview.eyebrow",
-    title: "nav.overview.title",
-    description: "nav.overview.description",
+    eyebrow: 'nav.overview.eyebrow',
+    title: 'nav.overview.title',
+    description: 'nav.overview.description',
   },
   users: {
-    eyebrow: "nav.users.eyebrow",
-    title: "nav.users.title",
-    description: "nav.users.description",
+    eyebrow: 'nav.users.eyebrow',
+    title: 'nav.users.title',
+    description: 'nav.users.description',
   },
   servers: {
-    eyebrow: "nav.servers.eyebrow",
-    title: "nav.servers.title",
-    description: "nav.servers.description",
+    eyebrow: 'nav.servers.eyebrow',
+    title: 'nav.servers.title',
+    description: 'nav.servers.description',
   },
   credentials: {
-    eyebrow: "nav.connections.eyebrow",
-    title: "nav.connections.title",
-    description: "nav.connections.description",
+    eyebrow: 'nav.connections.eyebrow',
+    title: 'nav.connections.title',
+    description: 'nav.connections.description',
   },
   monitoring: {
-    eyebrow: "nav.monitoring.eyebrow",
-    title: "nav.monitoring.title",
-    description: "nav.monitoring.description",
+    eyebrow: 'nav.monitoring.eyebrow',
+    title: 'nav.monitoring.title',
+    description: 'nav.monitoring.description',
   },
 };
 
@@ -96,22 +84,22 @@ export function AppShell({
   const current = titles[currentView];
 
   const menuItems = [
-    { key: "overview", icon: <DashboardOutlined />, label: t("nav.overview.label") },
+    { key: 'overview', icon: <DashboardOutlined />, label: t('nav.overview.label') },
     {
-      key: "users",
+      key: 'users',
       icon: <TeamOutlined />,
-      label: t("nav.users.label"),
+      label: t('nav.users.label'),
       extra: <span className="menu-count">{userCount}</span>,
     },
     {
-      key: "servers",
+      key: 'servers',
       icon: <CloudServerOutlined />,
-      label: t("nav.servers.label"),
+      label: t('nav.servers.label'),
       extra: <span className="menu-count">{serverCount}</span>,
     },
-    { key: "credentials", icon: <KeyOutlined />, label: t("nav.connections.title") },
-    { key: "monitoring", icon: <MonitorOutlined />, label: t("nav.monitoring.title") },
-    { key: "settings", icon: <SettingOutlined />, label: t("settings.title") },
+    { key: 'credentials', icon: <KeyOutlined />, label: t('nav.connections.title') },
+    { key: 'monitoring', icon: <MonitorOutlined />, label: t('nav.monitoring.title') },
+    { key: 'settings', icon: <SettingOutlined />, label: t('settings.title') },
   ];
 
   return (
@@ -126,19 +114,19 @@ export function AppShell({
         breakpoint="lg"
         onBreakpoint={(broken) => setCollapsed(broken)}
       >
-        <div className={collapsed ? "brand compact" : "brand"}>
+        <div className={collapsed ? 'brand compact' : 'brand'}>
           <span className="brand-symbol">
             <AppstoreOutlined />
           </span>
           {!collapsed && (
             <span className="brand-copy">
-              <strong>{t("app.documentTitle")}</strong>
-              <small>{t("app.controlPlane")}</small>
+              <strong>{t('app.documentTitle')}</strong>
+              <small>{t('app.controlPlane')}</small>
             </span>
           )}
         </div>
 
-        {!collapsed && <div className="sider-section-label">{t("nav.workspace")}</div>}
+        {!collapsed && <div className="sider-section-label">{t('nav.workspace')}</div>}
         <Menu
           theme="dark"
           mode="inline"
@@ -148,21 +136,15 @@ export function AppShell({
         />
 
         <div className="sider-footer">
-          <Button
-            type="text"
-            block
-            href="/connections"
-            icon={<LinkOutlined />}
-            className="connections-nav-button"
-          >
-            {!collapsed && t("nav.personalConnections")}
+          <Button type="text" block href="/connections" icon={<LinkOutlined />} className="connections-nav-button">
+            {!collapsed && t('nav.personalConnections')}
           </Button>
           {!collapsed && (
             <div className="system-state">
               <Badge status="success" />
               <span>
-                <strong>{t("nav.servicesOnline")}</strong>
-                <small>{t("app.controlPlaneOnline")}</small>
+                <strong>{t('nav.servicesOnline')}</strong>
+                <small>{t('app.controlPlaneOnline')}</small>
               </span>
             </div>
           )}
@@ -174,7 +156,7 @@ export function AppShell({
             loading={loggingOut}
             onClick={onLogout}
           >
-            {!collapsed && t("nav.signOut")}
+            {!collapsed && t('nav.signOut')}
           </Button>
         </div>
       </Sider>
@@ -187,17 +169,13 @@ export function AppShell({
               className="collapse-button"
               icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
               onClick={() => setCollapsed((value) => !value)}
-              aria-label={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")}
+              aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
             />
             <div className="page-heading">
-              <Typography.Text className="page-eyebrow">
-                {t(current.eyebrow)}
-              </Typography.Text>
+              <Typography.Text className="page-eyebrow">{t(current.eyebrow)}</Typography.Text>
               <Flex align="baseline" gap={12} wrap>
                 <Typography.Title level={2}>{t(current.title)}</Typography.Title>
-                <Typography.Text type="secondary">
-                  {t(current.description)}
-                </Typography.Text>
+                <Typography.Text type="secondary">{t(current.description)}</Typography.Text>
               </Flex>
             </div>
           </Flex>
@@ -210,19 +188,11 @@ export function AppShell({
                 {formatTime(lastUpdatedAt, language)}
               </Tag>
             )}
-            <Tag
-              icon={<SafetyCertificateOutlined />}
-              color="success"
-              className="secure-tag"
-            >
-              {t("app.secure")}
+            <Tag icon={<SafetyCertificateOutlined />} color="success" className="secure-tag">
+              {t('app.secure')}
             </Tag>
-            <Button
-              icon={<ReloadOutlined spin={refreshing} />}
-              loading={refreshing}
-              onClick={onRefresh}
-            >
-              {t("common.refresh")}
+            <Button icon={<ReloadOutlined spin={refreshing} />} loading={refreshing} onClick={onRefresh}>
+              {t('common.refresh')}
             </Button>
           </Space>
         </Header>

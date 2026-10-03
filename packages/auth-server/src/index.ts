@@ -47,33 +47,57 @@ app.use('*', async (c, next) => {
     await next();
   } catch (error) {
     failed = true;
-    console.error(JSON.stringify({ level: 'error', service: 'auth', request_id: requestId, error: error instanceof Error ? error.name : 'UnknownError' }));
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        service: 'auth',
+        request_id: requestId,
+        error: error instanceof Error ? error.name : 'UnknownError',
+      }),
+    );
     throw error;
   } finally {
     // Do not log query strings, headers or bodies: OAuth URLs can contain codes.
     if (c.req.path !== '/health' && c.req.path !== '/live') {
-      console.log(JSON.stringify({
-        level: failed ? 'error' : 'info',
-        service: 'auth',
-        request_id: requestId,
-        method: c.req.method,
-        path: c.req.path,
-        status: failed ? 500 : c.res.status,
-        duration_ms: Math.round(performance.now() - start),
-      }));
+      console.log(
+        JSON.stringify({
+          level: failed ? 'error' : 'info',
+          service: 'auth',
+          request_id: requestId,
+          method: c.req.method,
+          path: c.req.path,
+          status: failed ? 500 : c.res.status,
+          duration_ms: Math.round(performance.now() - start),
+        }),
+      );
     }
   }
 });
 app.use('*', async (c, next) => {
   if (!['/live', '/health'].includes(c.req.path)) {
-    try { await refreshSystemSettings(); } catch { return c.json({ error: 'system_settings_unavailable' }, 503); }
-    if (!systemConfigured() && (/^\/(authorize(?:\/|$)|token$|register$|me(?:\/|$)|oauth(?:\/|$))/.test(c.req.path)
-      || c.req.path.startsWith('/.well-known/'))) return c.json({ error: 'system_not_configured' }, 503);
+    try {
+      await refreshSystemSettings();
+    } catch {
+      return c.json({ error: 'system_settings_unavailable' }, 503);
+    }
+    if (
+      !systemConfigured() &&
+      (/^\/(authorize(?:\/|$)|token$|register$|me(?:\/|$)|oauth(?:\/|$))/.test(c.req.path) ||
+        c.req.path.startsWith('/.well-known/'))
+    )
+      return c.json({ error: 'system_not_configured' }, 503);
   }
   await next();
 });
 app.use('*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'payload_too_large' }, 413) }));
-app.use('*', cors({ allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowHeaders: ['content-type', 'authorization', 'x-session-identity'], credentials: true }));
+app.use(
+  '*',
+  cors({
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['content-type', 'authorization', 'x-session-identity'],
+    credentials: true,
+  }),
+);
 
 const publicPostLimits: Record<string, [number, number]> = {
   '/authorize/submit': [30, 60],
@@ -97,12 +121,25 @@ app.use('*', async (c, next) => {
       }
       if (!allowed) {
         c.header('Retry-After', String(policy[1]));
-        console.warn(JSON.stringify({ level: 'warn', service: 'auth', event: 'rate_limit_exceeded', path: c.req.path }));
+        console.warn(
+          JSON.stringify({ level: 'warn', service: 'auth', event: 'rate_limit_exceeded', path: c.req.path }),
+        );
         return c.json({ error: 'rate_limit_exceeded' }, 429);
       }
     }
   }
-  if (['/authorize', '/authorize/submit', '/authorize/signup', '/token', '/admin/session', '/me/session', '/me/signup', '/register'].includes(c.req.path)) {
+  if (
+    [
+      '/authorize',
+      '/authorize/submit',
+      '/authorize/signup',
+      '/token',
+      '/admin/session',
+      '/me/session',
+      '/me/signup',
+      '/register',
+    ].includes(c.req.path)
+  ) {
     c.header('Cache-Control', 'no-store');
   }
   await next();
@@ -121,14 +158,32 @@ app.get('/health', async (c) => {
 });
 
 app.route('/', authorizeRouter);
-app.route('/', createTokenRouter({ keys, get issuer() { return authIssuer(); }, accessTokenTtlSeconds: ACCESS_TOKEN_TTL, defaultAudience: DEFAULT_AUDIENCE }));
+app.route(
+  '/',
+  createTokenRouter({
+    keys,
+    get issuer() {
+      return authIssuer();
+    },
+    accessTokenTtlSeconds: ACCESS_TOKEN_TTL,
+    defaultAudience: DEFAULT_AUDIENCE,
+  }),
+);
 app.route('/', createMetadataRouter(keys, authIssuer));
-app.route('/', createAdminRouter({ keys, get issuer() { return authIssuer(); } }));
+app.route(
+  '/',
+  createAdminRouter({
+    keys,
+    get issuer() {
+      return authIssuer();
+    },
+  }),
+);
 app.route('/', createRegistryRouter());
 app.route('/', createConnectionsRouter());
 
 serve({ fetch: app.fetch, port: PORT, hostname: process.env.AUTH_LISTEN_HOST ?? '0.0.0.0' }, () => {
-  console.log(`[auth-server] listening on :${PORT} (issuer: ${authIssuer() || "setup pending"})`);
-  console.log(`[auth-server] metadata: ${authIssuer() || "setup pending"}/.well-known/oauth-authorization-server`);
-  console.log(`[auth-server] admin UI:   ${authIssuer() || "setup pending"}/admin`);
+  console.log(`[auth-server] listening on :${PORT} (issuer: ${authIssuer() || 'setup pending'})`);
+  console.log(`[auth-server] metadata: ${authIssuer() || 'setup pending'}/.well-known/oauth-authorization-server`);
+  console.log(`[auth-server] admin UI:   ${authIssuer() || 'setup pending'}/admin`);
 });

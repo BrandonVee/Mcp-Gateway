@@ -1,18 +1,33 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { authorizationLink, authorizationParams, consentPage, loginPage, pageLanguage, signupPage } from '../packages/auth-server/src/authorize-pages.js';
+import {
+  authorizationLink,
+  authorizationParams,
+  consentPage,
+  loginPage,
+  pageLanguage,
+  signupPage,
+} from '../packages/auth-server/src/authorize-pages.js';
 import { validateSignup } from '../packages/auth-server/src/registration.js';
 
 const q = {
-  response_type: 'code', client_id: 'test-client', redirect_uri: 'http://127.0.0.1:55945/oauth/callback',
-  code_challenge: 'a'.repeat(43), code_challenge_method: 'S256', state: 'original-state', scope: 'mcp',
+  response_type: 'code',
+  client_id: 'test-client',
+  redirect_uri: 'http://127.0.0.1:55945/oauth/callback',
+  code_challenge: 'a'.repeat(43),
+  code_challenge_method: 'S256',
+  state: 'original-state',
+  scope: 'mcp',
   resource: 'https://mcp.example.test/mcp/hscode',
 };
 const details = { clientName: 'WorkBuddy', resourceName: 'HS Code' };
 
 test('switching between login, signup, and languages preserves all authorization parameters', () => {
   for (const path of ['/authorize', '/authorize/signup'] as const) {
-    const url = new URL(authorizationLink(path, { ...q, password: 'must-not-leak', form_token: 'secret' }, 'zh-CN'), 'https://mcp.example.test');
+    const url = new URL(
+      authorizationLink(path, { ...q, password: 'must-not-leak', form_token: 'secret' }, 'zh-CN'),
+      'https://mcp.example.test',
+    );
     assert.equal(url.pathname, path);
     for (const [key, value] of Object.entries(q)) assert.equal(url.searchParams.get(key), value);
     assert.equal(url.searchParams.get('lang'), 'zh-CN');

@@ -10,12 +10,14 @@ const common = {
   packages: 'external',
   sourcemap: true,
   minify: false,
-  plugins: [{
-    name: 'bundle-workspace-shared',
-    setup(plugin) {
-      plugin.onResolve({ filter: /^@mcp\/shared$/ }, () => ({ path: shared }));
+  plugins: [
+    {
+      name: 'bundle-workspace-shared',
+      setup(plugin) {
+        plugin.onResolve({ filter: /^@mcp\/shared$/ }, () => ({ path: shared }));
+      },
     },
-  }],
+  ],
 };
 
 for (const service of ['auth-server', 'gateway']) {

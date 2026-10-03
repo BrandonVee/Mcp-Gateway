@@ -3,11 +3,14 @@ import { request } from 'undici';
 import { filterResponseHeaders } from './headers.js';
 
 /** Local clients may discover OAuth on the MCP origin before following RFC 9728. */
-export function registerDevelopmentOAuthRoutes(app: FastifyInstance, options: {
-  authUrl: string;
-  authIssuer: () => string;
-  production: boolean;
-}): void {
+export function registerDevelopmentOAuthRoutes(
+  app: FastifyInstance,
+  options: {
+    authUrl: string;
+    authIssuer: () => string;
+    production: boolean;
+  },
+): void {
   // Production ingress already routes these endpoints directly to Auth.
   if (options.production) return;
   const proxy = async (req: FastifyRequest, reply: FastifyReply) => {
@@ -19,9 +22,11 @@ export function registerDevelopmentOAuthRoutes(app: FastifyInstance, options: {
     }
     try {
       const response = await request(new URL(path, options.authUrl), {
-        method: req.method === 'POST' ? 'POST' : 'GET', headers,
-        body: req.method === 'POST' ? req.body as Buffer : undefined,
-        headersTimeout: 10_000, bodyTimeout: 10_000,
+        method: req.method === 'POST' ? 'POST' : 'GET',
+        headers,
+        body: req.method === 'POST' ? (req.body as Buffer) : undefined,
+        headersTimeout: 10_000,
+        bodyTimeout: 10_000,
       });
       reply.headers(filterResponseHeaders(response.headers));
       reply.header('Cache-Control', 'no-store');

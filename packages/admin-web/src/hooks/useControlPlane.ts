@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ApiError, apiForSession } from "../api";
-import { getCurrentLanguage, getTranslation } from "../i18n";
-import type { PlatformSession, SystemSettings, AdminConnection, AdminUser, GatewayHealth, McpServer } from "../types";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ApiError, apiForSession } from '../api';
+import { getCurrentLanguage, getTranslation } from '../i18n';
+import type { PlatformSession, SystemSettings, AdminConnection, AdminUser, GatewayHealth, McpServer } from '../types';
 
-export function useControlPlane(session: PlatformSession, onLogout: () => Promise<void>, onSessionExpired: () => Promise<void>) {
+export function useControlPlane(
+  session: PlatformSession,
+  onLogout: () => Promise<void>,
+  onSessionExpired: () => Promise<void>,
+) {
   const api = useMemo(() => apiForSession(session), [session.user_id, session.auth_version]);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -23,16 +27,16 @@ export function useControlPlane(session: PlatformSession, onLogout: () => Promis
         api.users(),
         api.servers(),
         api.adminConnections(),
-        api.gatewayHealth().catch(
-          (error): GatewayHealth => ({
-            ok: false,
-            redis: false,
-            registry: {
-              lastError:
-                error instanceof Error ? error.message : getTranslation("errors.couldNotReadGatewayStatus", getCurrentLanguage()),
-            },
-          }),
-        ),
+        api.gatewayHealth().catch((error): GatewayHealth => ({
+          ok: false,
+          redis: false,
+          registry: {
+            lastError:
+              error instanceof Error
+                ? error.message
+                : getTranslation('errors.couldNotReadGatewayStatus', getCurrentLanguage()),
+          },
+        })),
         api.systemSettings(),
       ]);
       setSettings(settingsData);
@@ -43,7 +47,9 @@ export function useControlPlane(session: PlatformSession, onLogout: () => Promis
       setLastUpdatedAt(Date.now());
     } catch (error) {
       setLoadError(
-        error instanceof Error ? error.message : getTranslation("errors.controlPlaneDataLoadFailed", getCurrentLanguage()),
+        error instanceof Error
+          ? error.message
+          : getTranslation('errors.controlPlaneDataLoadFailed', getCurrentLanguage()),
       );
       throw error;
     }
@@ -55,7 +61,7 @@ export function useControlPlane(session: PlatformSession, onLogout: () => Promis
       .catch((error) => {
         if (
           error instanceof ApiError &&
-          (error.status === 401 || error.status === 403 || error.code === "session_changed")
+          (error.status === 401 || error.status === 403 || error.code === 'session_changed')
         ) {
           void onSessionExpired();
         }
@@ -71,7 +77,7 @@ export function useControlPlane(session: PlatformSession, onLogout: () => Promis
     } catch (error) {
       if (
         error instanceof ApiError &&
-        (error.status === 401 || error.status === 403 || error.code === "session_changed")
+        (error.status === 401 || error.status === 403 || error.code === 'session_changed')
       ) {
         void onSessionExpired();
       }
@@ -88,7 +94,7 @@ export function useControlPlane(session: PlatformSession, onLogout: () => Promis
     } catch (error) {
       if (
         error instanceof ApiError &&
-        (error.status === 401 || error.status === 403 || error.code === "session_changed")
+        (error.status === 401 || error.status === 403 || error.code === 'session_changed')
       ) {
         void onSessionExpired();
       }

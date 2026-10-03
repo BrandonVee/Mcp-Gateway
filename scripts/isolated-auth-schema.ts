@@ -18,7 +18,9 @@ export async function createIsolatedAuthSchema() {
     const databaseUrl = new URL(connectionString);
     databaseUrl.searchParams.set('options', `-c search_path=${schema}`);
     scopedPool = new Pool({ connectionString: databaseUrl.toString(), connectionTimeoutMillis: 5000 });
-    const journal = JSON.parse(await readFile(new URL('../packages/auth-server/drizzle/meta/_journal.json', import.meta.url), 'utf8'));
+    const journal = JSON.parse(
+      await readFile(new URL('../packages/auth-server/drizzle/meta/_journal.json', import.meta.url), 'utf8'),
+    );
     for (const entry of journal.entries) {
       const sql = await readFile(new URL(`../packages/auth-server/drizzle/${entry.tag}.sql`, import.meta.url), 'utf8');
       // Generated migrations explicitly qualify enums and FKs with "public".
@@ -29,7 +31,10 @@ export async function createIsolatedAuthSchema() {
     scopedPool = undefined;
     return {
       databaseUrl: databaseUrl.toString(),
-      async cleanup() { await adminPool.query(`DROP SCHEMA "${schema}" CASCADE`); await adminPool.end(); },
+      async cleanup() {
+        await adminPool.query(`DROP SCHEMA "${schema}" CASCADE`);
+        await adminPool.end();
+      },
     };
   } catch (error) {
     if (scopedPool) await scopedPool.end();

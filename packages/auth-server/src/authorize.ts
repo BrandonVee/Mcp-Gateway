@@ -10,8 +10,15 @@ import { consumeRateLimit, limitLoginAccount } from './rate-limit.js';
 import { createRegisteredUser, validateSignup } from './registration.js';
 import { mcpServers } from './schema.js';
 import {
-  authorizationLink, authorizationParams, consentPage, loginPage, pageLanguage, signupPage,
-  type AuthPageDetails, type AuthPageError, type AuthPageLanguage,
+  authorizationLink,
+  authorizationParams,
+  consentPage,
+  loginPage,
+  pageLanguage,
+  signupPage,
+  type AuthPageDetails,
+  type AuthPageError,
+  type AuthPageLanguage,
 } from './authorize-pages.js';
 
 /** Authorization Code + PKCE, with sign-in and self-registration in the same browser flow. */
@@ -26,7 +33,10 @@ const protectAuthPage = async (c: Context, next: () => Promise<void>) => {
   c.header('Referrer-Policy', 'no-referrer');
   c.header('X-Frame-Options', 'DENY');
   c.header('X-Content-Type-Options', 'nosniff');
-  c.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'");
+  c.header(
+    'Content-Security-Policy',
+    "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'",
+  );
   await next();
 };
 authorizeRouter.use('/authorize', protectAuthPage);
@@ -44,7 +54,9 @@ authorizeRouter.get('/authorize', async (c) => {
     const authorization = await getUserAuthorization(session.userId);
     if (authorization && !authorization.disabled) {
       const name = resourceServer(q.resource);
-      const needsAccess = Boolean(name && !authorization.servers.includes('*') && !authorization.servers.includes(name));
+      const needsAccess = Boolean(
+        name && !authorization.servers.includes('*') && !authorization.servers.includes(name),
+      );
       return c.html(consentPage(q, session.sub, language, details, c.req.query('registered') === '1', needsAccess));
     }
   }
@@ -63,7 +75,7 @@ authorizeRouter.get('/authorize/signup', async (c) => {
 
 authorizeRouter.post('/authorize/signup', async (c) => {
   const form = await c.req.parseBody();
-  const str = (key: string) => typeof form[key] === 'string' ? form[key] as string : '';
+  const str = (key: string) => (typeof form[key] === 'string' ? (form[key] as string) : '');
   const q = authorizationParams(form);
   const language = pageLanguage(str('lang'), c.req.header('accept-language'));
   const invalid = await validateAuthorizeParams(q);
@@ -73,9 +85,12 @@ authorizeRouter.post('/authorize/signup', async (c) => {
   const submittedToken = str('form_token');
   const cookieToken = getCookie(c, SIGNUP_FORM_COOKIE) ?? '';
   const origin = c.req.header('origin');
-  if ((origin && origin !== new URL(authIssuer()).origin)
-    || !/^[A-Za-z0-9_-]{43}$/.test(submittedToken) || !/^[A-Za-z0-9_-]{43}$/.test(cookieToken)
-    || !timingSafeEqual(Buffer.from(cookieToken), Buffer.from(submittedToken))) {
+  if (
+    (origin && origin !== new URL(authIssuer()).origin) ||
+    !/^[A-Za-z0-9_-]{43}$/.test(submittedToken) ||
+    !/^[A-Za-z0-9_-]{43}$/.test(cookieToken) ||
+    !timingSafeEqual(Buffer.from(cookieToken), Buffer.from(submittedToken))
+  ) {
     return showSignup(c, q, language, 'invalidForm', username, 403);
   }
   if (await getSessionFromCookie(c)) return c.redirect(authorizationLink('/authorize', q, language), 303);
@@ -105,7 +120,7 @@ authorizeRouter.post('/authorize/signup', async (c) => {
 
 authorizeRouter.post('/authorize/submit', async (c) => {
   const form = await c.req.parseBody();
-  const str = (key: string) => typeof form[key] === 'string' ? form[key] as string : '';
+  const str = (key: string) => (typeof form[key] === 'string' ? (form[key] as string) : '');
   const language = pageLanguage(str('lang'), c.req.header('accept-language'));
   const q = authorizationParams(form);
   const invalid = await validateAuthorizeParams(q);
@@ -115,7 +130,8 @@ authorizeRouter.post('/authorize/submit', async (c) => {
   if (!identity) {
     const username = str('username').trim();
     const password = str('password');
-    if (!username || !password) return c.html(loginPage(q, language, await pageDetails(q), 'missingCredentials', username), 400);
+    if (!username || !password)
+      return c.html(loginPage(q, language, await pageDetails(q), 'missingCredentials', username), 400);
     try {
       if (!(await limitLoginAccount(username))) {
         c.header('Retry-After', '900');
@@ -127,19 +143,29 @@ authorizeRouter.post('/authorize/submit', async (c) => {
     const user = await verifyUser(username, password);
     if (!user) return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials', username), 401);
     identity = { sub: user.username, userId: user.id, userAuthVersion: user.authVersion };
-    try { await setBrowserSession(c, user.id, user.authVersion); }
-    catch { return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials'), 401); }
+    try {
+      await setBrowserSession(c, user.id, user.authVersion);
+    } catch {
+      return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials'), 401);
+    }
   }
   const authorization = await getUserAuthorization(identity.userId);
-  if (!authorization || authorization.disabled) return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials'), 401);
+  if (!authorization || authorization.disabled)
+    return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials'), 401);
   let code: string;
   try {
     code = await saveAuthCode({
-      client_id: q.client_id, redirect_uri: q.redirect_uri, scope: q.scope || 'mcp',
-      code_challenge: q.code_challenge, resource: q.resource || undefined, ...identity,
+      client_id: q.client_id,
+      redirect_uri: q.redirect_uri,
+      scope: q.scope || 'mcp',
+      code_challenge: q.code_challenge,
+      resource: q.resource || undefined,
+      ...identity,
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
-  } catch { return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials'), 401); }
+  } catch {
+    return c.html(loginPage(q, language, await pageDetails(q), 'invalidCredentials'), 401);
+  }
   const target = new URL(q.redirect_uri);
   target.searchParams.set('code', code);
   if (q.state) target.searchParams.set('state', q.state);
@@ -156,15 +182,29 @@ async function getSessionFromCookie(c: Context): Promise<AuthIdentity | null> {
 
 async function setBrowserSession(c: Context, userId: number, userAuthVersion: number): Promise<void> {
   setCookie(c, SESSION_COOKIE, await createLoginSession(userId, userAuthVersion), {
-    httpOnly: true, sameSite: 'Lax', secure: authIssuer().startsWith('https://'), path: '/', maxAge: 7 * 24 * 3600,
+    httpOnly: true,
+    sameSite: 'Lax',
+    secure: authIssuer().startsWith('https://'),
+    path: '/',
+    maxAge: 7 * 24 * 3600,
   });
 }
 
-async function showSignup(c: Context, q: Record<string, string>, language: AuthPageLanguage,
-  error?: AuthPageError, username = '', status: 200 | 400 | 403 | 409 | 429 | 503 = 200) {
+async function showSignup(
+  c: Context,
+  q: Record<string, string>,
+  language: AuthPageLanguage,
+  error?: AuthPageError,
+  username = '',
+  status: 200 | 400 | 403 | 409 | 429 | 503 = 200,
+) {
   const token = randomBytes(32).toString('base64url');
   setCookie(c, SIGNUP_FORM_COOKIE, token, {
-    httpOnly: true, sameSite: 'Strict', secure: authIssuer().startsWith('https://'), path: '/authorize', maxAge: 15 * 60,
+    httpOnly: true,
+    sameSite: 'Strict',
+    secure: authIssuer().startsWith('https://'),
+    path: '/authorize',
+    maxAge: 15 * 60,
   });
   c.header('Content-Language', language);
   return c.html(signupPage(q, language, await pageDetails(q), token, error, username), status);
@@ -176,28 +216,42 @@ function resourceServer(resource: string | undefined): string | undefined {
     const url = new URL(resource);
     if (url.origin !== new URL(gatewayPublicUrl()).origin) return undefined;
     return /^\/mcp\/([a-zA-Z0-9._-]{1,64})\/?$/.exec(url.pathname)?.[1];
-  } catch { return undefined; }
+  } catch {
+    return undefined;
+  }
 }
 
 async function pageDetails(q: Record<string, string>): Promise<AuthPageDetails> {
   const client = await getClient(q.client_id);
   const name = resourceServer(q.resource);
-  const [server] = name ? await db.select({ displayName: mcpServers.displayName }).from(mcpServers)
-    .where(eq(mcpServers.name, name)).limit(1) : [];
+  const [server] = name
+    ? await db
+        .select({ displayName: mcpServers.displayName })
+        .from(mcpServers)
+        .where(eq(mcpServers.name, name))
+        .limit(1)
+    : [];
   return { clientName: client?.client_name || q.client_id, resourceName: server?.displayName };
 }
 
-async function validateAuthorizeParams(q: Record<string, string>): Promise<{ error: string; error_description?: string } | null> {
+async function validateAuthorizeParams(
+  q: Record<string, string>,
+): Promise<{ error: string; error_description?: string } | null> {
   if (q.response_type !== 'code') return { error: 'unsupported_response_type' };
   const client = q.client_id ? await getClient(q.client_id) : undefined;
   if (!client) return { error: 'invalid_client', error_description: 'unknown client_id' };
-  if (!q.redirect_uri || !isRedirectUriAllowed(client, q.redirect_uri)) return { error: 'invalid_request', error_description: 'redirect_uri not registered' };
+  if (!q.redirect_uri || !isRedirectUriAllowed(client, q.redirect_uri))
+    return { error: 'invalid_request', error_description: 'redirect_uri not registered' };
   if (!/^[A-Za-z0-9_-]{43}$/.test(q.code_challenge ?? '') || q.code_challenge_method !== 'S256') {
     return { error: 'invalid_request', error_description: 'PKCE with S256 is required' };
   }
   if (q.scope && !SCOPE_RE.test(q.scope)) return { error: 'invalid_scope' };
   if (q.resource) {
-    try { new URL(q.resource); } catch { return { error: 'invalid_target' }; }
+    try {
+      new URL(q.resource);
+    } catch {
+      return { error: 'invalid_target' };
+    }
   }
   return null;
 }

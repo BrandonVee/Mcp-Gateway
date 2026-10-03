@@ -1,4 +1,16 @@
-import { bigint, bigserial, boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  bigserial,
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 const epoch = (name: string) => bigint(name, { mode: 'number' }).notNull();
 export const userRole = pgEnum('user_role', ['admin', 'user']);
@@ -32,7 +44,9 @@ export const authCodes = pgTable(
     codeChallenge: text('code_challenge').notNull(),
     resource: text('resource'),
     sub: text('sub').notNull(),
-    userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     userAuthVersion: integer('user_auth_version').notNull(),
     expiresAt: epoch('expires_at'),
   },
@@ -45,7 +59,9 @@ export const refreshTokens = pgTable(
     token: text('token').primaryKey(),
     clientId: text('client_id').notNull(),
     sub: text('sub').notNull(),
-    userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     userAuthVersion: integer('user_auth_version').notNull(),
     scope: text('scope').notNull(),
     resource: text('resource'),
@@ -59,7 +75,9 @@ export const refreshTokens = pgTable(
 export const loginSessions = pgTable('login_sessions', {
   token: text('token').primaryKey(),
   sub: text('sub').notNull(),
-  userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: bigint('user_id', { mode: 'number' })
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   userAuthVersion: integer('user_auth_version').notNull(),
   expiresAt: epoch('expires_at'),
 });
@@ -81,7 +99,10 @@ export const mcpServers = pgTable('mcp_servers', {
   oauthScopes: text('oauth_scopes'),
   oauthResource: text('oauth_resource'),
   oauthIssuer: text('oauth_issuer'),
-  oauthClientAuthMethod: text('oauth_client_auth_method').$type<'none' | 'client_secret_basic' | 'client_secret_post'>().notNull().default('none'),
+  oauthClientAuthMethod: text('oauth_client_auth_method')
+    .$type<'none' | 'client_secret_basic' | 'client_secret_post'>()
+    .notNull()
+    .default('none'),
   createdAt: epoch('created_at'),
   updatedAt: epoch('updated_at'),
 });
@@ -89,8 +110,12 @@ export const mcpServers = pgTable('mcp_servers', {
 export const userMcpCredentials = pgTable(
   'user_mcp_credentials',
   {
-    userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
-    serverName: text('server_name').notNull().references(() => mcpServers.name, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    serverName: text('server_name')
+      .notNull()
+      .references(() => mcpServers.name, { onDelete: 'cascade', onUpdate: 'cascade' }),
     mode: text('mode').$type<'api_key' | 'oauth'>().notNull(),
     secret: text('secret').notNull(),
     refreshSecret: text('refresh_secret'),
@@ -104,8 +129,12 @@ export const oauthConnectionStates = pgTable(
   'oauth_connection_states',
   {
     state: text('state').primaryKey(),
-    userId: bigint('user_id', { mode: 'number' }).notNull().references(() => users.id, { onDelete: 'cascade' }),
-    serverName: text('server_name').notNull().references(() => mcpServers.name, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    serverName: text('server_name')
+      .notNull()
+      .references(() => mcpServers.name, { onDelete: 'cascade', onUpdate: 'cascade' }),
     verifier: text('verifier').notNull(),
     authRevision: bigint('auth_revision', { mode: 'number' }).notNull().default(0),
     expiresAt: epoch('expires_at'),
@@ -154,33 +183,76 @@ export const meta = pgTable('meta', {
 });
 
 /** Metadata-only admin audit trail. Never store request bodies, tokens or secrets. */
-export const auditEvents = pgTable('audit_events', {
-  id: bigserial('id', { mode: 'number' }).primaryKey(),
-  actor: text('actor').notNull(),
-  method: text('method').notNull(),
-  path: text('path').notNull(),
-  statusCode: integer('status_code').notNull(),
-  requestId: text('request_id').notNull(),
-  createdAt: epoch('created_at'),
-}, (table) => [
-  index('idx_audit_created_at').on(table.createdAt),
-  index('idx_audit_actor_created_at').on(table.actor, table.createdAt),
-]);
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    actor: text('actor').notNull(),
+    method: text('method').notNull(),
+    path: text('path').notNull(),
+    statusCode: integer('status_code').notNull(),
+    requestId: text('request_id').notNull(),
+    createdAt: epoch('created_at'),
+  },
+  (table) => [
+    index('idx_audit_created_at').on(table.createdAt),
+    index('idx_audit_actor_created_at').on(table.actor, table.createdAt),
+  ],
+);
 
-export const mcpEventReceipts = pgTable('mcp_event_receipts', {
-  id: text('id').primaryKey(), receivedAt: epoch('received_at'),
-}, table => [index('idx_mcp_receipts_time').on(table.receivedAt)]);
-export const mcpCallEvents = pgTable('mcp_call_events', {
-  id: text('id').primaryKey(), requestId: text('request_id').notNull(), startedAt: epoch('started_at'), finishedAt: epoch('finished_at'),
-  userId: bigint('user_id', { mode: 'number' }).notNull(), username: text('username').notNull(), clientId: text('client_id').notNull(),
-  server: text('server').notNull(), method: text('method').notNull(), tool: text('tool').notNull(), outcome: text('outcome').notNull(),
-  httpStatus: integer('http_status').notNull(), durationMs: bigint('duration_ms', { mode: 'number' }),
-  error: text('error').notNull(), instance: text('instance').notNull(), attempts: integer('attempts').notNull(),
-}, table => [index('idx_mcp_calls_time').on(table.startedAt), index('idx_mcp_calls_server_time').on(table.server, table.startedAt)]);
-export const mcpCallMetrics = pgTable('mcp_call_metrics', {
-  minute: epoch('minute'), server: text('server').notNull(), method: text('method').notNull(), tool: text('tool').notNull(),
-  userId: bigint('user_id', { mode: 'number' }).notNull(), clientId: text('client_id').notNull(), username: text('username').notNull(),
-  outcome: text('outcome').notNull(), calls: bigint('calls', { mode: 'number' }).notNull(),
-  durationSum: bigint('duration_sum', { mode: 'number' }).notNull(), durationCount: bigint('duration_count', { mode: 'number' }).notNull(),
-  histogram: bigint('histogram', { mode: 'number' }).array().notNull(),
-}, table => [primaryKey({ columns: [table.minute, table.server, table.method, table.tool, table.userId, table.clientId, table.outcome] }), index('idx_mcp_metrics_time').on(table.minute)]);
+export const mcpEventReceipts = pgTable(
+  'mcp_event_receipts',
+  {
+    id: text('id').primaryKey(),
+    receivedAt: epoch('received_at'),
+  },
+  (table) => [index('idx_mcp_receipts_time').on(table.receivedAt)],
+);
+export const mcpCallEvents = pgTable(
+  'mcp_call_events',
+  {
+    id: text('id').primaryKey(),
+    requestId: text('request_id').notNull(),
+    startedAt: epoch('started_at'),
+    finishedAt: epoch('finished_at'),
+    userId: bigint('user_id', { mode: 'number' }).notNull(),
+    username: text('username').notNull(),
+    clientId: text('client_id').notNull(),
+    server: text('server').notNull(),
+    method: text('method').notNull(),
+    tool: text('tool').notNull(),
+    outcome: text('outcome').notNull(),
+    httpStatus: integer('http_status').notNull(),
+    durationMs: bigint('duration_ms', { mode: 'number' }),
+    error: text('error').notNull(),
+    instance: text('instance').notNull(),
+    attempts: integer('attempts').notNull(),
+  },
+  (table) => [
+    index('idx_mcp_calls_time').on(table.startedAt),
+    index('idx_mcp_calls_server_time').on(table.server, table.startedAt),
+  ],
+);
+export const mcpCallMetrics = pgTable(
+  'mcp_call_metrics',
+  {
+    minute: epoch('minute'),
+    server: text('server').notNull(),
+    method: text('method').notNull(),
+    tool: text('tool').notNull(),
+    userId: bigint('user_id', { mode: 'number' }).notNull(),
+    clientId: text('client_id').notNull(),
+    username: text('username').notNull(),
+    outcome: text('outcome').notNull(),
+    calls: bigint('calls', { mode: 'number' }).notNull(),
+    durationSum: bigint('duration_sum', { mode: 'number' }).notNull(),
+    durationCount: bigint('duration_count', { mode: 'number' }).notNull(),
+    histogram: bigint('histogram', { mode: 'number' }).array().notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.minute, table.server, table.method, table.tool, table.userId, table.clientId, table.outcome],
+    }),
+    index('idx_mcp_metrics_time').on(table.minute),
+  ],
+);

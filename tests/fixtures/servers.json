@@ -11,16 +11,12 @@
     {
       "name": "reports",
       "displayName": "Reports MCP",
-      "instances": [
-        { "id": "reports-a", "port": 3003, "dockerHost": "mcp-reports" }
-      ]
+      "instances": [{ "id": "reports-a", "port": 3003, "dockerHost": "mcp-reports" }]
     },
     {
       "name": "knowledge",
       "displayName": "Knowledge MCP",
-      "instances": [
-        { "id": "knowledge-a", "port": 3004, "dockerHost": "mcp-knowledge" }
-      ]
+      "instances": [{ "id": "knowledge-a", "port": 3004, "dockerHost": "mcp-knowledge" }]
     }
   ]
 }

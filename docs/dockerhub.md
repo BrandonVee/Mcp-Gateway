@@ -71,21 +71,21 @@ services:
       POSTGRES_DB: mcp
       POSTGRES_USER: mcp
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
-    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    volumes: ['postgres_data:/var/lib/postgresql/data']
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
+      test: ['CMD-SHELL', 'pg_isready -U mcp -d mcp']
       interval: 3s
       timeout: 3s
       retries: 30
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    command: ['sh', '-c', 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?}
-    volumes: ["redis_data:/data"]
+    volumes: ['redis_data:/data']
     healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      test: ['CMD-SHELL', 'REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG']
       interval: 3s
       timeout: 3s
       retries: 30
@@ -94,9 +94,9 @@ services:
     restart: unless-stopped
     stop_grace_period: 15s
     read_only: true
-    tmpfs: ["/tmp"]
-    cap_drop: ["ALL"]
-    security_opt: ["no-new-privileges:true"]
+    tmpfs: ['/tmp']
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
     environment:
       DATABASE_URL: postgres://mcp:${POSTGRES_PASSWORD:?}@postgres:5432/mcp
       REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
@@ -106,10 +106,10 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
       AUTH_TRUSTED_PROXY_IPS: ${AUTH_TRUSTED_PROXY_IPS:-}
-    ports: ["127.0.0.1:8080:8080"]
+    ports: ['127.0.0.1:8080:8080']
     depends_on:
-      postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
 volumes:
   postgres_data:
   redis_data:

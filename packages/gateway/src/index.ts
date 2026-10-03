@@ -33,12 +33,20 @@ app.get('/live', async () => ({ ok: true, service: 'mcp-gateway' }));
 
 app.get('/health', async (_req, reply) => {
   const redis = await redisHealthy();
-  const registryReady = Boolean(registryStatus.lastSuccessAt && !registryStatus.lastError
-    && Date.now() - registryStatus.lastSuccessAt <= Math.max(60, env.registryRefreshSeconds * 3) * 1000);
+  const registryReady = Boolean(
+    registryStatus.lastSuccessAt &&
+    !registryStatus.lastError &&
+    Date.now() - registryStatus.lastSuccessAt <= Math.max(60, env.registryRefreshSeconds * 3) * 1000,
+  );
   const ok = redis && registryReady;
   const upstreamUrls = [...serverConfigs.values()].flatMap((server) => server.instances);
   return reply.code(ok ? 200 : 503).send({
-    ok, service: 'mcp-gateway', redis, registry: registryStatus, monitoring: collectionStatus, active_requests:activeUpstreamRequests(),
+    ok,
+    service: 'mcp-gateway',
+    redis,
+    registry: registryStatus,
+    monitoring: collectionStatus,
+    active_requests: activeUpstreamRequests(),
     upstreams: { total: new Set(upstreamUrls).size, unavailable: upstreamHealth.unavailableCount(upstreamUrls) },
   });
 });
@@ -47,7 +55,11 @@ await app.register(async (instance) => {
   instance.addHook('onRequest', async (req, reply) => {
     const path = req.url.split('?')[0];
     if (databaseSettingsEnabled() && (path.startsWith('/mcp') || path === '/servers')) {
-      try { await refreshServerConfigs(); } catch { return reply.code(503).send({ error: 'system_settings_unavailable' }); }
+      try {
+        await refreshServerConfigs();
+      } catch {
+        return reply.code(503).send({ error: 'system_settings_unavailable' });
+      }
       if (!systemConfigured()) return reply.code(503).send({ error: 'system_not_configured' });
     }
     if (!path.startsWith('/mcp/')) return;
@@ -55,7 +67,8 @@ await app.register(async (instance) => {
       await reply.code(403).send({ error: 'invalid_origin' });
       return;
     }
-    for (const [name, value] of Object.entries(mcpCorsHeaders(req.headers.origin, env.resourceBaseUrl))) reply.header(name, value);
+    for (const [name, value] of Object.entries(mcpCorsHeaders(req.headers.origin, env.resourceBaseUrl)))
+      reply.header(name, value);
     if (req.method === 'OPTIONS' && req.headers.origin) await reply.code(204).send();
   });
   instance.addHook('onRequest', authHook);

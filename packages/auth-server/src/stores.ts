@@ -27,18 +27,20 @@ export const REFRESH_TTL_MS = 30 * 24 * 3600 * 1000;
 
 export async function saveAuthCode(entry: AuthCodeEntry): Promise<string> {
   const code = randomBytes(32).toString('hex');
-  await withAuthenticatedUser(entry, async (tx) => tx.insert(authCodes).values({
-    code,
-    clientId: entry.client_id,
-    redirectUri: entry.redirect_uri,
-    scope: entry.scope,
-    codeChallenge: entry.code_challenge,
-    resource: entry.resource ?? null,
-    sub: entry.sub,
-    userId: entry.userId,
-    userAuthVersion: entry.userAuthVersion,
-    expiresAt: entry.expiresAt,
-  }));
+  await withAuthenticatedUser(entry, async (tx) =>
+    tx.insert(authCodes).values({
+      code,
+      clientId: entry.client_id,
+      redirectUri: entry.redirect_uri,
+      scope: entry.scope,
+      codeChallenge: entry.code_challenge,
+      resource: entry.resource ?? null,
+      sub: entry.sub,
+      userId: entry.userId,
+      userAuthVersion: entry.userAuthVersion,
+      expiresAt: entry.expiresAt,
+    }),
+  );
   return code;
 }
 
@@ -61,18 +63,19 @@ export async function consumeAuthCode(code: string): Promise<AuthCodeEntry | und
 
 export async function saveRefreshToken(entry: RefreshTokenEntry, transaction?: AuthTransaction): Promise<string> {
   const token = randomBytes(32).toString('hex');
-  const insert = async (tx: AuthTransaction) => tx.insert(refreshTokens).values({
-    token,
-    clientId: entry.client_id,
-    sub: entry.sub,
-    userId: entry.userId,
-    userAuthVersion: entry.userAuthVersion,
-    scope: entry.scope,
-    resource: entry.resource ?? null,
-    expiresAt: Date.now() + REFRESH_TTL_MS,
-    revoked: false,
-    createdAt: Date.now(),
-  });
+  const insert = async (tx: AuthTransaction) =>
+    tx.insert(refreshTokens).values({
+      token,
+      clientId: entry.client_id,
+      sub: entry.sub,
+      userId: entry.userId,
+      userAuthVersion: entry.userAuthVersion,
+      scope: entry.scope,
+      resource: entry.resource ?? null,
+      expiresAt: Date.now() + REFRESH_TTL_MS,
+      revoked: false,
+      createdAt: Date.now(),
+    });
   if (transaction) await insert(transaction);
   else await withAuthenticatedUser(entry, insert);
   return token;
@@ -83,9 +86,17 @@ export async function consumeRefreshToken(token: string): Promise<RefreshTokenEn
   const [row] = await db
     .update(refreshTokens)
     .set({ revoked: true })
-    .where(and(eq(refreshTokens.token, token), eq(refreshTokens.revoked, false), gte(refreshTokens.expiresAt, Date.now())))
+    .where(
+      and(eq(refreshTokens.token, token), eq(refreshTokens.revoked, false), gte(refreshTokens.expiresAt, Date.now())),
+    )
     .returning();
   if (!row) return undefined;
-  return { client_id: row.clientId, scope: row.scope, resource: row.resource ?? undefined,
-    sub: row.sub, userId: row.userId, userAuthVersion: row.userAuthVersion };
+  return {
+    client_id: row.clientId,
+    scope: row.scope,
+    resource: row.resource ?? undefined,
+    sub: row.sub,
+    userId: row.userId,
+    userAuthVersion: row.userAuthVersion,
+  };
 }

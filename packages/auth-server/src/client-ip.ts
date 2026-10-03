@@ -7,10 +7,17 @@ function normalizedIp(value: string): string | null {
 }
 
 /** Walk a trusted proxy chain from the socket backwards; never trust arbitrary XFF. */
-export function resolveClientIp(socketAddress: string, forwardedFor: string | undefined, trustedProxyIps: string): string {
+export function resolveClientIp(
+  socketAddress: string,
+  forwardedFor: string | undefined,
+  trustedProxyIps: string,
+): string {
   const peer = normalizedIp(socketAddress) ?? 'unknown';
   const trusted = new BlockList();
-  for (const entry of trustedProxyIps.split(',').map((value) => value.trim()).filter(Boolean)) {
+  for (const entry of trustedProxyIps
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)) {
     const [host, prefix, extra] = entry.split('/');
     if (extra !== undefined) continue;
     const address = normalizedIp(host);
@@ -21,8 +28,8 @@ export function resolveClientIp(socketAddress: string, forwardedFor: string | un
       trusted.addSubnet(address, Number(prefix), type);
     }
   }
-  const isTrusted = (address: string): boolean => Boolean(isIP(address))
-    && trusted.check(address, isIP(address) === 6 ? 'ipv6' : 'ipv4');
+  const isTrusted = (address: string): boolean =>
+    Boolean(isIP(address)) && trusted.check(address, isIP(address) === 6 ? 'ipv6' : 'ipv4');
   if (!isTrusted(peer) || !forwardedFor) return peer;
   const chain = forwardedFor.split(',').map(normalizedIp);
   if (chain.some((ip) => !ip)) return peer;

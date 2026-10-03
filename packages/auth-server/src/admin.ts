@@ -1,14 +1,40 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { jwtVerify } from 'jose';
-import { createLoginSession, db, deleteLoginSession, getSessionUser, revokeUserAuthentication, verifyUser } from './db.js';
+import { z } from 'zod';
+import {
+  createLoginSession,
+  db,
+  deleteLoginSession,
+  getSessionUser,
+  revokeUserAuthentication,
+  verifyUser,
+} from './db.js';
 import { scryptHash } from './users.js';
 import type { SigningKeys } from './keys.js';
 import type { Context as HonoContext } from 'hono';
 import { and, count, desc, eq, lt, sql } from 'drizzle-orm';
-import { auditEvents, mcpServerInstances, mcpServers, oauthConnectionStates, userMcpCredentials, userServerAccess, users } from './schema.js';
+import {
+  auditEvents,
+  mcpServerInstances,
+  mcpServers,
+  oauthConnectionStates,
+  userMcpCredentials,
+  userServerAccess,
+  users,
+} from './schema.js';
 import { randomUUID } from 'node:crypto';
-import { normalizeUpstreamEndpoint, gatewayPublicUrl, adminWebUrl, databaseSettingsEnabled, systemConfigured, bootstrapOriginAllowed, normalizeSystemSettings, allowedUpstreamHosts, upstreamAllowlistEnabled } from '@mcp/shared';
+import {
+  normalizeUpstreamEndpoint,
+  gatewayPublicUrl,
+  adminWebUrl,
+  databaseSettingsEnabled,
+  systemConfigured,
+  bootstrapOriginAllowed,
+  normalizeSystemSettings,
+  allowedUpstreamHosts,
+  upstreamAllowlistEnabled,
+} from '@mcp/shared';
 import { encryptCredential } from './credential-crypto.js';
 import { limitLoginAccount } from './rate-limit.js';
 import { trustedAdminBearerClient } from './admin-bearer.js';
@@ -24,6 +50,39 @@ export interface AdminDeps {
 
 const SERVER_NAME_RE = /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/;
 const SESSION_COOKIE = 'auth_session';
+
+// Request bodies are parsed once per route instead of field by field. The auth_*
+// fields are validated later by authSettings(), so they stay on the parsed body.
+const NAME_MESSAGE = 'name must be 1-64 chars [a-zA-Z0-9._-]';
+const DESCRIPTION_MESSAGE = 'description must be a string of at most 2000 characters';
+const serverName = z
+  .string({ required_error: NAME_MESSAGE, invalid_type_error: NAME_MESSAGE })
+  .trim()
+  .regex(SERVER_NAME_RE, NAME_MESSAGE);
+const serverDescription = z.string({ invalid_type_error: DESCRIPTION_MESSAGE }).max(2000, DESCRIPTION_MESSAGE);
+const signupAccess = z.boolean({ invalid_type_error: 'signup_access must be a boolean' });
+const serverCreateSchema = z
+  .object({
+    name: serverName,
+    display_name: z.string({ invalid_type_error: 'display_name must be a string' }).optional(),
+    description: serverDescription.optional(),
+    signup_access: signupAccess.optional(),
+    instances: z.array(z.object({ id: z.string().optional(), url: z.string().optional() })).optional(),
+  })
+  .passthrough();
+const serverPatchSchema = z
+  .object({
+    name: serverName.optional(),
+    display_name: z
+      .string({ invalid_type_error: 'display_name must be a non-empty string' })
+      .trim()
+      .min(1, 'display_name must be a non-empty string')
+      .optional(),
+    description: serverDescription.optional(),
+    enabled: z.boolean({ invalid_type_error: 'enabled must be a boolean' }).optional(),
+    signup_access: signupAccess.optional(),
+  })
+  .passthrough();
 
 function normalizeMcpEndpoint(value: string): string | null {
   try {
@@ -44,15 +103,24 @@ function validOAuthUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   try {
     const url = new URL(value);
-    return !url.username && !url.password && !url.hash && (url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)));
+    return (
+      !url.username &&
+      !url.password &&
+      !url.hash &&
+      (url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)))
+    );
   } catch {
     return false;
   }
 }
 
-function authSettings(body: Record<string, unknown>, existing?: typeof mcpServers.$inferSelect): { values?: Partial<typeof mcpServers.$inferInsert>; error?: string } {
+function authSettings(
+  body: Record<string, unknown>,
+  existing?: typeof mcpServers.$inferSelect,
+): { values?: Partial<typeof mcpServers.$inferInsert>; error?: string } {
   const mode = body.auth_mode ?? 'none';
-  if (mode !== 'none' && mode !== 'api_key' && mode !== 'oauth') return { error: 'auth_mode must be none, api_key or oauth' };
+  if (mode !== 'none' && mode !== 'api_key' && mode !== 'oauth')
+    return { error: 'auth_mode must be none, api_key or oauth' };
   const values: Partial<typeof mcpServers.$inferInsert> = { authMode: mode };
   if (mode !== 'api_key') {
     values.apiKeyHeader = 'authorization';
@@ -71,8 +139,10 @@ function authSettings(body: Record<string, unknown>, existing?: typeof mcpServer
   if (mode === 'api_key') {
     const header = body.api_key_header ?? (existing?.authMode === 'api_key' ? existing.apiKeyHeader : 'authorization');
     const prefix = body.api_key_prefix ?? (existing?.authMode === 'api_key' ? existing.apiKeyPrefix : 'Bearer ');
-    if (typeof header !== 'string' || !/^(authorization|x-[a-z0-9-]{1,60})$/i.test(header)) return { error: 'api_key_header must be authorization or an x-* header' };
-    if (typeof prefix !== 'string' || prefix.length > 100 || /[\x00-\x1f\x7f]/.test(prefix)) return { error: 'invalid api_key_prefix' };
+    if (typeof header !== 'string' || !/^(authorization|x-[a-z0-9-]{1,60})$/i.test(header))
+      return { error: 'api_key_header must be authorization or an x-* header' };
+    if (typeof prefix !== 'string' || prefix.length > 100 || /[\x00-\x1f\x7f]/.test(prefix))
+      return { error: 'invalid api_key_prefix' };
     values.apiKeyHeader = header.toLowerCase();
     values.apiKeyPrefix = prefix;
   }
@@ -80,26 +150,59 @@ function authSettings(body: Record<string, unknown>, existing?: typeof mcpServer
     const authorizeUrl = body.oauth_authorize_url ?? existing?.oauthAuthorizeUrl;
     const tokenUrl = body.oauth_token_url ?? existing?.oauthTokenUrl;
     const clientId = body.oauth_client_id ?? existing?.oauthClientId;
-    if (!validOAuthUrl(authorizeUrl) || !validOAuthUrl(tokenUrl)) return { error: 'valid OAuth authorize and token URLs are required' };
+    if (!validOAuthUrl(authorizeUrl) || !validOAuthUrl(tokenUrl))
+      return { error: 'valid OAuth authorize and token URLs are required' };
     if (typeof clientId !== 'string' || !clientId.trim()) return { error: 'oauth_client_id is required' };
-    if (body.oauth_client_secret !== undefined && (typeof body.oauth_client_secret !== 'string' || body.oauth_client_secret.length > 4096)) return { error: 'invalid oauth_client_secret' };
-    const clientAuthMethod = body.oauth_client_auth_method ?? existing?.oauthClientAuthMethod ?? (body.oauth_client_secret ? 'client_secret_basic' : 'none');
-    if (clientAuthMethod !== 'none' && clientAuthMethod !== 'client_secret_basic' && clientAuthMethod !== 'client_secret_post') return { error: 'invalid oauth_client_auth_method' };
-    if (clientAuthMethod !== 'none' && !body.oauth_client_secret && !existing?.oauthClientSecret) return { error: 'oauth_client_secret is required' };
-    if (clientAuthMethod === 'none' && body.oauth_client_secret) return { error: 'oauth_client_secret requires a client authentication method' };
-    if (body.oauth_scopes !== undefined && (typeof body.oauth_scopes !== 'string' || body.oauth_scopes.length > 1000)) return { error: 'invalid oauth_scopes' };
-    if (body.oauth_resource !== undefined && body.oauth_resource !== '' && !validOAuthUrl(body.oauth_resource)) return { error: 'invalid oauth_resource' };
-    if (body.oauth_issuer !== undefined && body.oauth_issuer !== '' && !validOAuthUrl(body.oauth_issuer)) return { error: 'invalid oauth_issuer' };
+    if (
+      body.oauth_client_secret !== undefined &&
+      (typeof body.oauth_client_secret !== 'string' || body.oauth_client_secret.length > 4096)
+    )
+      return { error: 'invalid oauth_client_secret' };
+    const clientAuthMethod =
+      body.oauth_client_auth_method ??
+      existing?.oauthClientAuthMethod ??
+      (body.oauth_client_secret ? 'client_secret_basic' : 'none');
+    if (
+      clientAuthMethod !== 'none' &&
+      clientAuthMethod !== 'client_secret_basic' &&
+      clientAuthMethod !== 'client_secret_post'
+    )
+      return { error: 'invalid oauth_client_auth_method' };
+    if (clientAuthMethod !== 'none' && !body.oauth_client_secret && !existing?.oauthClientSecret)
+      return { error: 'oauth_client_secret is required' };
+    if (clientAuthMethod === 'none' && body.oauth_client_secret)
+      return { error: 'oauth_client_secret requires a client authentication method' };
+    if (body.oauth_scopes !== undefined && (typeof body.oauth_scopes !== 'string' || body.oauth_scopes.length > 1000))
+      return { error: 'invalid oauth_scopes' };
+    if (body.oauth_resource !== undefined && body.oauth_resource !== '' && !validOAuthUrl(body.oauth_resource))
+      return { error: 'invalid oauth_resource' };
+    if (body.oauth_issuer !== undefined && body.oauth_issuer !== '' && !validOAuthUrl(body.oauth_issuer))
+      return { error: 'invalid oauth_issuer' };
     values.oauthAuthorizeUrl = authorizeUrl;
     values.oauthTokenUrl = tokenUrl;
     values.oauthClientId = clientId.trim();
-    values.oauthClientSecret = clientAuthMethod === 'none' ? null : body.oauth_client_secret ? encryptCredential(body.oauth_client_secret)
-      : body.oauth_client_secret === undefined && existing?.authMode === 'oauth' ? existing.oauthClientSecret : null;
-    values.oauthScopes = typeof body.oauth_scopes === 'string' ? body.oauth_scopes.trim() : existing?.oauthScopes ?? null;
-    values.oauthResource = body.oauth_resource === '' ? null
-      : typeof body.oauth_resource === 'string' ? body.oauth_resource : existing?.oauthResource ?? null;
-    values.oauthIssuer = body.oauth_issuer === '' ? null
-      : typeof body.oauth_issuer === 'string' ? body.oauth_issuer : existing?.oauthIssuer ?? null;
+    values.oauthClientSecret =
+      clientAuthMethod === 'none'
+        ? null
+        : body.oauth_client_secret
+          ? encryptCredential(body.oauth_client_secret)
+          : body.oauth_client_secret === undefined && existing?.authMode === 'oauth'
+            ? existing.oauthClientSecret
+            : null;
+    values.oauthScopes =
+      typeof body.oauth_scopes === 'string' ? body.oauth_scopes.trim() : (existing?.oauthScopes ?? null);
+    values.oauthResource =
+      body.oauth_resource === ''
+        ? null
+        : typeof body.oauth_resource === 'string'
+          ? body.oauth_resource
+          : (existing?.oauthResource ?? null);
+    values.oauthIssuer =
+      body.oauth_issuer === ''
+        ? null
+        : typeof body.oauth_issuer === 'string'
+          ? body.oauth_issuer
+          : (existing?.oauthIssuer ?? null);
     values.oauthClientAuthMethod = clientAuthMethod;
   }
   return { values };
@@ -128,8 +231,15 @@ async function replaceUserServers(userId: number, names: string[]): Promise<void
 
 async function getAdminActor(c: HonoContext, deps: AdminDeps): Promise<string | null> {
   const isActiveAdmin = async (userId: unknown, username: string, authVersion: unknown): Promise<boolean> => {
-    if (typeof userId !== 'number' || !Number.isSafeInteger(userId) || userId <= 0
-      || typeof authVersion !== 'number' || !Number.isSafeInteger(authVersion) || authVersion < 0) return false;
+    if (
+      typeof userId !== 'number' ||
+      !Number.isSafeInteger(userId) ||
+      userId <= 0 ||
+      typeof authVersion !== 'number' ||
+      !Number.isSafeInteger(authVersion) ||
+      authVersion < 0
+    )
+      return false;
     const [row] = await db
       .select({ role: users.role, disabled: users.disabled })
       .from(users)
@@ -145,9 +255,13 @@ async function getAdminActor(c: HonoContext, deps: AdminDeps): Promise<string | 
         issuer: deps.issuer,
         ...(process.env.NODE_ENV === 'production' ? { audience: `${deps.issuer}/admin` } : {}),
       });
-      if (payload.role === 'admin' && typeof payload.sub === 'string'
-        && trustedAdminBearerClient(payload.client_id)
-        && (await isActiveAdmin(payload.uid, payload.sub, payload.auth_version ?? 0))) return payload.sub;
+      if (
+        payload.role === 'admin' &&
+        typeof payload.sub === 'string' &&
+        trustedAdminBearerClient(payload.client_id) &&
+        (await isActiveAdmin(payload.uid, payload.sub, payload.auth_version ?? 0))
+      )
+        return payload.sub;
     } catch {
       /* An invalid explicit credential must not fall back to a browser cookie. */
     }
@@ -190,9 +304,11 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   router.use('/admin/*', async (c, next) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
       const origin = c.req.header('origin');
-      const allowed = !origin || (!systemConfigured()
-        ? bootstrapOriginAllowed(origin, c.req.header('host'))
-        : [deps.issuer, adminWebUrl()].map((url) => new URL(url).origin).includes(origin));
+      const allowed =
+        !origin ||
+        (!systemConfigured()
+          ? bootstrapOriginAllowed(origin, c.req.header('host'))
+          : [deps.issuer, adminWebUrl()].map((url) => new URL(url).origin).includes(origin));
       if (!allowed) return jsonError(c, 'invalid_origin', 403);
       const expectedIdentity = c.req.header('x-session-identity');
       const login = c.req.method === 'POST' && c.req.path === '/admin/session';
@@ -236,15 +352,24 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         return c.json({ error: 'rate_limit_unavailable' }, 503);
       }
     }
-    const user = typeof body.username === 'string' && typeof body.password === 'string'
-      ? await verifyUser(body.username.trim(), body.password) : null;
+    const user =
+      typeof body.username === 'string' && typeof body.password === 'string'
+        ? await verifyUser(body.username.trim(), body.password)
+        : null;
     if (!user || user.role !== 'admin') {
-      await recordAudit(c, typeof body.username === 'string' && SERVER_NAME_RE.test(body.username) ? body.username : 'anonymous', 401);
+      await recordAudit(
+        c,
+        typeof body.username === 'string' && SERVER_NAME_RE.test(body.username) ? body.username : 'anonymous',
+        401,
+      );
       return c.json({ error: 'invalid_admin_credentials' }, 401);
     }
     let token: string;
-    try { token = await createLoginSession(user.id, user.authVersion); }
-    catch { return c.json({ error: 'invalid_admin_credentials' }, 401); }
+    try {
+      token = await createLoginSession(user.id, user.authVersion);
+    } catch {
+      return c.json({ error: 'invalid_admin_credentials' }, 401);
+    }
     setCookie(c, SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: 'Lax',
@@ -267,13 +392,23 @@ export function createAdminRouter(deps: AdminDeps): Hono {
 
   router.get('/admin/system-settings', (c) => {
     c.header('Cache-Control', 'no-store');
-    return c.json({ managed: process.env.SYSTEM_CONFIG_MODE !== 'file', configured: systemConfigured(),
-      ...systemOptionDefaults, registration_enabled: registrationEnabled(),
-      ...(databaseSettingsEnabled() ? currentSystemSettings() : { public_url: deps.issuer,
-        upstream_allowlist_enabled: upstreamAllowlistEnabled(), upstream_hosts: [...allowedUpstreamHosts()] }) });
+    return c.json({
+      managed: process.env.SYSTEM_CONFIG_MODE !== 'file',
+      configured: systemConfigured(),
+      ...systemOptionDefaults,
+      registration_enabled: registrationEnabled(),
+      ...(databaseSettingsEnabled()
+        ? currentSystemSettings()
+        : {
+            public_url: deps.issuer,
+            upstream_allowlist_enabled: upstreamAllowlistEnabled(),
+            upstream_hosts: [...allowedUpstreamHosts()],
+          }),
+    });
   });
   router.put('/admin/system-settings', async (c) => {
-    if (process.env.SYSTEM_CONFIG_MODE === 'file') return c.json({ error: 'system_settings_managed_by_environment' }, 409);
+    if (process.env.SYSTEM_CONFIG_MODE === 'file')
+      return c.json({ error: 'system_settings_managed_by_environment' }, 409);
     const settings = normalizeSystemSettings(await c.req.json().catch(() => null));
     if (!settings) return c.json({ error: 'invalid_system_settings' }, 400);
     await saveSystemSettings(settings);
@@ -287,15 +422,26 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const before = c.req.query('before') === undefined ? undefined : Number(c.req.query('before'));
     const actor = c.req.query('actor')?.trim();
     const method = c.req.query('method')?.trim().toUpperCase();
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) return jsonError(c, 'limit must be an integer from 1 to 100');
-    if (before !== undefined && (!Number.isSafeInteger(before) || before < 1)) return jsonError(c, 'before must be a positive event ID');
-    if (actor !== undefined && (actor.length < 1 || actor.length > 64)) return jsonError(c, 'actor must be 1-64 characters');
-    if (method !== undefined && !['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return jsonError(c, 'invalid method');
-    const rows = await db.select().from(auditEvents).where(and(
-      before === undefined ? undefined : lt(auditEvents.id, before),
-      actor === undefined ? undefined : eq(auditEvents.actor, actor),
-      method === undefined ? undefined : eq(auditEvents.method, method),
-    )).orderBy(desc(auditEvents.id)).limit(limit + 1);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100)
+      return jsonError(c, 'limit must be an integer from 1 to 100');
+    if (before !== undefined && (!Number.isSafeInteger(before) || before < 1))
+      return jsonError(c, 'before must be a positive event ID');
+    if (actor !== undefined && (actor.length < 1 || actor.length > 64))
+      return jsonError(c, 'actor must be 1-64 characters');
+    if (method !== undefined && !['POST', 'PUT', 'PATCH', 'DELETE'].includes(method))
+      return jsonError(c, 'invalid method');
+    const rows = await db
+      .select()
+      .from(auditEvents)
+      .where(
+        and(
+          before === undefined ? undefined : lt(auditEvents.id, before),
+          actor === undefined ? undefined : eq(auditEvents.actor, actor),
+          method === undefined ? undefined : eq(auditEvents.method, method),
+        ),
+      )
+      .orderBy(desc(auditEvents.id))
+      .limit(limit + 1);
     const page = rows.slice(0, limit);
     return c.json({
       events: page.map((row) => ({
@@ -314,19 +460,21 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   router.get('/admin/users', async (c) => {
     const userRows = await db.select().from(users).orderBy(users.id);
     const activeAdminCount = userRows.filter((user) => user.role === 'admin' && !user.disabled).length;
-    const userDtos = await Promise.all(userRows.map(async (u) => {
-      const protectedAdmin = u.role === 'admin' && !u.disabled && activeAdminCount <= 1;
-      return {
-        id: u.id,
-        username: u.username,
-        role: u.role,
-        disabled: u.disabled,
-        can_disable: !protectedAdmin,
-        can_delete: !protectedAdmin,
-        servers: u.role === 'admin' || u.allServers ? ['*'] : await listServerNamesForUser(u.id),
-        created_at: u.createdAt,
-      };
-    }));
+    const userDtos = await Promise.all(
+      userRows.map(async (u) => {
+        const protectedAdmin = u.role === 'admin' && !u.disabled && activeAdminCount <= 1;
+        return {
+          id: u.id,
+          username: u.username,
+          role: u.role,
+          disabled: u.disabled,
+          can_disable: !protectedAdmin,
+          can_delete: !protectedAdmin,
+          servers: u.role === 'admin' || u.allServers ? ['*'] : await listServerNamesForUser(u.id),
+          created_at: u.createdAt,
+        };
+      }),
+    );
     return c.json({
       users: userDtos,
     });
@@ -334,8 +482,14 @@ export function createAdminRouter(deps: AdminDeps): Hono {
 
   router.post('/admin/users', async (c) => {
     const body = await c.req.json().catch(() => ({}));
-    const { username, password, role, servers } = body as { username?: string; password?: string; role?: string; servers?: unknown };
-    if (!username || !/^[a-zA-Z0-9._-]{2,64}$/.test(username)) return jsonError(c, 'username must be 2-64 chars [a-zA-Z0-9._-]');
+    const { username, password, role, servers } = body as {
+      username?: string;
+      password?: string;
+      role?: string;
+      servers?: unknown;
+    };
+    if (!username || !/^[a-zA-Z0-9._-]{2,64}$/.test(username))
+      return jsonError(c, 'username must be 2-64 chars [a-zA-Z0-9._-]');
     if (!password || password.length < 12) return jsonError(c, 'password must be at least 12 characters');
     const userRole = role ?? 'user';
     if (userRole !== 'admin' && userRole !== 'user') return jsonError(c, 'role must be admin or user');
@@ -343,10 +497,15 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       return jsonError(c, 'servers must be an array of server names');
     }
     const requestedServers = [...new Set((servers ?? []) as string[])];
-    if (requestedServers.includes('*') && requestedServers.length !== 1) return jsonError(c, 'wildcard must be the only server grant');
+    if (requestedServers.includes('*') && requestedServers.length !== 1)
+      return jsonError(c, 'wildcard must be the only server grant');
     for (const name of requestedServers) {
       if (name === '*') continue;
-      const [server] = await db.select({ name: mcpServers.name }).from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
+      const [server] = await db
+        .select({ name: mcpServers.name })
+        .from(mcpServers)
+        .where(eq(mcpServers.name, name))
+        .limit(1);
       if (!SERVER_NAME_RE.test(name) || !server) {
         return jsonError(c, `unknown server: ${name}`);
       }
@@ -358,18 +517,35 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const now = Date.now();
     const [created] = await db
       .insert(users)
-      .values({ username, passwordHash: scryptHash(password), role: userRole, disabled: false, createdAt: now, updatedAt: now })
+      .values({
+        username,
+        passwordHash: scryptHash(password),
+        role: userRole,
+        disabled: false,
+        createdAt: now,
+        updatedAt: now,
+      })
       .returning({ id: users.id });
     const id = created.id;
     if (userRole !== 'admin') await replaceUserServers(id, requestedServers);
-    return c.json({ id, username, role: userRole, disabled: false, servers: userRole === 'admin' ? ['*'] : requestedServers }, 201);
+    return c.json(
+      { id, username, role: userRole, disabled: false, servers: userRole === 'admin' ? ['*'] : requestedServers },
+      201,
+    );
   });
 
   router.get('/admin/users/:id/servers', async (c) => {
     const id = Number(c.req.param('id'));
-    const [row] = await db.select({ id: users.id, role: users.role, allServers: users.allServers }).from(users).where(eq(users.id, id)).limit(1);
+    const [row] = await db
+      .select({ id: users.id, role: users.role, allServers: users.allServers })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
     if (!row) return jsonError(c, 'user not found', 404);
-    return c.json({ user_id: id, servers: row.role === 'admin' || row.allServers ? ['*'] : await listServerNamesForUser(id) });
+    return c.json({
+      user_id: id,
+      servers: row.role === 'admin' || row.allServers ? ['*'] : await listServerNamesForUser(id),
+    });
   });
 
   /** Replace all grants for a user. This is the user <-> server many-to-many edge API. */
@@ -402,31 +578,56 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   /** Server-centric view of the same user <-> server grants. Admins have implicit access. */
   router.get('/admin/servers/:name/users', async (c) => {
     const name = c.req.param('name');
-    const [server] = await db.select({ name: mcpServers.name, signupAccess: mcpServers.signupAccess }).from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
+    const [server] = await db
+      .select({ name: mcpServers.name, signupAccess: mcpServers.signupAccess })
+      .from(mcpServers)
+      .where(eq(mcpServers.name, name))
+      .limit(1);
     if (!server) return jsonError(c, 'server not found', 404);
-    const grants = await db.select({ userId: userServerAccess.userId }).from(userServerAccess)
-      .where(eq(userServerAccess.serverName, name)).orderBy(userServerAccess.userId);
-    return c.json({ server_name: name, signup_access: server.signupAccess, user_ids: grants.map((grant) => grant.userId) });
+    const grants = await db
+      .select({ userId: userServerAccess.userId })
+      .from(userServerAccess)
+      .where(eq(userServerAccess.serverName, name))
+      .orderBy(userServerAccess.userId);
+    return c.json({
+      server_name: name,
+      signup_access: server.signupAccess,
+      user_ids: grants.map((grant) => grant.userId),
+    });
   });
 
   router.put('/admin/servers/:name/users', async (c) => {
     const name = c.req.param('name');
-    const [server] = await db.select({ name: mcpServers.name }).from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
+    const [server] = await db
+      .select({ name: mcpServers.name })
+      .from(mcpServers)
+      .where(eq(mcpServers.name, name))
+      .limit(1);
     if (!server) return jsonError(c, 'server not found', 404);
     const body = (await c.req.json().catch(() => ({}))) as { user_ids?: unknown; signup_access?: unknown };
-    if (body.signup_access !== undefined && typeof body.signup_access !== 'boolean') return jsonError(c, 'signup_access must be a boolean');
+    if (body.signup_access !== undefined && typeof body.signup_access !== 'boolean')
+      return jsonError(c, 'signup_access must be a boolean');
     if (!Array.isArray(body.user_ids) || !body.user_ids.every((id) => Number.isSafeInteger(id) && id > 0)) {
       return jsonError(c, 'user_ids must be an array of positive integer IDs');
     }
     const ids = [...new Set(body.user_ids as number[])];
     const candidates = await db.select({ id: users.id, role: users.role, allServers: users.allServers }).from(users);
-    const ordinaryIds = new Set(candidates.filter((user) => user.role === 'user' && !user.allServers).map((user) => user.id));
-    if (ids.some((id) => !ordinaryIds.has(id))) return jsonError(c, 'user_ids must refer to ordinary users without wildcard access');
+    const ordinaryIds = new Set(
+      candidates.filter((user) => user.role === 'user' && !user.allServers).map((user) => user.id),
+    );
+    if (ids.some((id) => !ordinaryIds.has(id)))
+      return jsonError(c, 'user_ids must refer to ordinary users without wildcard access');
     await db.transaction(async (tx) => {
-      if (typeof body.signup_access === 'boolean') await tx.update(mcpServers)
-        .set({ signupAccess: body.signup_access, updatedAt: Date.now() }).where(eq(mcpServers.name, name));
+      if (typeof body.signup_access === 'boolean')
+        await tx
+          .update(mcpServers)
+          .set({ signupAccess: body.signup_access, updatedAt: Date.now() })
+          .where(eq(mcpServers.name, name));
       await tx.delete(userServerAccess).where(eq(userServerAccess.serverName, name));
-      if (ids.length) await tx.insert(userServerAccess).values(ids.map((userId) => ({ userId, serverName: name, createdAt: Date.now() })));
+      if (ids.length)
+        await tx
+          .insert(userServerAccess)
+          .values(ids.map((userId) => ({ userId, serverName: name, createdAt: Date.now() })));
     });
     return c.json({ server_name: name, signup_access: body.signup_access, user_ids: ids });
   });
@@ -436,7 +637,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     if (!Number.isSafeInteger(id) || id <= 0) return jsonError(c, 'invalid user ID');
     const body = await c.req.json().catch(() => ({}));
     const { password, role, disabled } = body as { password?: string; role?: string; disabled?: boolean };
-    if (password !== undefined && (typeof password !== 'string' || password.length < 12 || password.length > 256)) return jsonError(c, 'password must be 12-256 characters');
+    if (password !== undefined && (typeof password !== 'string' || password.length < 12 || password.length > 256))
+      return jsonError(c, 'password must be 12-256 characters');
     if (role !== undefined && role !== 'admin' && role !== 'user') return jsonError(c, 'role must be admin or user');
     if (disabled !== undefined && typeof disabled !== 'boolean') return jsonError(c, 'disabled must be a boolean');
     const passwordHash = password === undefined ? undefined : scryptHash(password);
@@ -448,13 +650,23 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       const nextRole = role ?? row.role;
       const nextDisabled = disabled ?? row.disabled;
       if (row.role === 'admin' && !row.disabled && (nextRole !== 'admin' || nextDisabled)) {
-        const [{ value }] = await tx.select({ value: count() }).from(users).where(and(eq(users.role, 'admin'), eq(users.disabled, false)));
+        const [{ value }] = await tx
+          .select({ value: count() })
+          .from(users)
+          .where(and(eq(users.role, 'admin'), eq(users.disabled, false)));
         if (value <= 1) return 'last_admin';
       }
       const revoke = passwordHash !== undefined || (disabled === true && !row.disabled) || nextRole !== row.role;
-      await tx.update(users).set({ role: nextRole as 'admin' | 'user', disabled: nextDisabled, updatedAt: Date.now(),
-        ...(passwordHash === undefined ? {} : { passwordHash }),
-        ...(revoke ? { authVersion: sql`${users.authVersion} + 1` } : {}) }).where(eq(users.id, id));
+      await tx
+        .update(users)
+        .set({
+          role: nextRole as 'admin' | 'user',
+          disabled: nextDisabled,
+          updatedAt: Date.now(),
+          ...(passwordHash === undefined ? {} : { passwordHash }),
+          ...(revoke ? { authVersion: sql`${users.authVersion} + 1` } : {}),
+        })
+        .where(eq(users.id, id));
       if (revoke) await revokeUserAuthentication(tx, id);
       return 'updated';
     });
@@ -468,10 +680,18 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     if (!Number.isSafeInteger(id) || id <= 0) return jsonError(c, 'invalid user ID');
     const result = await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(762441, 2)`);
-      const [row] = await tx.select({ role: users.role, disabled: users.disabled }).from(users).where(eq(users.id, id)).for('update').limit(1);
+      const [row] = await tx
+        .select({ role: users.role, disabled: users.disabled })
+        .from(users)
+        .where(eq(users.id, id))
+        .for('update')
+        .limit(1);
       if (!row) return 'missing';
       if (row.role === 'admin' && !row.disabled) {
-        const [{ value }] = await tx.select({ value: count() }).from(users).where(and(eq(users.role, 'admin'), eq(users.disabled, false)));
+        const [{ value }] = await tx
+          .select({ value: count() })
+          .from(users)
+          .where(and(eq(users.role, 'admin'), eq(users.disabled, false)));
         if (value <= 1) return 'last_admin';
       }
       // Foreign keys remove every cookie, code and refresh token for this immutable user ID.
@@ -486,34 +706,41 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   /** Metadata only: never expose API keys, OAuth access tokens or refresh tokens. */
   router.get('/admin/connections', async (c) => {
     c.header('Cache-Control', 'no-store');
-    const rows = await db.select({
-      userId: userMcpCredentials.userId,
-      serverName: userMcpCredentials.serverName,
-      mode: userMcpCredentials.mode,
-      expiresAt: userMcpCredentials.expiresAt,
-      refreshSecret: userMcpCredentials.refreshSecret,
-      updatedAt: userMcpCredentials.updatedAt,
-    }).from(userMcpCredentials);
-    return c.json({ connections: rows.map((row) => ({
-      user_id: row.userId,
-      server_name: row.serverName,
-      mode: row.mode,
-      expires_at: row.expiresAt,
-      has_refresh_token: Boolean(row.refreshSecret),
-      updated_at: row.updatedAt,
-    })) });
+    const rows = await db
+      .select({
+        userId: userMcpCredentials.userId,
+        serverName: userMcpCredentials.serverName,
+        mode: userMcpCredentials.mode,
+        expiresAt: userMcpCredentials.expiresAt,
+        refreshSecret: userMcpCredentials.refreshSecret,
+        updatedAt: userMcpCredentials.updatedAt,
+      })
+      .from(userMcpCredentials);
+    return c.json({
+      connections: rows.map((row) => ({
+        user_id: row.userId,
+        server_name: row.serverName,
+        mode: row.mode,
+        expires_at: row.expiresAt,
+        has_refresh_token: Boolean(row.refreshSecret),
+        updated_at: row.updatedAt,
+      })),
+    });
   });
 
   router.delete('/admin/connections/:userId/:serverName', async (c) => {
     const userId = Number(c.req.param('userId'));
     const serverName = c.req.param('serverName');
-    if (!Number.isSafeInteger(userId) || userId <= 0 || !SERVER_NAME_RE.test(serverName)) return jsonError(c, 'invalid connection identifier');
+    if (!Number.isSafeInteger(userId) || userId <= 0 || !SERVER_NAME_RE.test(serverName))
+      return jsonError(c, 'invalid connection identifier');
     if (!(await revokeUserConnection(userId, serverName))) return jsonError(c, 'connection not found', 404);
     return c.json({ ok: true });
   });
 
   router.get('/admin/servers', async (c) => {
-    const [{ value: wildcardUserCount }] = await db.select({ value: count() }).from(users)
+    const [{ value: wildcardUserCount }] = await db
+      .select({ value: count() })
+      .from(users)
       .where(and(eq(users.role, 'user'), eq(users.allServers, true)));
     const rows = await db
       .select({
@@ -539,66 +766,53 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       .leftJoin(userServerAccess, eq(userServerAccess.serverName, mcpServers.name))
       .groupBy(mcpServers.name)
       .orderBy(mcpServers.name);
-    const serverDtos = await Promise.all(rows.map(async (row) => {
-      const instances = await db
-        .select({ id: mcpServerInstances.id, url: mcpServerInstances.url, enabled: mcpServerInstances.enabled })
-        .from(mcpServerInstances)
-        .where(eq(mcpServerInstances.serverName, row.name))
-        .orderBy(mcpServerInstances.id);
-      return {
-        name: row.name,
-        display_name: row.displayName,
-        description: row.description,
-        enabled: row.enabled,
-        signup_access: row.signupAccess,
-        auth_mode: row.authMode,
-        api_key_header: row.apiKeyHeader,
-        api_key_prefix: row.apiKeyPrefix,
-        oauth_authorize_url: row.oauthAuthorizeUrl,
-        oauth_token_url: row.oauthTokenUrl,
-        oauth_client_id: row.oauthClientId,
-        oauth_scopes: row.oauthScopes,
-        oauth_resource: row.oauthResource,
-        oauth_issuer: row.oauthIssuer,
-        oauth_client_auth_method: row.oauthClientAuthMethod,
-        user_count: Number(row.userCount) + Number(wildcardUserCount),
-        created_at: row.createdAt,
-        instances,
-      };
-    }));
+    const serverDtos = await Promise.all(
+      rows.map(async (row) => {
+        const instances = await db
+          .select({ id: mcpServerInstances.id, url: mcpServerInstances.url, enabled: mcpServerInstances.enabled })
+          .from(mcpServerInstances)
+          .where(eq(mcpServerInstances.serverName, row.name))
+          .orderBy(mcpServerInstances.id);
+        return {
+          name: row.name,
+          display_name: row.displayName,
+          description: row.description,
+          enabled: row.enabled,
+          signup_access: row.signupAccess,
+          auth_mode: row.authMode,
+          api_key_header: row.apiKeyHeader,
+          api_key_prefix: row.apiKeyPrefix,
+          oauth_authorize_url: row.oauthAuthorizeUrl,
+          oauth_token_url: row.oauthTokenUrl,
+          oauth_client_id: row.oauthClientId,
+          oauth_scopes: row.oauthScopes,
+          oauth_resource: row.oauthResource,
+          oauth_issuer: row.oauthIssuer,
+          oauth_client_auth_method: row.oauthClientAuthMethod,
+          user_count: Number(row.userCount) + Number(wildcardUserCount),
+          created_at: row.createdAt,
+          instances,
+        };
+      }),
+    );
     return c.json({
       servers: serverDtos,
     });
   });
 
   router.post('/admin/servers', async (c) => {
-    const body = (await c.req.json().catch(() => ({}))) as {
-      name?: string;
-      display_name?: string;
-      description?: string;
-      signup_access?: boolean;
-      instances?: Array<{ id?: string; url?: string }>;
-      auth_mode?: string;
-      api_key_header?: string;
-      api_key_prefix?: string;
-      oauth_authorize_url?: string;
-      oauth_token_url?: string;
-      oauth_client_id?: string;
-      oauth_client_secret?: string;
-      oauth_scopes?: string;
-      oauth_resource?: string;
-      oauth_issuer?: string;
-      oauth_client_auth_method?: string;
-    };
-    const name = body.name?.trim() ?? '';
-    if (!SERVER_NAME_RE.test(name)) return jsonError(c, 'name must be 1-64 chars [a-zA-Z0-9._-]');
-    const [existing] = await db.select({ name: mcpServers.name }).from(mcpServers).where(eq(mcpServers.name, name)).limit(1);
+    const parsed = serverCreateSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return jsonError(c, parsed.error.issues[0]?.message ?? 'invalid server payload');
+    const body = parsed.data;
+    const name = body.name;
+    const [existing] = await db
+      .select({ name: mcpServers.name })
+      .from(mcpServers)
+      .where(eq(mcpServers.name, name))
+      .limit(1);
     if (existing) return jsonError(c, 'server already exists', 409);
-    if (body.display_name !== undefined && typeof body.display_name !== 'string') return jsonError(c, 'display_name must be a string');
-    if (body.description !== undefined && (typeof body.description !== 'string' || body.description.length > 2000)) return jsonError(c, 'description must be a string of at most 2000 characters');
     const displayName = body.display_name?.trim() || name;
     const description = body.description?.trim() ?? '';
-    if (body.signup_access !== undefined && typeof body.signup_access !== 'boolean') return jsonError(c, 'signup_access must be a boolean');
     const auth = authSettings(body as Record<string, unknown>);
     if (auth.error) return jsonError(c, auth.error);
     const now = Date.now();
@@ -610,7 +824,16 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       normalizedInstances.push({ id: instance.id?.trim() || randomUUID(), url });
     }
     await db.transaction(async (tx) => {
-      await tx.insert(mcpServers).values({ name, displayName, description, enabled: true, signupAccess: body.signup_access ?? false, createdAt: now, updatedAt: now, ...auth.values });
+      await tx.insert(mcpServers).values({
+        name,
+        displayName,
+        description,
+        enabled: true,
+        signupAccess: body.signup_access ?? false,
+        createdAt: now,
+        updatedAt: now,
+        ...auth.values,
+      });
       if (normalizedInstances.length) {
         await tx.insert(mcpServerInstances).values(
           normalizedInstances.map((instance) => ({
@@ -623,16 +846,32 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         );
       }
     });
-    return c.json({ name, display_name: displayName, description, enabled: true, signup_access: body.signup_access ?? false, auth_mode: auth.values?.authMode, instances: normalizedInstances }, 201);
+    return c.json(
+      {
+        name,
+        display_name: displayName,
+        description,
+        enabled: true,
+        signup_access: body.signup_access ?? false,
+        auth_mode: auth.values?.authMode,
+        instances: normalizedInstances,
+      },
+      201,
+    );
   });
 
   router.post('/admin/servers/:name/instances', async (c) => {
     const serverName = c.req.param('name');
-    const [server] = await db.select({ name: mcpServers.name }).from(mcpServers).where(eq(mcpServers.name, serverName)).limit(1);
+    const [server] = await db
+      .select({ name: mcpServers.name })
+      .from(mcpServers)
+      .where(eq(mcpServers.name, serverName))
+      .limit(1);
     if (!server) return jsonError(c, 'server not found', 404);
     const body = (await c.req.json().catch(() => ({}))) as { id?: string; url?: string };
     const url = typeof body.url === 'string' ? normalizeMcpEndpoint(body.url) : null;
-    if (!url) return jsonError(c, 'url must be an http(s) upstream MCP endpoint and must not point back to the Gateway');
+    if (!url)
+      return jsonError(c, 'url must be an http(s) upstream MCP endpoint and must not point back to the Gateway');
     const id = body.id?.trim() || randomUUID();
     const now = Date.now();
     await db.insert(mcpServerInstances).values({ id, serverName, url, enabled: true, createdAt: now, updatedAt: now });
@@ -651,7 +890,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const changes: Partial<typeof mcpServerInstances.$inferInsert> = { updatedAt: Date.now() };
     if (body.url !== undefined) {
       const url = normalizeMcpEndpoint(body.url);
-      if (!url) return jsonError(c, 'url must be an http(s) upstream MCP endpoint and must not point back to the Gateway');
+      if (!url)
+        return jsonError(c, 'url must be an http(s) upstream MCP endpoint and must not point back to the Gateway');
       changes.url = url;
     }
     if (body.enabled !== undefined) changes.enabled = body.enabled;
@@ -671,19 +911,20 @@ export function createAdminRouter(deps: AdminDeps): Hono {
 
   router.patch('/admin/servers/:name', async (c) => {
     const name = c.req.param('name');
-    const body = (await c.req.json().catch(() => ({}))) as { name?: string; display_name?: string; description?: string; enabled?: boolean; auth_mode?: string; signup_access?: boolean };
-    if (body.name !== undefined && (typeof body.name !== 'string' || !SERVER_NAME_RE.test(body.name.trim()))) return jsonError(c, 'name must be 1-64 chars [a-zA-Z0-9._-]');
-    if (body.display_name !== undefined && (typeof body.display_name !== 'string' || !body.display_name.trim())) return jsonError(c, 'display_name must be a non-empty string');
-    if (body.description !== undefined && (typeof body.description !== 'string' || body.description.length > 2000)) return jsonError(c, 'description must be a string of at most 2000 characters');
-    if (body.enabled !== undefined && typeof body.enabled !== 'boolean') return jsonError(c, 'enabled must be a boolean');
-    if (body.signup_access !== undefined && typeof body.signup_access !== 'boolean') return jsonError(c, 'signup_access must be a boolean');
-    const nextName = body.name?.trim() ?? name;
+    const parsed = serverPatchSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return jsonError(c, parsed.error.issues[0]?.message ?? 'invalid server payload');
+    const body = parsed.data;
+    const nextName = body.name ?? name;
     try {
       const result = await db.transaction(async (tx) => {
         const [existing] = await tx.select().from(mcpServers).where(eq(mcpServers.name, name)).for('update').limit(1);
         if (!existing) return { error: 'server not found', status: 404 as const };
         if (nextName !== name) {
-          const [taken] = await tx.select({ name: mcpServers.name }).from(mcpServers).where(eq(mcpServers.name, nextName)).limit(1);
+          const [taken] = await tx
+            .select({ name: mcpServers.name })
+            .from(mcpServers)
+            .where(eq(mcpServers.name, nextName))
+            .limit(1);
           if (taken) return { error: 'server already exists', status: 409 as const };
         }
         const changes: Partial<typeof mcpServers.$inferInsert> = { name: nextName, updatedAt: Date.now() };
@@ -691,16 +932,22 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         if (body.auth_mode !== undefined) {
           const auth = authSettings(body as Record<string, unknown>, existing);
           if (auth.error) return { error: auth.error, status: 400 as const };
-          credentialsChanged = Boolean(auth.values && (
-            existing.authMode !== auth.values.authMode ||
-            (auth.values.authMode === 'api_key' && (existing.apiKeyHeader !== auth.values.apiKeyHeader || existing.apiKeyPrefix !== auth.values.apiKeyPrefix)) ||
-            (auth.values.authMode === 'oauth' && (
-              existing.oauthAuthorizeUrl !== auth.values.oauthAuthorizeUrl || existing.oauthTokenUrl !== auth.values.oauthTokenUrl ||
-              existing.oauthClientId !== auth.values.oauthClientId || existing.oauthClientSecret !== auth.values.oauthClientSecret ||
-              existing.oauthScopes !== auth.values.oauthScopes || existing.oauthResource !== auth.values.oauthResource ||
-              existing.oauthIssuer !== auth.values.oauthIssuer || existing.oauthClientAuthMethod !== auth.values.oauthClientAuthMethod
-            ))
-          ));
+          credentialsChanged = Boolean(
+            auth.values &&
+            (existing.authMode !== auth.values.authMode ||
+              (auth.values.authMode === 'api_key' &&
+                (existing.apiKeyHeader !== auth.values.apiKeyHeader ||
+                  existing.apiKeyPrefix !== auth.values.apiKeyPrefix)) ||
+              (auth.values.authMode === 'oauth' &&
+                (existing.oauthAuthorizeUrl !== auth.values.oauthAuthorizeUrl ||
+                  existing.oauthTokenUrl !== auth.values.oauthTokenUrl ||
+                  existing.oauthClientId !== auth.values.oauthClientId ||
+                  existing.oauthClientSecret !== auth.values.oauthClientSecret ||
+                  existing.oauthScopes !== auth.values.oauthScopes ||
+                  existing.oauthResource !== auth.values.oauthResource ||
+                  existing.oauthIssuer !== auth.values.oauthIssuer ||
+                  existing.oauthClientAuthMethod !== auth.values.oauthClientAuthMethod))),
+          );
           Object.assign(changes, auth.values);
         }
         if (body.display_name !== undefined) changes.displayName = body.display_name.trim();
@@ -708,7 +955,11 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         if (body.enabled !== undefined) changes.enabled = body.enabled;
         if (body.signup_access !== undefined) changes.signupAccess = body.signup_access;
         // Pending upstream OAuth callbacks still point at the old route.
-        if (nextName !== name || credentialsChanged || (body.enabled !== undefined && body.enabled !== existing.enabled)) {
+        if (
+          nextName !== name ||
+          credentialsChanged ||
+          (body.enabled !== undefined && body.enabled !== existing.enabled)
+        ) {
           changes.authRevision = existing.authRevision + 1;
           await tx.delete(oauthConnectionStates).where(eq(oauthConnectionStates.serverName, name));
         }
@@ -721,13 +972,17 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       return c.json({ ok: true, name: result.name });
     } catch (error) {
       const failure = error as { code?: string; cause?: { code?: string } };
-      if (failure.code === '23505' || failure.cause?.code === '23505') return jsonError(c, 'server already exists', 409);
+      if (failure.code === '23505' || failure.cause?.code === '23505')
+        return jsonError(c, 'server already exists', 409);
       throw error;
     }
   });
 
   router.delete('/admin/servers/:name', async (c) => {
-    const deleted = await db.delete(mcpServers).where(eq(mcpServers.name, c.req.param('name'))).returning({ name: mcpServers.name });
+    const deleted = await db
+      .delete(mcpServers)
+      .where(eq(mcpServers.name, c.req.param('name')))
+      .returning({ name: mcpServers.name });
     if (!deleted.length) return jsonError(c, 'server not found', 404);
     return c.json({ ok: true });
   });

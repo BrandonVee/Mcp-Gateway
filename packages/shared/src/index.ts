@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 
 /** A backend MCP server: one logical name mapped to N instance URLs. */
 export interface McpServerConfig {
@@ -10,7 +11,12 @@ export interface McpServerConfig {
 
 /** Explicit host allowlist shared by the control plane and every Gateway replica. */
 export function allowedUpstreamHosts(env: NodeJS.ProcessEnv = process.env): Set<string> {
-  return new Set((env.MCP_UPSTREAM_ALLOWED_HOSTS ?? '').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean));
+  return new Set(
+    (env.MCP_UPSTREAM_ALLOWED_HOSTS ?? '')
+      .split(',')
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean),
+  );
 }
 
 export function upstreamAllowlistEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -21,7 +27,8 @@ export function upstreamAllowlistEnabled(env: NodeJS.ProcessEnv = process.env): 
 export function normalizeUpstreamEndpoint(value: string, env: NodeJS.ProcessEnv = process.env): string | null {
   try {
     const url = new URL(value);
-    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.hash) return null;
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.hash)
+      return null;
     if (upstreamAllowlistEnabled(env) && !allowedUpstreamHosts(env).has(url.hostname.toLowerCase())) return null;
     if (url.pathname === '/' || !url.pathname) url.pathname = '/mcp';
     return url.toString().replace(/\/$/, '');
@@ -74,13 +81,25 @@ function validatePlatformConfig(config: PlatformConfig, path: string): void {
   };
   const validPort = (value: number) => Number.isInteger(value) && value >= 1 && value <= 65535;
   if (!config.auth || !validPort(config.auth.port)) fail('auth.port must be a valid TCP port');
-  if (!config.auth.postgres?.url || !Number.isInteger(config.auth.postgres.poolMax) || config.auth.postgres.poolMax < 1) fail('auth.postgres is required');
+  if (!config.auth.postgres?.url || !Number.isInteger(config.auth.postgres.poolMax) || config.auth.postgres.poolMax < 1)
+    fail('auth.postgres is required');
   if (!config.auth.internalApiToken) fail('auth.internalApiToken is required');
-  if (!config.gateway || !validPort(config.gateway.port) || !config.gateway.redisUrl) fail('gateway settings are required');
-  if (!config.gateway.registryUrl || !Number.isInteger(config.gateway.registryRefreshSeconds) || config.gateway.registryRefreshSeconds < 1) fail('gateway registry settings are required');
+  if (!config.gateway || !validPort(config.gateway.port) || !config.gateway.redisUrl)
+    fail('gateway settings are required');
+  if (
+    !config.gateway.registryUrl ||
+    !Number.isInteger(config.gateway.registryRefreshSeconds) ||
+    config.gateway.registryRefreshSeconds < 1
+  )
+    fail('gateway registry settings are required');
 }
 
-/** Fail closed before opening a listener when production still carries local-development defaults. */
+/**
+ * Fail closed before opening a listener when production still carries
+ * local-development defaults. Settings stored in the database replace the file
+ * configuration after setup, so those file-based checks are skipped once
+ * databaseSettingsEnabled() is true.
+ */
 export function validateProductionRuntime(
   config: PlatformConfig,
   service: 'auth' | 'gateway',
@@ -89,7 +108,9 @@ export function validateProductionRuntime(
   if (env.NODE_ENV !== 'production') return;
   const developmentBrokerToken = 'ef23e6d931a69ad96a57d9ba38a39c810d6adb8a61f4e38990a9b14e0bc6a36d';
   const developmentEncryptionKey = '9f52ebfcbdfb3f52cfcf214b6196952c486efe7ec2c1d7f7a2144d72428c01fc';
-  const fail = (message: string): never => { throw new Error(`Production configuration: ${message}`); };
+  const fail = (message: string): never => {
+    throw new Error(`Production configuration: ${message}`);
+  };
   const requireSecret = (name: string): string => {
     const value = env[name];
     if (!value || value.length < 32 || value === 'local-registry-token' || value === developmentBrokerToken) {
@@ -101,23 +122,33 @@ export function validateProductionRuntime(
     try {
       const url = new URL(value ?? '');
       if (url.protocol === 'https:' && url.hostname && !url.username && !url.password) return;
-    } catch { /* Invalid URL is reported below. */ }
+    } catch {
+      /* Invalid URL is reported below. */
+    }
     fail(`${name} must be a public HTTPS URL without embedded credentials`);
   };
 
   if (!env.CONFIG_FILE) fail('CONFIG_FILE must select a deployment-specific configuration file');
-  if (env.MCP_UPSTREAM_ALLOWLIST_ENABLED !== undefined && !['true', 'false'].includes(env.MCP_UPSTREAM_ALLOWLIST_ENABLED)) {
+  if (
+    env.MCP_UPSTREAM_ALLOWLIST_ENABLED !== undefined &&
+    !['true', 'false'].includes(env.MCP_UPSTREAM_ALLOWLIST_ENABLED)
+  ) {
     fail('MCP_UPSTREAM_ALLOWLIST_ENABLED must be true or false');
   }
   const upstreamHosts = allowedUpstreamHosts(env);
-  if ((!databaseSettingsEnabled(env) && upstreamAllowlistEnabled(env) && upstreamHosts.size === 0) || [...upstreamHosts].some((host) => !/^[a-z0-9][a-z0-9.-]*$/.test(host) || host.includes('..'))) {
+  if (
+    (!databaseSettingsEnabled(env) && upstreamAllowlistEnabled(env) && upstreamHosts.size === 0) ||
+    [...upstreamHosts].some((host) => !/^[a-z0-9][a-z0-9.-]*$/.test(host) || host.includes('..'))
+  ) {
     fail('MCP_UPSTREAM_ALLOWED_HOSTS must list trusted upstream hostnames');
   }
   if (!databaseSettingsEnabled(env)) {
     requireHttps('auth.issuer', config.auth.issuer);
     requireHttps('gateway.resourceBaseUrl', config.gateway.resourceBaseUrl);
-    if (new URL(config.auth.issuer).origin !== config.auth.issuer.replace(/\/$/, '')) fail('auth.issuer must be an HTTPS origin without a path');
-    if (new URL(config.gateway.resourceBaseUrl).origin !== config.gateway.resourceBaseUrl.replace(/\/$/, '')) fail('gateway.resourceBaseUrl must be an HTTPS origin without a path');
+    if (new URL(config.auth.issuer).origin !== config.auth.issuer.replace(/\/$/, ''))
+      fail('auth.issuer must be an HTTPS origin without a path');
+    if (new URL(config.gateway.resourceBaseUrl).origin !== config.gateway.resourceBaseUrl.replace(/\/$/, ''))
+      fail('gateway.resourceBaseUrl must be an HTTPS origin without a path');
   }
   const internalToken = requireSecret('INTERNAL_API_TOKEN');
   const brokerToken = requireSecret('CREDENTIAL_BROKER_TOKEN');
@@ -126,18 +157,30 @@ export function validateProductionRuntime(
     if (!env.DATABASE_URL) fail('DATABASE_URL must be supplied via the environment');
     if (!env.REDIS_URL) fail('REDIS_URL must be supplied via the environment');
     let databaseUrl: URL;
-    try { databaseUrl = new URL(env.DATABASE_URL ?? ''); } catch { return fail('DATABASE_URL must be a PostgreSQL URL'); }
-    if (!['postgres:', 'postgresql:'].includes(databaseUrl.protocol) || !databaseUrl.hostname) fail('DATABASE_URL must be a PostgreSQL URL');
-    if (decodeURIComponent(databaseUrl.password) === 'mcp-dev-password') fail('DATABASE_URL still contains the development password');
-    if (!/^[0-9a-fA-F]{64}$/.test(env.CREDENTIAL_ENCRYPT_KEY ?? '')) fail('CREDENTIAL_ENCRYPT_KEY must be a 32-byte hex key');
-    if (env.CREDENTIAL_ENCRYPT_KEY === developmentEncryptionKey) fail('CREDENTIAL_ENCRYPT_KEY must not use the development default');
+    try {
+      databaseUrl = new URL(env.DATABASE_URL ?? '');
+    } catch {
+      return fail('DATABASE_URL must be a PostgreSQL URL');
+    }
+    if (!['postgres:', 'postgresql:'].includes(databaseUrl.protocol) || !databaseUrl.hostname)
+      fail('DATABASE_URL must be a PostgreSQL URL');
+    if (decodeURIComponent(databaseUrl.password) === 'mcp-dev-password')
+      fail('DATABASE_URL still contains the development password');
+    if (!/^[0-9a-fA-F]{64}$/.test(env.CREDENTIAL_ENCRYPT_KEY ?? ''))
+      fail('CREDENTIAL_ENCRYPT_KEY must be a 32-byte hex key');
+    if (env.CREDENTIAL_ENCRYPT_KEY === developmentEncryptionKey)
+      fail('CREDENTIAL_ENCRYPT_KEY must not use the development default');
     if (!databaseSettingsEnabled(env)) requireHttps('ADMIN_WEB_URL', env.ADMIN_WEB_URL);
   } else {
     if (!env.REDIS_URL) fail('REDIS_URL must be supplied via the environment');
     if (!databaseSettingsEnabled(env)) requireHttps('CONNECTIONS_WEB_URL', env.CONNECTIONS_WEB_URL);
   }
   let redisUrl: URL;
-  try { redisUrl = new URL(env.REDIS_URL ?? ''); } catch { return fail('REDIS_URL must be a Redis URL'); }
+  try {
+    redisUrl = new URL(env.REDIS_URL ?? '');
+  } catch {
+    return fail('REDIS_URL must be a Redis URL');
+  }
   if (!['redis:', 'rediss:'].includes(redisUrl.protocol) || !redisUrl.hostname) fail('REDIS_URL must be a Redis URL');
 }
 
@@ -155,21 +198,37 @@ export interface SystemSettings {
   monitoring_error_rate?: number;
   monitoring_slow_ms?: number;
 }
-export const systemOptionDefaults = { registration_enabled: true, monitoring_enabled: true, monitoring_logs_enabled: true,
-  monitoring_retention_days: 14, monitoring_summary_days: 365, monitoring_error_rate: 5, monitoring_slow_ms: 2000 };
+export const systemOptionDefaults = {
+  registration_enabled: true,
+  monitoring_enabled: true,
+  monitoring_logs_enabled: true,
+  monitoring_retention_days: 14,
+  monitoring_summary_days: 365,
+  monitoring_error_rate: 5,
+  monitoring_slow_ms: 2000,
+};
 export function runtimeSettings() {
   return { ...systemOptionDefaults, ...currentSystemSettings() };
 }
 export function registrationEnabled(): boolean {
-  return process.env.SYSTEM_CONFIG_MODE === 'file' ? process.env.MCP_REGISTRATION_ENABLED !== 'false' : runtimeSettings().registration_enabled;
+  return process.env.SYSTEM_CONFIG_MODE === 'file'
+    ? process.env.MCP_REGISTRATION_ENABLED !== 'false'
+    : runtimeSettings().registration_enabled;
 }
 let storedSettingsActive = false;
 let systemSettings: SystemSettings = { public_url: null, upstream_allowlist_enabled: true, upstream_hosts: [] };
 export function databaseSettingsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.SYSTEM_CONFIG_MODE === 'database' || (env === process.env && env.SYSTEM_CONFIG_MODE !== 'file' && storedSettingsActive);
+  return (
+    env.SYSTEM_CONFIG_MODE === 'database' ||
+    (env === process.env && env.SYSTEM_CONFIG_MODE !== 'file' && storedSettingsActive)
+  );
 }
-export function currentSystemSettings(): SystemSettings { return systemSettings; }
+export function currentSystemSettings(): SystemSettings {
+  return systemSettings;
+}
 export function applySystemSettings(value: SystemSettings): void {
+  // Settings only take effect once a public URL exists: an empty URL means setup
+  // has not finished and the file configuration must keep answering.
   storedSettingsActive = Boolean(value.public_url);
   systemSettings = value;
   if (databaseSettingsEnabled()) {
@@ -177,49 +236,100 @@ export function applySystemSettings(value: SystemSettings): void {
     process.env.MCP_UPSTREAM_ALLOWLIST_ENABLED = String(value.upstream_allowlist_enabled);
   }
 }
-export function systemConfigured(): boolean { return !databaseSettingsEnabled() || Boolean(systemSettings.public_url); }
+export function systemConfigured(): boolean {
+  return !databaseSettingsEnabled() || Boolean(systemSettings.public_url);
+}
 export function authIssuer(env: NodeJS.ProcessEnv = process.env): string {
   if (env.NODE_ENV !== 'production') return loadPlatformConfig().auth.issuer;
-  return databaseSettingsEnabled(env) ? systemSettings.public_url ?? '' : loadPlatformConfig().auth.issuer;
+  return databaseSettingsEnabled(env) ? (systemSettings.public_url ?? '') : loadPlatformConfig().auth.issuer;
 }
 export function gatewayPublicUrl(env: NodeJS.ProcessEnv = process.env): string {
   // Local development has separate Auth and Gateway listeners, not one ingress.
   if (env.NODE_ENV !== 'production') return loadPlatformConfig().gateway.resourceBaseUrl;
-  return databaseSettingsEnabled(env) ? systemSettings.public_url ?? '' : loadPlatformConfig().gateway.resourceBaseUrl;
+  return databaseSettingsEnabled(env)
+    ? (systemSettings.public_url ?? '')
+    : loadPlatformConfig().gateway.resourceBaseUrl;
 }
 export function adminWebUrl(env: NodeJS.ProcessEnv = process.env): string {
   // Vite remains a separate browser origin when development uses stored settings.
   if (env.NODE_ENV !== 'production') return env.ADMIN_WEB_URL ?? 'http://localhost:5173';
-  return databaseSettingsEnabled(env) ? systemSettings.public_url ?? '/' : env.ADMIN_WEB_URL ?? 'http://localhost:5173';
+  return databaseSettingsEnabled(env)
+    ? (systemSettings.public_url ?? '/')
+    : (env.ADMIN_WEB_URL ?? 'http://localhost:5173');
 }
-export function normalizeSystemSettings(value: unknown, production = process.env.NODE_ENV === 'production'): SystemSettings | null {
-  if (!value || typeof value !== 'object') return null;
-  const input = value as Record<string, unknown>;
-  if (typeof input.public_url !== 'string' || !Array.isArray(input.upstream_hosts)) return null;
-  if (input.upstream_allowlist_enabled !== undefined && typeof input.upstream_allowlist_enabled !== 'boolean') return null;
-  for (const key of ['registration_enabled', 'monitoring_enabled', 'monitoring_logs_enabled']) {
-    if (input[key] !== undefined && typeof input[key] !== 'boolean') return null;
+// Stored settings arrive from the admin API, so every field is parsed instead of
+// trusted: one schema keeps the accepted shape and the bounds in one place.
+const boundedInt = (max: number) => z.number().int().min(1).max(max);
+const upstreamHost = z
+  .string()
+  .max(253)
+  .regex(/^[a-z0-9][a-z0-9.-]*$/i)
+  .refine((host) => !host.includes('..'));
+const publicOrigin = (production: boolean) =>
+  z.string().refine((value) => {
+    try {
+      const url = new URL(value.trim());
+      const protocols = production ? ['https:'] : ['http:', 'https:'];
+      return (
+        protocols.includes(url.protocol) &&
+        !url.username &&
+        !url.password &&
+        !url.search &&
+        !url.hash &&
+        url.pathname === '/'
+      );
+    } catch {
+      return false;
+    }
+  });
+const systemSettingsSchema = (production: boolean) =>
+  z.object({
+    public_url: publicOrigin(production),
+    upstream_allowlist_enabled: z.boolean().optional(),
+    upstream_hosts: z.array(upstreamHost).max(200),
+    registration_enabled: z.boolean().optional(),
+    monitoring_enabled: z.boolean().optional(),
+    monitoring_logs_enabled: z.boolean().optional(),
+    monitoring_retention_days: boundedInt(90).optional(),
+    monitoring_summary_days: boundedInt(730).optional(),
+    monitoring_error_rate: boundedInt(100).optional(),
+    monitoring_slow_ms: boundedInt(3_600_000).optional(),
+  });
+
+export function normalizeSystemSettings(
+  value: unknown,
+  production = process.env.NODE_ENV === 'production',
+): SystemSettings | null {
+  const parsed = systemSettingsSchema(production).safeParse(value);
+  if (!parsed.success) return null;
+  const input = parsed.data;
+  const options: Partial<SystemSettings> = {};
+  for (const key of Object.keys(systemOptionDefaults) as Array<keyof typeof systemOptionDefaults>) {
+    if (input[key] !== undefined) Object.assign(options, { [key]: input[key] });
   }
-  for (const [key, max] of [['monitoring_retention_days', 90], ['monitoring_summary_days', 730], ['monitoring_error_rate', 100], ['monitoring_slow_ms', 3600000]] as const) {
-    if (input[key] !== undefined && (!Number.isSafeInteger(input[key]) || Number(input[key]) < 1 || Number(input[key]) > max)) return null;
-  }
-  try {
-    const url = new URL(input.public_url.trim());
-    if ((production ? url.protocol !== 'https:' : !['http:', 'https:'].includes(url.protocol))
-      || url.username || url.password || url.search || url.hash || url.pathname !== '/') return null;
-    if (input.upstream_hosts.length > 200 || !input.upstream_hosts.every((host) => typeof host === 'string'
-      && host.length <= 253 && /^[a-z0-9][a-z0-9.-]*$/i.test(host) && !host.includes('..'))) return null;
-    return { public_url: url.origin, upstream_allowlist_enabled: input.upstream_allowlist_enabled ?? true,
-      upstream_hosts: [...new Set((input.upstream_hosts as string[]).map((host) => host.toLowerCase()))].sort(),
-      ...Object.fromEntries(Object.keys(systemOptionDefaults).filter(key => input[key] !== undefined).map(key => [key, input[key]])) };
-  } catch { return null; }
+  return {
+    public_url: new URL(input.public_url.trim()).origin,
+    upstream_allowlist_enabled: input.upstream_allowlist_enabled ?? true,
+    upstream_hosts: [...new Set(input.upstream_hosts.map((host) => host.toLowerCase()))].sort(),
+    ...options,
+  };
 }
 
 /** Before initial setup, accept only the browser origin of the requested host. */
-export function bootstrapOriginAllowed(origin: string, host: string | undefined, production = process.env.NODE_ENV === 'production'): boolean {
+export function bootstrapOriginAllowed(
+  origin: string,
+  host: string | undefined,
+  production = process.env.NODE_ENV === 'production',
+): boolean {
   try {
     const url = new URL(origin);
-    return Boolean(host && url.host.toLowerCase() === host.toLowerCase() && url.origin === origin
-      && (production ? url.protocol === 'https:' : ['http:', 'https:'].includes(url.protocol)));
-  } catch { return false; }
+    return Boolean(
+      host &&
+      url.host.toLowerCase() === host.toLowerCase() &&
+      url.origin === origin &&
+      (production ? url.protocol === 'https:' : ['http:', 'https:'].includes(url.protocol)),
+    );
+  } catch {
+    return false;
+  }
 }

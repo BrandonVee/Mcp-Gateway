@@ -3,10 +3,10 @@ services:
     build: .
     command: pnpm --filter @mcp/admin-web dev --host 0.0.0.0
     environment:
-      ADMIN_API_TARGET: "http://auth:9001"
-      GATEWAY_TARGET: "http://gateway:8000"
+      ADMIN_API_TARGET: 'http://auth:9001'
+      GATEWAY_TARGET: 'http://gateway:8000'
     ports:
-      - "5173:5173"
+      - '5173:5173'
     volumes:
       - ./packages/admin-web/src:/app/packages/admin-web/src
       - ./packages/admin-web/index.html:/app/packages/admin-web/index.html
@@ -21,15 +21,15 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: "mcp"
-      POSTGRES_USER: "mcp"
-      POSTGRES_PASSWORD: "mcp-dev-password"
+      POSTGRES_DB: 'mcp'
+      POSTGRES_USER: 'mcp'
+      POSTGRES_PASSWORD: 'mcp-dev-password'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5433:5432"
+      - '127.0.0.1:5433:5432'
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
+      test: ['CMD-SHELL', 'pg_isready -U mcp -d mcp']
       interval: 3s
       timeout: 2s
       retries: 20
@@ -38,9 +38,9 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "127.0.0.1:6380:6379"
+      - '127.0.0.1:6380:6379'
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 3s
       timeout: 2s
       retries: 10
@@ -49,19 +49,25 @@ services:
     build: .
     command: pnpm --filter @mcp/auth-server dev
     environment:
-      CONFIG_FILE: "/app/config/docker.json"
-      ADMIN_WEB_URL: "http://localhost:5173"
-      CREDENTIAL_ENCRYPT_KEY: "${CREDENTIAL_ENCRYPT_KEY:-9f52ebfcbdfb3f52cfcf214b6196952c486efe7ec2c1d7f7a2144d72428c01fc}"
-      CREDENTIAL_BROKER_TOKEN: "${CREDENTIAL_BROKER_TOKEN:-ef23e6d931a69ad96a57d9ba38a39c810d6adb8a61f4e38990a9b14e0bc6a36d}"
+      CONFIG_FILE: '/app/config/docker.json'
+      ADMIN_WEB_URL: 'http://localhost:5173'
+      CREDENTIAL_ENCRYPT_KEY: '${CREDENTIAL_ENCRYPT_KEY:-9f52ebfcbdfb3f52cfcf214b6196952c486efe7ec2c1d7f7a2144d72428c01fc}'
+      CREDENTIAL_BROKER_TOKEN: '${CREDENTIAL_BROKER_TOKEN:-ef23e6d931a69ad96a57d9ba38a39c810d6adb8a61f4e38990a9b14e0bc6a36d}'
     ports:
-      - "9001:9001"
+      - '9001:9001'
     volumes:
       - ./packages/auth-server/src:/app/packages/auth-server/src
       - ./packages/auth-server/drizzle:/app/packages/auth-server/drizzle
       - ./packages/shared/src:/app/packages/shared/src
       - ./config:/app/config:ro
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:9001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
       interval: 3s
       timeout: 2s
       retries: 20
@@ -75,11 +81,11 @@ services:
     build: .
     command: pnpm --filter @mcp/gateway dev
     environment:
-      CONFIG_FILE: "/app/config/docker.json"
-      CONNECTIONS_WEB_URL: "http://localhost:5173/connections"
-      CREDENTIAL_BROKER_TOKEN: "${CREDENTIAL_BROKER_TOKEN:-ef23e6d931a69ad96a57d9ba38a39c810d6adb8a61f4e38990a9b14e0bc6a36d}"
+      CONFIG_FILE: '/app/config/docker.json'
+      CONNECTIONS_WEB_URL: 'http://localhost:5173/connections'
+      CREDENTIAL_BROKER_TOKEN: '${CREDENTIAL_BROKER_TOKEN:-ef23e6d931a69ad96a57d9ba38a39c810d6adb8a61f4e38990a9b14e0bc6a36d}'
     ports:
-      - "8000:8000"
+      - '8000:8000'
     volumes:
       - ./packages/gateway/src:/app/packages/gateway/src
       - ./packages/shared/src:/app/packages/shared/src

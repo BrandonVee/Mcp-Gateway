@@ -217,12 +217,12 @@ curl --fail https://YOUR_DOMAIN/gateway/health
 
 触发与标签规则：
 
-| 触发方式 | 说明 | 发布标签 |
-| --- | --- | --- |
-| 推送 `main` 且测试通过 | 自动算版本并派发 release.yml | `latest`（仅当发布提交就是默认分支 HEAD）、12 位提交 SHA、`vX.Y.Z` / `X.Y.Z` |
-| 推送 `v1.2.3` | 直接发布该标签指向的提交 | `v1.2.3`、`1.2.3`、12 位提交 SHA |
-| 手动运行 release.yml | 填写 tag，可填 ref 指定提交，可开 dry_run | 同版本标签；dry_run 只构建校验，不推送、不打标签、不建 Release |
-| PR、其他分支 | 仅测试 | 无 |
+| 触发方式               | 说明                                      | 发布标签                                                                     |
+| ---------------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| 推送 `main` 且测试通过 | 自动算版本并派发 release.yml              | `latest`（仅当发布提交就是默认分支 HEAD）、12 位提交 SHA、`vX.Y.Z` / `X.Y.Z` |
+| 推送 `v1.2.3`          | 直接发布该标签指向的提交                  | `v1.2.3`、`1.2.3`、12 位提交 SHA                                             |
+| 手动运行 release.yml   | 填写 tag，可填 ref 指定提交，可开 dry_run | 同版本标签；dry_run 只构建校验，不推送、不打标签、不建 Release               |
+| PR、其他分支           | 仅测试                                    | 无                                                                           |
 
 重复运行同一已发布提交会复用版本，不移动已有标签，也不会重写已记录的镜像 digest。工作流声明 `contents: write`，使用内置 `GITHUB_TOKEN`，无需额外的 GitHub PAT。手动运行 release.yml **不经过 CI 测试**，仅用于重发、固定版本或演练。
 
@@ -262,7 +262,6 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 ```
 
 这会发布适用于 x86_64 和 ARM64 服务器的单个应用镜像；**不要发布 `builder` 或 `test-upstream` 目标**。详见 [Docker 多架构构建](https://docs.docker.com/build/building/multi-platform/)。
-
 
 发布完成后，`./scripts/deploy.sh --yes` 即默认拉取该镜像；需要固定版本时使用 README 的 `MCP_VERSION` 一键拉取部署命令。分离服务高级模式仍可单独构建 `runtime` 和 `admin-web` 目标，使用原 `mcp-runtime` / `mcp-admin-web` 名称；它们不用于默认单机部署。
 

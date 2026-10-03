@@ -39,6 +39,8 @@ docker compose version >/dev/null || fail 'Docker Compose 插件不可用'
 requested_version=${MCP_VERSION:-}
 export MCP_DEPLOY_DIR=${MCP_DEPLOY_DIR:-"$root/deploy/single-host"}
 env_path="$MCP_DEPLOY_DIR/runtime.env"
+# A saved runtime.env is the source of truth for redeploys: only unset variables
+# are filled in, so an existing deployment never silently changes its secrets.
 if [[ -f "$env_path" ]]; then
   while IFS='=' read -r key value; do
     case "$key" in
@@ -209,6 +211,7 @@ EOF
 }
 save_config
 compose() { docker compose --env-file "$env_path" -f "$root/deploy/compose.single-host.yml" "$@"; }
+# Validate the rendered Compose file before touching a running deployment.
 compose config --quiet
 if $prepare_only; then
   echo "配置已保存：$MCP_DEPLOY_DIR"
@@ -217,8 +220,11 @@ if $prepare_only; then
 fi
 
 compose up -d --wait postgres redis
+# Redis and Postgres are up, so the control network now has a subnet: trust it as
+# the proxy hop instead of trusting every forwarded client IP.
 subnets=$(docker network inspect "${COMPOSE_PROJECT_NAME}_control" --format '{{range .IPAM.Config}}{{.Subnet}},{{end}}')
 export AUTH_TRUSTED_PROXY_IPS=${subnets%,}
+# Rewrite the environment so the trusted-proxy setting survives later runs.
 save_config
 if $use_local_image; then
   docker image inspect "$MCP_IMAGE_NAME:$MCP_VERSION" >/dev/null || fail "未找到本地镜像 $MCP_IMAGE_NAME:$MCP_VERSION，请先构建或 docker load 导入。"

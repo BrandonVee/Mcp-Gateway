@@ -13,18 +13,35 @@ export interface TokenRouteDeps {
   defaultAudience: string;
 }
 
+/** OAuth token endpoint: authorization_code (PKCE) and rotating refresh_token grants. */
 export function createTokenRouter(deps: TokenRouteDeps): Hono {
   const router = new Hono();
   const { keys, defaultAudience } = deps;
-  const ttl = Number.isFinite(deps.accessTokenTtlSeconds) && deps.accessTokenTtlSeconds > 0 ? deps.accessTokenTtlSeconds : 3600;
+  // An access token must always expire, even when configuration omits the TTL.
+  const ttl =
+    Number.isFinite(deps.accessTokenTtlSeconds) && deps.accessTokenTtlSeconds > 0 ? deps.accessTokenTtlSeconds : 3600;
 
+  /**
+   * Mint the access token and rotate the refresh token inside one transaction so
+   * a user disabled mid-flight cannot end up with a usable new pair.
+   */
   async function issueTokens(entry: RefreshTokenEntry) {
     return withAuthenticatedUser(entry, async (tx) => {
       const authorization = await getUserAuthorization(entry.userId, tx);
       if (!authorization || authorization.disabled) throw new Error('user is missing or disabled');
+      // '*' authorizes administrators for every server without a grant row.
       const mcpServers = authorization.role === 'admin' ? ['*'] : authorization.servers;
-      const accessToken = await new SignJWT({ scope: entry.scope, client_id: entry.client_id, uid: authorization.id,
-        auth_version: authorization.authVersion, role: authorization.role, mcp_servers: mcpServers })
+      // Claims are the only thing the Gateway and the admin API see: mcp_servers
+      // scopes the token to granted servers, and auth_version lets both reject
+      // tokens minted before an administrator revoked the user's authentication.
+      const accessToken = await new SignJWT({
+        scope: entry.scope,
+        client_id: entry.client_id,
+        uid: authorization.id,
+        auth_version: authorization.authVersion,
+        role: authorization.role,
+        mcp_servers: mcpServers,
+      })
         .setProtectedHeader({ alg: 'RS256', kid: keys.kid, typ: 'JWT' })
         .setIssuer(deps.issuer)
         .setAudience(entry.resource ?? defaultAudience)
@@ -34,10 +51,17 @@ export function createTokenRouter(deps: TokenRouteDeps): Hono {
         .setJti(randomBytes(8).toString('hex'))
         .sign(keys.privateKey);
       const refresh = await saveRefreshToken(entry, tx);
-      return { access_token: accessToken, token_type: 'Bearer', expires_in: ttl, refresh_token: refresh, scope: entry.scope };
+      return {
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: ttl,
+        refresh_token: refresh,
+        scope: entry.scope,
+      };
     });
   }
 
+  /** PKCE S256: the verifier is hashed, never compared in plaintext. */
   const s256 = (verifier: string): string => createHash('sha256').update(verifier).digest('base64url');
 
   function jsonError(c: Context, error: string, description?: string) {
@@ -45,6 +69,7 @@ export function createTokenRouter(deps: TokenRouteDeps): Hono {
   }
 
   router.post('/token', async (c: Context) => {
+    // RFC 6749 allows both encodings; clients disagree on which one they send.
     let params: Record<string, string>;
     const contentType = c.req.header('content-type') ?? '';
     if (contentType.includes('application/json')) {
@@ -59,7 +84,8 @@ export function createTokenRouter(deps: TokenRouteDeps): Hono {
       const { code, code_verifier, client_id, redirect_uri } = params;
       const entry = code ? await consumeAuthCode(code) : undefined;
       if (!entry) return jsonError(c, 'invalid_grant', 'authorization code is invalid or expired');
-      if (entry.client_id !== client_id || !(await getClient(client_id))) return jsonError(c, 'invalid_grant', 'client_id mismatch');
+      if (entry.client_id !== client_id || !(await getClient(client_id)))
+        return jsonError(c, 'invalid_grant', 'client_id mismatch');
       if (entry.redirect_uri !== redirect_uri) return jsonError(c, 'invalid_grant', 'redirect_uri mismatch');
       if (!/^[A-Za-z0-9._~-]{43,128}$/.test(code_verifier ?? '') || s256(code_verifier) !== entry.code_challenge) {
         return jsonError(c, 'invalid_grant', 'PKCE verification failed');

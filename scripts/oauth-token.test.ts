@@ -10,8 +10,10 @@ test('CLI dynamically registers a client and exchanges a PKCE code for an existi
   process.env.MCP_PASSWORD = 'existing-password';
   t.after(() => {
     globalThis.fetch = originalFetch;
-    if (previousUser === undefined) delete process.env.MCP_USER; else process.env.MCP_USER = previousUser;
-    if (previousPassword === undefined) delete process.env.MCP_PASSWORD; else process.env.MCP_PASSWORD = previousPassword;
+    if (previousUser === undefined) delete process.env.MCP_USER;
+    else process.env.MCP_USER = previousUser;
+    if (previousPassword === undefined) delete process.env.MCP_PASSWORD;
+    else process.env.MCP_PASSWORD = previousPassword;
   });
   let state = '';
   let challenge = '';
@@ -37,7 +39,10 @@ test('CLI dynamically registers a client and exchanges a PKCE code for an existi
       assert.equal(form.get('password'), 'existing-password');
       assert.equal(form.get('state'), state);
       assert.equal(init?.redirect, 'manual');
-      return new Response(null, { status: 302, headers: { location: `http://localhost:8080/callback?code=test-code&state=${state}` } });
+      return new Response(null, {
+        status: 302,
+        headers: { location: `http://localhost:8080/callback?code=test-code&state=${state}` },
+      });
     }
     assert.equal(url.pathname, '/token');
     const form = init?.body as URLSearchParams;

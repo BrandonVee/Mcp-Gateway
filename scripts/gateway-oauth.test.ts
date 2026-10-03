@@ -15,14 +15,22 @@ test('local Gateway discovers Auth, proxies public OAuth bodies and redirects br
     res.writeHead(200, { 'content-type': 'application/json', 'set-cookie': 'upstream-cookie=private' });
     res.end(JSON.stringify({ issuer: 'http://auth.example.test', endpoint: req.url }));
   });
-  await new Promise<void>(resolve => auth.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => auth.listen(0, '127.0.0.1', resolve));
   const address = auth.address();
   assert.ok(address && typeof address !== 'string');
   const app = Fastify();
   // Match the Gateway parsers: proxy request bytes without JSON reserialization.
-  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req: unknown, body: Buffer, done: Function) => done(null, body));
-  app.addContentTypeParser('*', { parseAs: 'buffer' }, (_req: unknown, body: Buffer, done: Function) => done(null, body));
-  registerDevelopmentOAuthRoutes(app, { authUrl: `http://127.0.0.1:${address.port}`, authIssuer: () => 'http://auth.example.test', production: false });
+  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req: unknown, body: Buffer, done: Function) =>
+    done(null, body),
+  );
+  app.addContentTypeParser('*', { parseAs: 'buffer' }, (_req: unknown, body: Buffer, done: Function) =>
+    done(null, body),
+  );
+  registerDevelopmentOAuthRoutes(app, {
+    authUrl: `http://127.0.0.1:${address.port}`,
+    authIssuer: () => 'http://auth.example.test',
+    production: false,
+  });
   try {
     for (const url of ['/.well-known/oauth-authorization-server', '/.well-known/openid-configuration', '/jwks.json']) {
       const response = await app.inject({ method: 'GET', url });
@@ -32,12 +40,35 @@ test('local Gateway discovers Auth, proxies public OAuth bodies and redirects br
       assert.equal(response.headers['set-cookie'], undefined);
     }
     const registration = '{ "redirect_uris": ["http://127.0.0.1:55945/oauth/callback"] }';
-    assert.equal((await app.inject({ method: 'POST', url: '/register', headers: { 'content-type': 'application/json', cookie: 'auth_session=private' }, payload: registration })).statusCode, 200);
+    assert.equal(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/register',
+          headers: { 'content-type': 'application/json', cookie: 'auth_session=private' },
+          payload: registration,
+        })
+      ).statusCode,
+      200,
+    );
     assert.deepEqual(received.at(-1), { path: '/register', body: registration, cookie: undefined });
     const token = 'grant_type=authorization_code&code=one-time-code&code_verifier=verifier';
-    assert.equal((await app.inject({ method: 'POST', url: '/token', headers: { 'content-type': 'application/x-www-form-urlencoded' }, payload: token })).statusCode, 200);
+    assert.equal(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/token',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          payload: token,
+        })
+      ).statusCode,
+      200,
+    );
     assert.equal(received.at(-1)?.body, token);
-    const authorize = await app.inject({ method: 'GET', url: '/authorize?state=test-state&resource=http%3A%2F%2Flocalhost%3A8000%2Fmcp%2Fhscode' });
+    const authorize = await app.inject({
+      method: 'GET',
+      url: '/authorize?state=test-state&resource=http%3A%2F%2Flocalhost%3A8000%2Fmcp%2Fhscode',
+    });
     assert.equal(authorize.statusCode, 307);
     const destination = new URL(authorize.headers.location!);
     assert.equal(destination.origin, 'http://auth.example.test');
@@ -47,16 +78,26 @@ test('local Gateway discovers Auth, proxies public OAuth bodies and redirects br
     assert.equal((await app.inject({ method: 'GET', url: '/admin/users' })).statusCode, 404);
   } finally {
     await app.close();
-    await new Promise<void>((resolve, reject) => auth.close(error => error ? reject(error) : resolve()));
+    await new Promise<void>((resolve, reject) => auth.close((error) => (error ? reject(error) : resolve())));
   }
 });
 
 test('production does not enable development OAuth aliases', async () => {
   const app = Fastify();
-  registerDevelopmentOAuthRoutes(app, { authUrl: 'http://127.0.0.1:1', authIssuer: () => 'https://auth.example.test', production: true });
+  registerDevelopmentOAuthRoutes(app, {
+    authUrl: 'http://127.0.0.1:1',
+    authIssuer: () => 'https://auth.example.test',
+    production: true,
+  });
   try {
-    for (const [method, url] of [['GET', '/.well-known/openid-configuration'], ['POST', '/register'], ['POST', '/token']]) {
+    for (const [method, url] of [
+      ['GET', '/.well-known/openid-configuration'],
+      ['POST', '/register'],
+      ['POST', '/token'],
+    ]) {
       assert.equal((await app.inject({ method, url })).statusCode, 404);
     }
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });

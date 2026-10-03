@@ -35,12 +35,15 @@ export function isRedirectUriAllowed(client: OAuthClient, redirectUri: string): 
 }
 
 /** RFC 7591 dynamic client registration (public clients only, for the skeleton). */
-export async function registerClient(body: unknown): Promise<{ ok: true; client: OAuthClient } | { ok: false; error: string }> {
+export async function registerClient(
+  body: unknown,
+): Promise<{ ok: true; client: OAuthClient } | { ok: false; error: string }> {
   if (typeof body !== 'object' || body === null) return { ok: false, error: 'invalid_client_metadata' };
   const { redirect_uris, client_name, token_endpoint_auth_method } = body as Record<string, unknown>;
   if (
     !Array.isArray(redirect_uris) ||
-    redirect_uris.length === 0 || redirect_uris.length > 10 ||
+    redirect_uris.length === 0 ||
+    redirect_uris.length > 10 ||
     new Set(redirect_uris).size !== redirect_uris.length ||
     !redirect_uris.every((u) => typeof u === 'string' && isValidRedirectUri(u))
   ) {

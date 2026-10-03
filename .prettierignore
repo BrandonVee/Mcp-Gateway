@@ -1,0 +1,13 @@
+node_modules/
+dist/
+output/
+data/
+backups/
+pnpm-lock.yaml
+*.tsbuildinfo
+# Hand-compact markup: parsed by scripts/setup-wizard.test.ts with regexes.
+scripts/setup/index.html
+*.log
+deploy/production.json
+.env
+.env.local

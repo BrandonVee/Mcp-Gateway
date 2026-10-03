@@ -39,8 +39,10 @@ export function createRegistryRouter(): Hono {
       }),
     );
 
-    return c.json({ servers: result.filter((server) => server.instances.length > 0),
-      ...(process.env.SYSTEM_CONFIG_MODE !== 'file' ? { system_settings: currentSystemSettings() } : {}) });
+    return c.json({
+      servers: result.filter((server) => server.instances.length > 0),
+      ...(process.env.SYSTEM_CONFIG_MODE !== 'file' ? { system_settings: currentSystemSettings() } : {}),
+    });
   });
 
   // Recheck mutable authorization state so disabling a user or removing a grant
@@ -53,15 +55,31 @@ export function createRegistryRouter(): Hono {
     const userId = Number(c.req.query('user_id'));
     const authVersion = Number(c.req.query('auth_version') ?? '0');
     const serverName = c.req.query('server') ?? '';
-    if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isSafeInteger(authVersion) || authVersion < 0 || !serverName) return c.json({ error: 'invalid_request' }, 400);
-    const [user] = await db.select({ id: users.id, role: users.role, disabled: users.disabled, allServers: users.allServers })
-      .from(users).where(and(eq(users.id, userId), eq(users.authVersion, authVersion))).limit(1);
-    const [server] = await db.select({ name: mcpServers.name, enabled: mcpServers.enabled })
-      .from(mcpServers).where(eq(mcpServers.name, serverName)).limit(1);
+    if (
+      !Number.isSafeInteger(userId) ||
+      userId <= 0 ||
+      !Number.isSafeInteger(authVersion) ||
+      authVersion < 0 ||
+      !serverName
+    )
+      return c.json({ error: 'invalid_request' }, 400);
+    const [user] = await db
+      .select({ id: users.id, role: users.role, disabled: users.disabled, allServers: users.allServers })
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.authVersion, authVersion)))
+      .limit(1);
+    const [server] = await db
+      .select({ name: mcpServers.name, enabled: mcpServers.enabled })
+      .from(mcpServers)
+      .where(eq(mcpServers.name, serverName))
+      .limit(1);
     if (!user || user.disabled || !server?.enabled) return c.json({ error: 'access_denied' }, 403);
     if (user.role !== 'admin' && !user.allServers) {
-      const [grant] = await db.select({ userId: userServerAccess.userId }).from(userServerAccess)
-        .where(and(eq(userServerAccess.userId, userId), eq(userServerAccess.serverName, serverName))).limit(1);
+      const [grant] = await db
+        .select({ userId: userServerAccess.userId })
+        .from(userServerAccess)
+        .where(and(eq(userServerAccess.userId, userId), eq(userServerAccess.serverName, serverName)))
+        .limit(1);
       if (!grant) return c.json({ error: 'access_denied' }, 403);
     }
     return c.json({ allowed: true });

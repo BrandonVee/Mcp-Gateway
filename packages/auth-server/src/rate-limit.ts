@@ -23,7 +23,12 @@ function clientIp(c: Context): string {
 }
 
 /** Shared Redis counters apply the same fixed-window limit across Auth replicas. */
-export async function consumeRateLimit(bucket: string, identity: string, limit: number, windowSeconds: number): Promise<boolean> {
+export async function consumeRateLimit(
+  bucket: string,
+  identity: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<boolean> {
   const digest = createHash('sha256').update(identity).digest('hex');
   const count = Number(await redis.eval(INCREMENT_WITH_EXPIRY, 1, `auth:rl:${bucket}:${digest}`, windowSeconds));
   return count <= limit;
@@ -38,5 +43,9 @@ export async function limitLoginAccount(username: string): Promise<boolean> {
 }
 
 export async function rateLimitHealthy(): Promise<boolean> {
-  try { return await redis.ping() === 'PONG'; } catch { return false; }
+  try {
+    return (await redis.ping()) === 'PONG';
+  } catch {
+    return false;
+  }
 }

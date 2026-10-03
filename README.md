@@ -99,13 +99,13 @@ curl --fail https://mcp.example.com/healthz    # 替换为实际域名
 
 ### 常见部署问题
 
-| 现象 | 排查与处理 |
-| --- | --- |
-| 无法通过服务器 IP 访问 `8080` | 默认只监听回环地址，使用已配置的 HTTPS 域名；初始化可使用 SSH 隧道。 |
-| 管理员提示凭据无效 | 核对该部署的密码；已有数据库账号不会因修改 `ADMIN_PASSWORD` 被重置。 |
-| MCP 返回 `503 system_not_configured` | 在“系统设置”保存真实 HTTPS 对外访问地址。 |
-| 无法注册上游服务 | 检查白名单开关、可信上游主机和容器到上游的连通性。 |
-| 应用未就绪或容器 unhealthy | 用对应 Compose 文件查看 `ps` 与应用日志，再检查 PostgreSQL / Redis。 |
+| 现象                                 | 排查与处理                                                           |
+| ------------------------------------ | -------------------------------------------------------------------- |
+| 无法通过服务器 IP 访问 `8080`        | 默认只监听回环地址，使用已配置的 HTTPS 域名；初始化可使用 SSH 隧道。 |
+| 管理员提示凭据无效                   | 核对该部署的密码；已有数据库账号不会因修改 `ADMIN_PASSWORD` 被重置。 |
+| MCP 返回 `503 system_not_configured` | 在“系统设置”保存真实 HTTPS 对外访问地址。                            |
+| 无法注册上游服务                     | 检查白名单开关、可信上游主机和容器到上游的连通性。                   |
+| 应用未就绪或容器 unhealthy           | 用对应 Compose 文件查看 `ps` 与应用日志，再检查 PostgreSQL / Redis。 |
 
 ## Docker 部署（不用克隆源码）
 
@@ -138,21 +138,21 @@ services:
       POSTGRES_DB: mcp
       POSTGRES_USER: mcp
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
-    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    volumes: ['postgres_data:/var/lib/postgresql/data']
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
+      test: ['CMD-SHELL', 'pg_isready -U mcp -d mcp']
       interval: 3s
       timeout: 3s
       retries: 30
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    command: ['sh', '-c', 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?}
-    volumes: ["redis_data:/data"]
+    volumes: ['redis_data:/data']
     healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      test: ['CMD-SHELL', 'REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG']
       interval: 3s
       timeout: 3s
       retries: 30
@@ -161,9 +161,9 @@ services:
     restart: unless-stopped
     stop_grace_period: 15s
     read_only: true
-    tmpfs: ["/tmp"]
-    cap_drop: ["ALL"]
-    security_opt: ["no-new-privileges:true"]
+    tmpfs: ['/tmp']
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
     environment:
       DATABASE_URL: postgres://mcp:${POSTGRES_PASSWORD:?}@postgres:5432/mcp
       REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
@@ -173,10 +173,10 @@ services:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
       AUTH_TRUSTED_PROXY_IPS: ${AUTH_TRUSTED_PROXY_IPS:-}
-    ports: ["127.0.0.1:8080:8080"]
+    ports: ['127.0.0.1:8080:8080']
     depends_on:
-      postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
 volumes:
   postgres_data:
   redis_data:
@@ -272,11 +272,11 @@ pnpm typecheck && pnpm test:unit
 
 ## 文档
 
-| 文档 | 内容 |
-| --- | --- |
-| [生产部署与上线检查](docs/production.md) | 分离部署、外部数据库、网络与密钥、备份恢复、自动发布 |
-| [架构与运行机制](docs/architecture.md) | 权限模型、状态存储、实例池、配置文件、日志与监控 |
-| [上游服务接入与用户凭据](docs/upstream-connections.md) | 注册外部 MCP Server、API Key / OAuth 连接、凭据加密 |
-| [管理 API 与管理端](docs/admin-api.md) | 管理接口清单、授权与账号生命周期、前端能力 |
-| [本地开发与测试](docs/development.md) | 三种开发方式、客户端验证、冒烟测试 |
-| [Docker Hub 使用说明](docs/dockerhub.md) | 直接用镜像启动、连接已有数据库 |
+| 文档                                                   | 内容                                                 |
+| ------------------------------------------------------ | ---------------------------------------------------- |
+| [生产部署与上线检查](docs/production.md)               | 分离部署、外部数据库、网络与密钥、备份恢复、自动发布 |
+| [架构与运行机制](docs/architecture.md)                 | 权限模型、状态存储、实例池、配置文件、日志与监控     |
+| [上游服务接入与用户凭据](docs/upstream-connections.md) | 注册外部 MCP Server、API Key / OAuth 连接、凭据加密  |
+| [管理 API 与管理端](docs/admin-api.md)                 | 管理接口清单、授权与账号生命周期、前端能力           |
+| [本地开发与测试](docs/development.md)                  | 三种开发方式、客户端验证、冒烟测试                   |
+| [Docker Hub 使用说明](docs/dockerhub.md)               | 直接用镜像启动、连接已有数据库                       |

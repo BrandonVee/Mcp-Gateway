@@ -8,13 +8,13 @@ services:
       context: ..
       dockerfile: Dockerfile.production
       target: runtime
-    command: ["node", "packages/auth-server/dist/index.js"]
+    command: ['node', 'packages/auth-server/dist/index.js']
     init: true
     restart: unless-stopped
     read_only: true
-    tmpfs: ["/tmp"]
-    cap_drop: ["ALL"]
-    security_opt: ["no-new-privileges:true"]
+    tmpfs: ['/tmp']
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
     environment:
       NODE_ENV: production
       SYSTEM_CONFIG_MODE: file
@@ -34,9 +34,15 @@ services:
     volumes:
       - ./production.json:/app/config/production.json:ro
     ports:
-      - "127.0.0.1:${AUTH_HOST_PORT:-9001}:9001"
+      - '127.0.0.1:${AUTH_HOST_PORT:-9001}:9001'
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:9001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 4s
       retries: 6
@@ -44,13 +50,13 @@ services:
 
   gateway:
     image: ${MCP_IMAGE_PREFIX:-}mcp-runtime:${MCP_VERSION:?set MCP_VERSION}
-    command: ["node", "packages/gateway/dist/index.js"]
+    command: ['node', 'packages/gateway/dist/index.js']
     init: true
     restart: unless-stopped
     read_only: true
-    tmpfs: ["/tmp"]
-    cap_drop: ["ALL"]
-    security_opt: ["no-new-privileges:true"]
+    tmpfs: ['/tmp']
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
     environment:
       NODE_ENV: production
       SYSTEM_CONFIG_MODE: file
@@ -66,12 +72,18 @@ services:
     volumes:
       - ./production.json:/app/config/production.json:ro
     ports:
-      - "127.0.0.1:${GATEWAY_HOST_PORT:-8000}:8000"
+      - '127.0.0.1:${GATEWAY_HOST_PORT:-8000}:8000'
     depends_on:
       auth:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 4s
       retries: 6
@@ -86,18 +98,18 @@ services:
     init: true
     restart: unless-stopped
     read_only: true
-    tmpfs: ["/tmp"]
-    cap_drop: ["ALL"]
-    security_opt: ["no-new-privileges:true"]
+    tmpfs: ['/tmp']
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
     ports:
-      - "127.0.0.1:${ADMIN_HOST_PORT:-8080}:8080"
+      - '127.0.0.1:${ADMIN_HOST_PORT:-8080}:8080'
     depends_on:
       auth:
         condition: service_healthy
       gateway:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/healthz']
       interval: 10s
       timeout: 4s
       retries: 6

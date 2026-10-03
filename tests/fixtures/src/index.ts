@@ -62,7 +62,8 @@ app.use('/mcp-protected', (req, res, next) => {
   next();
 });
 app.use('/mcp-oauth', (req, res, next) => {
-  if (!req.headers.authorization?.startsWith('Bearer ')) return res.status(401).json({ error: 'missing_upstream_bearer' });
+  if (!req.headers.authorization?.startsWith('Bearer '))
+    return res.status(401).json({ error: 'missing_upstream_bearer' });
   next();
 });
 
@@ -70,7 +71,10 @@ app.use('/mcp-oauth', (req, res, next) => {
 app.use('/mcp', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type, authorization, mcp-session-id, mcp-protocol-version, last-event-id');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'content-type, authorization, mcp-session-id, mcp-protocol-version, last-event-id',
+  );
   if (req.method === 'OPTIONS') {
     res.sendStatus(204);
     return;

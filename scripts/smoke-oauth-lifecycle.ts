@@ -8,7 +8,13 @@ import { createIsolatedAuthSchema } from './isolated-auth-schema.js';
 const require = createRequire(new URL('../packages/auth-server/package.json', import.meta.url));
 const { Hono } = require('hono');
 const { eq } = require('drizzle-orm');
-const deferred = () => { let resolve!: () => void; const promise = new Promise<void>((r) => { resolve = r; }); return { promise, resolve }; };
+const deferred = () => {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+};
 
 async function main() {
   const isolated = await createIsolatedAuthSchema();
@@ -17,7 +23,8 @@ async function main() {
   process.env.CREDENTIAL_ENCRYPT_KEY = '65'.repeat(32);
   process.env.CREDENTIAL_BROKER_TOKEN = 'isolated-oauth-broker';
   const { db, pool, createLoginSession } = await import('../packages/auth-server/src/db.js');
-  const { mcpServers, oauthConnectionStates, userMcpCredentials, users } = await import('../packages/auth-server/src/schema.js');
+  const { mcpServers, oauthConnectionStates, userMcpCredentials, users } =
+    await import('../packages/auth-server/src/schema.js');
   const { decryptCredential } = await import('../packages/auth-server/src/credential-crypto.js');
   const { createConnectionsRouter } = await import('../packages/auth-server/src/connections.js');
   const { createAdminRouter } = await import('../packages/auth-server/src/admin.js');
@@ -35,8 +42,14 @@ async function main() {
     const params = new URLSearchParams(Buffer.concat(chunks).toString());
     if (params.get('grant_type') === 'refresh_token') refreshCalls++;
     const activeMode = mode;
-    if (activeMode === 'blocked') { entered.resolve(); await release.promise; }
-    if (activeMode === 'network') { response.destroy(); return; }
+    if (activeMode === 'blocked') {
+      entered.resolve();
+      await release.promise;
+    }
+    if (activeMode === 'network') {
+      response.destroy();
+      return;
+    }
     response.setHeader('content-type', 'application/json');
     if (activeMode === 'limited' || activeMode === 'timeout' || activeMode === 'invalid') {
       response.statusCode = activeMode === 'limited' ? 429 : activeMode === 'timeout' ? 408 : 400;
@@ -44,8 +57,14 @@ async function main() {
       return;
     }
     const sequence = ++tokenSequence;
-    response.end(JSON.stringify({ access_token: `access-${sequence}`, token_type: 'Bearer', expires_in: activeMode === 'short' ? 30 : 3600,
-      ...(activeMode === 'short' ? {} : { refresh_token: `refresh-${sequence}` }) }));
+    response.end(
+      JSON.stringify({
+        access_token: `access-${sequence}`,
+        token_type: 'Bearer',
+        expires_in: activeMode === 'short' ? 30 : 3600,
+        ...(activeMode === 'short' ? {} : { refresh_token: `refresh-${sequence}` }),
+      }),
+    );
   });
   try {
     await new Promise<void>((resolve) => provider.listen(0, '127.0.0.1', resolve));
@@ -54,27 +73,60 @@ async function main() {
     const providerUrl = `http://127.0.0.1:${address.port}`;
     const now = Date.now();
     const password = 'isolated-oauth-test-password';
-    const [user] = await db.insert(users).values({ username: `oauth-test-${randomBytes(8).toString('hex')}`, passwordHash: scryptHash(password), role: 'admin', createdAt: now, updatedAt: now }).returning();
+    const [user] = await db
+      .insert(users)
+      .values({
+        username: `oauth-test-${randomBytes(8).toString('hex')}`,
+        passwordHash: scryptHash(password),
+        role: 'admin',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
     const cookie = `auth_session=${await createLoginSession(user.id, user.authVersion)}`;
     const app = new Hono();
     app.route('/', createConnectionsRouter());
     app.route('/', createAdminRouter({ keys: {} as any, issuer: authIssuer() }));
-    const request = (path: string, method = 'GET', body?: unknown) => app.request(`http://localhost${path}`, {
-      method, headers: { cookie, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    const request = (path: string, method = 'GET', body?: unknown) =>
+      app.request(`http://localhost${path}`, {
+        method,
+        headers: { cookie, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
     const name = 'oauth-lifecycle';
     const session = await request('/me/session');
     assert.equal(session.status, 200);
-    assert.deepEqual(await session.json(), { authenticated: true, username: user.username, role: 'admin', user_id: user.id, auth_version: 0 });
+    assert.deepEqual(await session.json(), {
+      authenticated: true,
+      username: user.username,
+      role: 'admin',
+      user_id: user.id,
+      auth_version: 0,
+    });
     const signedIn = await request('/me/session', 'POST', { username: user.username, password });
     assert.equal(signedIn.status, 200);
-    assert.deepEqual(await signedIn.json(), { authenticated: true, username: user.username, role: 'admin', user_id: user.id, auth_version: 0 }, 'login returns the same immutable identity as session validation');
-    assert.equal((await request('/admin/servers', 'POST', {
-      name, display_name: 'Isolated OAuth', instances: [], auth_mode: 'oauth',
-      oauth_authorize_url: `${providerUrl}/authorize`, oauth_token_url: `${providerUrl}/token`, oauth_client_id: 'original-client', oauth_scopes: 'read',
-    })).status, 201);
-    const readCredential = async () => (await db.select().from(userMcpCredentials).where(eq(userMcpCredentials.userId, user.id)))[0];
+    assert.deepEqual(
+      await signedIn.json(),
+      { authenticated: true, username: user.username, role: 'admin', user_id: user.id, auth_version: 0 },
+      'login returns the same immutable identity as session validation',
+    );
+    assert.equal(
+      (
+        await request('/admin/servers', 'POST', {
+          name,
+          display_name: 'Isolated OAuth',
+          instances: [],
+          auth_mode: 'oauth',
+          oauth_authorize_url: `${providerUrl}/authorize`,
+          oauth_token_url: `${providerUrl}/token`,
+          oauth_client_id: 'original-client',
+          oauth_scopes: 'read',
+        })
+      ).status,
+      201,
+    );
+    const readCredential = async () =>
+      (await db.select().from(userMcpCredentials).where(eq(userMcpCredentials.userId, user.id)))[0];
     const readServer = async () => (await db.select().from(mcpServers).where(eq(mcpServers.name, name)))[0];
     const start = async () => {
       const response = await request(`/me/servers/${name}/oauth`, 'POST');
@@ -83,11 +135,25 @@ async function main() {
     };
     const callback = (state: string) => request(`/oauth/callback/${name}?state=${state}&code=test-code`);
     const result = (response: Response) => new URL(response.headers.get('location')!).searchParams.get('result');
-    const connect = async () => { assert.equal(result(await callback(await start())), 'connected'); };
-    const broker = () => app.request(`http://localhost/internal/connector-credential?user_id=${user.id}&server=${name}&auth_version=0`, { headers: { authorization: `Bearer ${process.env.CREDENTIAL_BROKER_TOKEN}` } });
-    const expire = () => db.update(userMcpCredentials).set({ expiresAt: Date.now() - 1 }).where(eq(userMcpCredentials.userId, user.id));
-    const change = (fields: Record<string, unknown>) => request(`/admin/servers/${name}`, 'PATCH', { auth_mode: 'oauth', ...fields });
-    const block = () => { mode = 'blocked'; entered = deferred(); release = deferred(); };
+    const connect = async () => {
+      assert.equal(result(await callback(await start())), 'connected');
+    };
+    const broker = () =>
+      app.request(`http://localhost/internal/connector-credential?user_id=${user.id}&server=${name}&auth_version=0`, {
+        headers: { authorization: `Bearer ${process.env.CREDENTIAL_BROKER_TOKEN}` },
+      });
+    const expire = () =>
+      db
+        .update(userMcpCredentials)
+        .set({ expiresAt: Date.now() - 1 })
+        .where(eq(userMcpCredentials.userId, user.id));
+    const change = (fields: Record<string, unknown>) =>
+      request(`/admin/servers/${name}`, 'PATCH', { auth_mode: 'oauth', ...fields });
+    const block = () => {
+      mode = 'blocked';
+      entered = deferred();
+      release = deferred();
+    };
 
     mode = 'short';
     await connect();
@@ -104,17 +170,30 @@ async function main() {
       const response = await broker();
       assert.equal(response.status, 503);
       assert.equal(response.headers.get('retry-after'), '5');
-      assert.equal((await readCredential()).refreshSecret, beforeRefresh.refreshSecret, 'temporary failure preserves the rotating refresh token');
+      assert.equal(
+        (await readCredential()).refreshSecret,
+        beforeRefresh.refreshSecret,
+        'temporary failure preserves the rotating refresh token',
+      );
     }
-    await db.update(userMcpCredentials).set({ expiresAt: Date.now() + 30_000 }).where(eq(userMcpCredentials.userId, user.id));
+    await db
+      .update(userMcpCredentials)
+      .set({ expiresAt: Date.now() + 30_000 })
+      .where(eq(userMcpCredentials.userId, user.id));
     mode = 'limited';
     assert.equal((await broker()).status, 200, 'still-valid access survives temporary refresh failure');
     await expire();
     mode = 'success';
     const callsBefore = refreshCalls;
-    assert.deepEqual((await Promise.all([broker(), broker()])).map((response) => response.status), [200, 200]);
+    assert.deepEqual(
+      (await Promise.all([broker(), broker()])).map((response) => response.status),
+      [200, 200],
+    );
     assert.equal(refreshCalls - callsBefore, 1, 'concurrent refresh redeems the rotating token once');
-    assert.notEqual(decryptCredential((await readCredential()).refreshSecret!), decryptCredential(beforeRefresh.refreshSecret!));
+    assert.notEqual(
+      decryptCredential((await readCredential()).refreshSecret!),
+      decryptCredential(beforeRefresh.refreshSecret!),
+    );
     await expire();
     mode = 'invalid';
     assert.equal((await broker()).status, 409);
@@ -127,15 +206,27 @@ async function main() {
     const revision = (await readServer()).authRevision;
     assert.equal((await change({ oauth_scopes: 'write', oauth_client_id: 'replacement-client' })).status, 200);
     assert.equal((await change({ oauth_scopes: 'read', oauth_client_id: 'original-client' })).status, 200);
-    assert.equal((await readServer()).authRevision, revision + 2, 'A-to-B-to-A still invalidates the old authorization');
+    assert.equal(
+      (await readServer()).authRevision,
+      revision + 2,
+      'A-to-B-to-A still invalidates the old authorization',
+    );
     release.resolve();
     assert.equal(result(await configCallback), 'invalid_state');
-    assert.equal(await readCredential(), undefined, 'old callback cannot recreate credentials after configuration edit');
+    assert.equal(
+      await readCredential(),
+      undefined,
+      'old callback cannot recreate credentials after configuration edit',
+    );
 
     block();
     const revokedCallback = callback(await start());
     await entered.promise;
-    assert.equal((await request(`/admin/connections/${user.id}/${name}`, 'DELETE')).status, 200, 'admin may revoke an in-flight connection without a saved credential');
+    assert.equal(
+      (await request(`/admin/connections/${user.id}/${name}`, 'DELETE')).status,
+      200,
+      'admin may revoke an in-flight connection without a saved credential',
+    );
     release.resolve();
     assert.equal(result(await revokedCallback), 'invalid_state');
     assert.equal(await readCredential(), undefined);
@@ -145,7 +236,11 @@ async function main() {
     await entered.promise;
     const latestState = await start();
     release.resolve();
-    assert.equal(result(await previousCallback), 'invalid_state', 'new authorization cancels the earlier in-flight callback');
+    assert.equal(
+      result(await previousCallback),
+      'invalid_state',
+      'new authorization cancels the earlier in-flight callback',
+    );
     mode = 'success';
     assert.equal(result(await callback(latestState)), 'connected');
 
@@ -157,7 +252,11 @@ async function main() {
     release.resolve();
     assert.equal((await refreshing).status, 200);
     assert.equal((await updating).status, 200);
-    assert.equal(await readCredential(), undefined, 'configuration edit removes credentials after an in-flight refresh completes');
+    assert.equal(
+      await readCredential(),
+      undefined,
+      'configuration edit removes credentials after an in-flight refresh completes',
+    );
 
     mode = 'success';
     await connect();
@@ -173,13 +272,39 @@ async function main() {
     assert.equal((await db.select().from(oauthConnectionStates)).length, 0);
 
     // An old tab still displays the first account while a new tab has changed the shared cookie.
-    const [other] = await db.insert(users).values({ username: `oauth-other-${randomBytes(8).toString('hex')}`, passwordHash: 'unused', role: 'user', allServers: true, createdAt: now, updatedAt: now }).returning();
+    const [other] = await db
+      .insert(users)
+      .values({
+        username: `oauth-other-${randomBytes(8).toString('hex')}`,
+        passwordHash: 'unused',
+        role: 'user',
+        allServers: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
     const otherCookie = `auth_session=${await createLoginSession(other.id, other.authVersion)}`;
-    assert.equal((await request('/admin/servers', 'POST', { name: 'key-lifecycle', display_name: 'Isolated key', instances: [], auth_mode: 'api_key' })).status, 201);
-    const switchedRequest = (path: string, method: string, identity: string, body?: unknown) => app.request(`http://localhost${path}`, {
-      method, headers: { cookie: otherCookie, 'x-session-identity': identity, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    assert.equal(
+      (
+        await request('/admin/servers', 'POST', {
+          name: 'key-lifecycle',
+          display_name: 'Isolated key',
+          instances: [],
+          auth_mode: 'api_key',
+        })
+      ).status,
+      201,
+    );
+    const switchedRequest = (path: string, method: string, identity: string, body?: unknown) =>
+      app.request(`http://localhost${path}`, {
+        method,
+        headers: {
+          cookie: otherCookie,
+          'x-session-identity': identity,
+          ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
     for (const [path, method, body] of [
       ['/me/servers/key-lifecycle/credential', 'PUT', { api_key: 'old-tab-private-key' }],
       [`/me/servers/${name}/oauth`, 'POST', undefined],
@@ -189,20 +314,40 @@ async function main() {
       assert.equal(stale.status, 409, 'old tab cannot modify or log out the newly signed-in account');
       assert.deepEqual(await stale.json(), { error: 'session_changed' });
     }
-    assert.equal((await db.select().from(userMcpCredentials).where(eq(userMcpCredentials.userId, other.id))).length, 0, 'stale key is not stored against the second account');
+    assert.equal(
+      (await db.select().from(userMcpCredentials).where(eq(userMcpCredentials.userId, other.id))).length,
+      0,
+      'stale key is not stored against the second account',
+    );
     const otherSession = await app.request('http://localhost/me/session', { headers: { cookie: otherCookie } });
     assert.equal(otherSession.status, 200, 'a stale logout did not revoke the new account session');
     assert.equal((await otherSession.json()).user_id, other.id);
-    assert.equal((await switchedRequest('/me/servers/key-lifecycle/credential', 'PUT', `${other.id}:0`, { api_key: 'current-account-key' })).status, 200, 'matching identity permits the current account write');
-    assert.equal((await switchedRequest('/me/servers/key-lifecycle/credential', 'DELETE', `${other.id}:0`)).status, 200);
+    assert.equal(
+      (
+        await switchedRequest('/me/servers/key-lifecycle/credential', 'PUT', `${other.id}:0`, {
+          api_key: 'current-account-key',
+        })
+      ).status,
+      200,
+      'matching identity permits the current account write',
+    );
+    assert.equal(
+      (await switchedRequest('/me/servers/key-lifecycle/credential', 'DELETE', `${other.id}:0`)).status,
+      200,
+    );
 
     // Verify live JWT version checks on the credential broker without changing real users.
     await db.update(users).set({ authVersion: 1 }).where(eq(users.id, user.id));
     assert.equal((await broker()).status, 403, 'old token auth_version is rejected immediately');
-    const expiredLogout = await app.request('http://localhost/me/session', { method: 'DELETE', headers: { cookie, 'x-session-identity': `${user.id}:0` } });
+    const expiredLogout = await app.request('http://localhost/me/session', {
+      method: 'DELETE',
+      headers: { cookie, 'x-session-identity': `${user.id}:0` },
+    });
     assert.equal(expiredLogout.status, 200, 'expired sessions can still clear their cookie');
     assert.ok(expiredLogout.headers.get('set-cookie')?.includes('Max-Age=0'));
-    console.log('PASS: isolated OAuth lifecycle covers short TTL, refresh recovery, callback/config/revoke races, live auth_version, immutable sessions and cross-tab identity protection');
+    console.log(
+      'PASS: isolated OAuth lifecycle covers short TTL, refresh recovery, callback/config/revoke races, live auth_version, immutable sessions and cross-tab identity protection',
+    );
   } finally {
     release.resolve();
     await new Promise<void>((resolve) => provider.close(() => resolve()));
@@ -212,4 +357,10 @@ async function main() {
 }
 
 // Imported Auth modules keep their Redis clients alive; all owned DB/HTTP resources are closed above.
-main().then(() => process.exit(0), (error) => { console.error(error); process.exit(1); });
+main().then(
+  () => process.exit(0),
+  (error) => {
+    console.error(error);
+    process.exit(1);
+  },
+);

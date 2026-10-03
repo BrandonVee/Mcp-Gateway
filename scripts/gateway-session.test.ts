@@ -21,7 +21,16 @@ class SessionRedis {
     this.entries.delete(key);
     return null;
   }
-  async eval(_script: string, _count: number, binding: string, owner: string, action: string, user: string, seconds: number, url: string): Promise<number> {
+  async eval(
+    _script: string,
+    _count: number,
+    binding: string,
+    owner: string,
+    action: string,
+    user: string,
+    seconds: number,
+    url: string,
+  ): Promise<number> {
     const currentOwner = await this.get(owner);
     if (action === 'bind') {
       if (currentOwner !== null && currentOwner !== user) return 0;
@@ -30,9 +39,10 @@ class SessionRedis {
       return 1;
     }
     if (action === 'touch') this.touches++;
-    if (currentOwner !== user || await this.get(binding) === null) return 0;
+    if (currentOwner !== user || (await this.get(binding)) === null) return 0;
     if (action === 'remove') {
-      this.entries.delete(binding); this.entries.delete(owner);
+      this.entries.delete(binding);
+      this.entries.delete(owner);
     } else {
       this.entries.get(binding)!.expires = this.now + seconds * 1000;
       this.entries.get(owner)!.expires = this.now + seconds * 1000;
@@ -56,8 +66,16 @@ async function fixture(t: TestContext) {
     const url = new URL(String(input));
     if (url.pathname === '/internal/mcp-access' || url.pathname === '/internal/connector-credential') {
       internalRequests.push(url);
-      return Promise.resolve(new Response(JSON.stringify(url.pathname === '/internal/mcp-access' ? {}
-        : { header: 'authorization', value: 'Bearer isolated-upstream-token' }), { status: 200 }));
+      return Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url.pathname === '/internal/mcp-access'
+              ? {}
+              : { header: 'authorization', value: 'Bearer isolated-upstream-token' },
+          ),
+          { status: 200 },
+        ),
+      );
     }
     return actualFetch(input, init);
   });
@@ -71,7 +89,8 @@ async function fixture(t: TestContext) {
     if (req.method === 'GET') {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.write(': connected\n\n');
-      streams.add(res); res.once('close', () => streams.delete(res));
+      streams.add(res);
+      res.once('close', () => streams.delete(res));
       return;
     }
     let body = '';
@@ -84,43 +103,77 @@ async function fixture(t: TestContext) {
     res.writeHead(code, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: { tools: [] } }));
   });
-  await new Promise<void>(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve));
   const address = upstream.address();
   assert.ok(address && typeof address !== 'string');
   const url = `http://127.0.0.1:${address.port}/mcp`;
   serverConfigs.set(name, { name, authMode: 'none', instances: [url] });
   const app = Fastify();
   let resolveStreamClosed!: () => void;
-  const streamClosed = new Promise<void>(resolve => { resolveStreamClosed = resolve; });
-  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req: unknown, body: Buffer, done: Function) => done(null, body));
+  const streamClosed = new Promise<void>((resolve) => {
+    resolveStreamClosed = resolve;
+  });
+  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req: unknown, body: Buffer, done: Function) =>
+    done(null, body),
+  );
   app.addHook('onRequest', async (req: any, reply: any) => {
-    req.mcpAuth = { uid: Number(req.headers['x-test-user'] || 1), sub: 'test', mcp_servers: [name], auth_version: authVersion };
+    req.mcpAuth = {
+      uid: Number(req.headers['x-test-user'] || 1),
+      sub: 'test',
+      mcp_servers: [name],
+      auth_version: authVersion,
+    };
     if (req.method === 'GET') reply.raw.once('close', resolveStreamClosed);
   });
   registerMcpRoutes(app);
   const binding = `gw:bind:${name}:${id}`;
   const owner = `gw:owner:${name}:${id}`;
-  const headers = { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-session-id': id };
+  const headers = {
+    'content-type': 'application/json',
+    accept: 'application/json, text/event-stream',
+    'mcp-session-id': id,
+  };
   const rpc = (method = 'tools/list', user = 1) => {
     const requestHeaders: Record<string, string> = { ...headers, 'x-test-user': String(user) };
     if (method === 'initialize') delete requestHeaders['mcp-session-id'];
-    return app.inject({ method: 'POST', url: `/mcp/${name}`, headers: requestHeaders,
-      payload: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: {} }) });
+    return app.inject({
+      method: 'POST',
+      url: `/mcp/${name}`,
+      headers: requestHeaders,
+      payload: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: {} }),
+    });
   };
   t.after(async () => {
     for (const stream of streams) stream.destroy();
     await app.close();
-    await new Promise<void>((resolve, reject) => upstream.close(error => error ? reject(error) : resolve()));
+    await new Promise<void>((resolve, reject) => upstream.close((error) => (error ? reject(error) : resolve())));
     serverConfigs.delete(name);
     env.sessionTtlSeconds = previousTtl;
     env.credentialBrokerToken = previousBrokerToken;
   });
-  return { app, store, name, id, binding, owner, url, headers, rpc, streamClosed, internalRequests,
-    authVersion: (version: unknown) => { authVersion = version; },
-    requests: () => upstreamRequests, status: (code: number) => { status = code; } };
+  return {
+    app,
+    store,
+    name,
+    id,
+    binding,
+    owner,
+    url,
+    headers,
+    rpc,
+    streamClosed,
+    internalRequests,
+    authVersion: (version: unknown) => {
+      authVersion = version;
+    },
+    requests: () => upstreamRequests,
+    status: (code: number) => {
+      status = code;
+    },
+  };
 }
 
-test('Gateway preserves owned sessions without an echoed response header', async t => {
+test('Gateway preserves owned sessions without an echoed response header', async (t) => {
   const f = await fixture(t);
   assert.equal((await f.rpc('initialize')).statusCode, 200);
   const originalExpiry = f.store.entries.get(f.owner)!.expires;
@@ -149,19 +202,26 @@ test('Gateway preserves owned sessions without an echoed response header', async
   assert.equal((await f.rpc()).statusCode, 404, 'ownership alone cannot restore a missing binding');
 });
 
-test('Gateway sends the verified token revision to both internal authorization checks', async t => {
+test('Gateway sends the verified token revision to both internal authorization checks', async (t) => {
   const f = await fixture(t);
   f.authVersion(7);
   for (const mode of ['none', 'api_key', 'oauth'] as const) {
     serverConfigs.get(f.name)!.authMode = mode;
-    const response = await f.app.inject({ method: 'POST', url: `/mcp/${f.name}?auth_version=99&user_id=2`,
+    const response = await f.app.inject({
+      method: 'POST',
+      url: `/mcp/${f.name}?auth_version=99&user_id=2`,
       headers: { 'content-type': 'application/json', accept: f.headers.accept, 'x-mcp-auth-version': '99' },
-      payload: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }) });
+      payload: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+    });
     assert.equal(response.statusCode, 200);
     const internal = f.internalRequests.at(-1)!;
     assert.equal(internal.pathname, mode === 'none' ? '/internal/mcp-access' : '/internal/connector-credential');
     assert.equal(internal.searchParams.get('user_id'), '1');
-    assert.equal(internal.searchParams.get('auth_version'), '7', 'client headers and query cannot override the token revision');
+    assert.equal(
+      internal.searchParams.get('auth_version'),
+      '7',
+      'client headers and query cannot override the token revision',
+    );
   }
   f.authVersion(undefined);
   assert.equal((await f.rpc('initialize')).statusCode, 200);
@@ -180,13 +240,14 @@ test('Gateway sends the verified token revision to both internal authorization c
 
 test('Gateway accepts only nonnegative safe integer JWT credential revisions', () => {
   assert.equal(tokenAuthVersion({}), 0);
-  for (const version of [0, 1, Number.MAX_SAFE_INTEGER]) assert.equal(tokenAuthVersion({ auth_version: version }), version);
+  for (const version of [0, 1, Number.MAX_SAFE_INTEGER])
+    assert.equal(tokenAuthVersion({ auth_version: version }), version);
   for (const version of [null, '', '0', -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, false, {}]) {
     assert.equal(tokenAuthVersion({ auth_version: version }), null);
   }
 });
 
-test('Gateway removes upstream-terminated sessions and preserves temporary failures', async t => {
+test('Gateway removes upstream-terminated sessions and preserves temporary failures', async (t) => {
   const f = await fixture(t);
   await f.rpc('initialize');
   f.status(503);
@@ -210,7 +271,7 @@ test('Gateway removes upstream-terminated sessions and preserves temporary failu
   assert.equal(await f.store.get(f.owner), null, 'successful DELETE retires both session keys');
 });
 
-test('Gateway renews a long SSE session only while its response remains active', async t => {
+test('Gateway renews a long SSE session only while its response remains active', async (t) => {
   const f = await fixture(t);
   await f.rpc('initialize');
   const originalExpiry = f.store.entries.get(f.owner)!.expires;
@@ -220,10 +281,15 @@ test('Gateway renews a long SSE session only while its response remains active',
   t.mock.timers.enable({ apis: ['setInterval'] });
   const request = get(`http://127.0.0.1:${address.port}/mcp/${f.name}`, { headers: f.headers });
   request.on('error', () => undefined);
-  const response = await new Promise<import('node:http').IncomingMessage>(resolve => request.once('response', resolve));
-  response.on('error', () => undefined); response.resume();
+  const response = await new Promise<import('node:http').IncomingMessage>((resolve) =>
+    request.once('response', resolve),
+  );
+  response.on('error', () => undefined);
+  response.resume();
   assert.equal(response.statusCode, 200);
-  const flush = async () => { await new Promise<void>(resolve => setImmediate(resolve)); };
+  const flush = async () => {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  };
   for (let i = 0; i < 7; i++) {
     f.store.now += 1000;
     t.mock.timers.tick(1000);
@@ -232,10 +298,12 @@ test('Gateway renews a long SSE session only while its response remains active',
   assert.ok(f.store.now > originalExpiry);
   assert.equal(await f.store.get(f.owner), '1', 'an open stream retains ownership beyond the initial TTL');
   assert.equal((await f.rpc()).statusCode, 200);
-  response.destroy(); request.destroy();
-  await new Promise<void>(resolve => response.once('close', resolve));
+  response.destroy();
+  request.destroy();
+  await new Promise<void>((resolve) => response.once('close', resolve));
   await f.streamClosed;
-  await flush(); await flush();
+  await flush();
+  await flush();
   const touches = f.store.touches;
   f.store.now += 5000;
   t.mock.timers.tick(5000);

@@ -1,6 +1,7 @@
 import { isIP } from 'node:net';
 import { connect as connectTcp } from 'node:net';
 import { connect as connectTls } from 'node:tls';
+import pLimit from 'p-limit';
 
 interface InstanceHealth {
   transportUnavailableUntil: number;
@@ -29,9 +30,12 @@ export class UpstreamHealthTracker {
 
   recordFailure(url: string, source: 'transport' | 'http' = 'transport', now = Date.now()): void {
     const state = this.instances.get(url) ?? { transportUnavailableUntil: 0, httpUnavailableUntil: 0 };
-    this.instances.set(url, source === 'transport'
-      ? { ...state, transportUnavailableUntil: now + this.cooldownMs }
-      : { ...state, httpUnavailableUntil: now + this.cooldownMs });
+    this.instances.set(
+      url,
+      source === 'transport'
+        ? { ...state, transportUnavailableUntil: now + this.cooldownMs }
+        : { ...state, httpUnavailableUntil: now + this.cooldownMs },
+    );
   }
 
   forgetRemoved(activeUrls: Iterable<string>): void {
@@ -75,22 +79,25 @@ export async function probeUpstreamTransport(endpoint: string, timeoutMs = 2_000
 export async function probeRegisteredUpstreams(urls: Iterable<string>): Promise<void> {
   const unique = [...new Set(urls)];
   upstreamHealth.forgetRemoved(unique);
-  const concurrency = 10;
-  let next = 0;
-  await Promise.all(Array.from({ length: Math.min(concurrency, unique.length) }, async () => {
-    while (next < unique.length) {
-      const url = unique[next++];
-      if (await probeUpstreamTransport(url)) upstreamHealth.recordSuccess(url, 'probe');
-      else upstreamHealth.recordFailure(url, 'transport');
-    }
-  }));
+  const limit = pLimit(10);
+  await Promise.all(
+    unique.map((url) =>
+      limit(async () => {
+        if (await probeUpstreamTransport(url)) upstreamHealth.recordSuccess(url, 'probe');
+        else upstreamHealth.recordFailure(url, 'transport');
+      }),
+    ),
+  );
 }
 
 export function orderedAvailableInstances(
-  instances: readonly string[], preferredIndex: number, health: UpstreamHealthTracker = upstreamHealth,
+  instances: readonly string[],
+  preferredIndex: number,
+  health: UpstreamHealthTracker = upstreamHealth,
 ): string[] {
   if (!instances.length) return [];
-  return instances.map((_, offset) => instances[(preferredIndex + offset) % instances.length])
+  return instances
+    .map((_, offset) => instances[(preferredIndex + offset) % instances.length])
     .filter((url) => health.isAvailable(url));
 }
 

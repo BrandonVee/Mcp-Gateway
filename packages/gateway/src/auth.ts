@@ -10,7 +10,7 @@ declare module 'fastify' {
   }
 }
 
-const resourceBase = () => env.resourceBaseUrl.replace(/\/+$/, "");
+const resourceBase = () => env.resourceBaseUrl.replace(/\/+$/, '');
 // RFC 8707: clients send the gateway URL as `resource`; the auth server uses
 // it as the JWT audience. Accept both it (with/without trailing slash) and
 // the plain configured audience. A server-specific resource URL is accepted
@@ -33,9 +33,18 @@ function resourceMetadataUrl(serverName?: string): string {
     : `${resourceBase()}/.well-known/oauth-protected-resource`;
 }
 
-export function unauthorized(reply: FastifyReply, code: string, description: string, serverName?: string): FastifyReply {
-  return reply.code(401)
-    .header('WWW-Authenticate', `Bearer realm="mcp-gateway", resource_metadata="${resourceMetadataUrl(serverName)}", error="${code}"`)
+export function unauthorized(
+  reply: FastifyReply,
+  code: string,
+  description: string,
+  serverName?: string,
+): FastifyReply {
+  return reply
+    .code(401)
+    .header(
+      'WWW-Authenticate',
+      `Bearer realm="mcp-gateway", resource_metadata="${resourceMetadataUrl(serverName)}", error="${code}"`,
+    )
     .send({ error: code, error_description: description });
 }
 
@@ -43,7 +52,11 @@ export function hasServerAccess(payload: JWTPayload | undefined, serverName: str
   if (!payload) return false;
   if (payload.role === 'admin') return true;
   const allowed = payload.mcp_servers;
-  return Array.isArray(allowed) && allowed.every((name) => typeof name === 'string') && (allowed.includes('*') || allowed.includes(serverName));
+  return (
+    Array.isArray(allowed) &&
+    allowed.every((name) => typeof name === 'string') &&
+    (allowed.includes('*') || allowed.includes(serverName))
+  );
 }
 
 /** Tokens issued before credential revisions were introduced belong to revision zero. */
@@ -103,6 +116,11 @@ export async function authHook(req: FastifyRequest, reply: FastifyReply): Promis
     if (tokenAuthVersion(payload) === null) throw new Error('invalid auth_version claim');
     req.mcpAuth = payload;
   } catch (err) {
-    await unauthorized(reply, 'invalid_token', err instanceof Error ? err.message : 'token validation failed', serverName);
+    await unauthorized(
+      reply,
+      'invalid_token',
+      err instanceof Error ? err.message : 'token validation failed',
+      serverName,
+    );
   }
 }

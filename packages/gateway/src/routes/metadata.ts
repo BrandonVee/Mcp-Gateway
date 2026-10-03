@@ -9,7 +9,13 @@ import { env, refreshServerConfigs } from '../config.js';
 export function registerMetadataRoutes(app: FastifyInstance): void {
   const base = () => env.resourceBaseUrl.replace(/\/+$/, '');
   const ready = async () => {
-    if (databaseSettingsEnabled()) { try { await refreshServerConfigs(); } catch { return false; } }
+    if (databaseSettingsEnabled()) {
+      try {
+        await refreshServerConfigs();
+      } catch {
+        return false;
+      }
+    }
     return systemConfigured();
   };
   const metadata = (resource: string) => ({
@@ -21,13 +27,13 @@ export function registerMetadataRoutes(app: FastifyInstance): void {
   });
 
   app.get('/.well-known/oauth-protected-resource', async (_req, reply) => {
-    if (!await ready()) return reply.code(503).send({ error: 'system_not_configured' });
+    if (!(await ready())) return reply.code(503).send({ error: 'system_not_configured' });
     return reply.send(metadata(base()));
   });
 
   // RFC 9728 path form for a protected resource such as /mcp/demo.
   app.get('/.well-known/oauth-protected-resource/mcp/:serverName', async (req, reply) => {
-    if (!await ready()) return reply.code(503).send({ error: 'system_not_configured' });
+    if (!(await ready())) return reply.code(503).send({ error: 'system_not_configured' });
     const { serverName } = req.params as { serverName: string };
     return reply.send(metadata(`${base()}/mcp/${encodeURIComponent(serverName)}`));
   });

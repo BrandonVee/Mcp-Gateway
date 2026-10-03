@@ -1,5 +1,10 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
+/**
+ * Envelope encryption for upstream credentials at rest. The key comes from the
+ * environment only: a lost or rotated key invalidates stored secrets instead of
+ * silently falling back to a guessable default.
+ */
 function encryptionKey(): Buffer {
   const configured = process.env.CREDENTIAL_ENCRYPT_KEY ?? '';
   if (!/^[0-9a-fA-F]{64}$/.test(configured)) {
@@ -8,6 +13,9 @@ function encryptionKey(): Buffer {
   return Buffer.from(configured, 'hex');
 }
 
+// The version prefix lets a future rotation decrypt old rows while writing new
+// ones; nonce and GCM tag are stored with the ciphertext because both are
+// required and neither is secret.
 export function encryptCredential(value: string): string {
   const nonce = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', encryptionKey(), nonce);

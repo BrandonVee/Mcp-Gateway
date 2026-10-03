@@ -485,15 +485,7 @@
       "compositePrimaryKeys": {
         "mcp_call_metrics_minute_server_method_tool_user_id_client_id_outcome_pk": {
           "name": "mcp_call_metrics_minute_server_method_tool_user_id_client_id_outcome_pk",
-          "columns": [
-            "minute",
-            "server",
-            "method",
-            "tool",
-            "user_id",
-            "client_id",
-            "outcome"
-          ]
+          "columns": ["minute", "server", "method", "tool", "user_id", "client_id", "outcome"]
         }
       },
       "uniqueConstraints": {},
@@ -611,12 +603,8 @@
           "name": "mcp_server_instances_server_name_mcp_servers_name_fk",
           "tableFrom": "mcp_server_instances",
           "tableTo": "mcp_servers",
-          "columnsFrom": [
-            "server_name"
-          ],
-          "columnsTo": [
-            "name"
-          ],
+          "columnsFrom": ["server_name"],
+          "columnsTo": ["name"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -830,12 +818,8 @@
           "name": "oauth_connection_states_user_id_users_id_fk",
           "tableFrom": "oauth_connection_states",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -843,12 +827,8 @@
           "name": "oauth_connection_states_server_name_mcp_servers_name_fk",
           "tableFrom": "oauth_connection_states",
           "tableTo": "mcp_servers",
-          "columnsFrom": [
-            "server_name"
-          ],
-          "columnsTo": [
-            "name"
-          ],
+          "columnsFrom": ["server_name"],
+          "columnsTo": ["name"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -990,12 +970,8 @@
           "name": "user_mcp_credentials_user_id_users_id_fk",
           "tableFrom": "user_mcp_credentials",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1003,12 +979,8 @@
           "name": "user_mcp_credentials_server_name_mcp_servers_name_fk",
           "tableFrom": "user_mcp_credentials",
           "tableTo": "mcp_servers",
-          "columnsFrom": [
-            "server_name"
-          ],
-          "columnsTo": [
-            "name"
-          ],
+          "columnsFrom": ["server_name"],
+          "columnsTo": ["name"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1016,10 +988,7 @@
       "compositePrimaryKeys": {
         "user_mcp_credentials_user_id_server_name_pk": {
           "name": "user_mcp_credentials_user_id_server_name_pk",
-          "columns": [
-            "user_id",
-            "server_name"
-          ]
+          "columns": ["user_id", "server_name"]
         }
       },
       "uniqueConstraints": {},
@@ -1072,12 +1041,8 @@
           "name": "user_server_access_user_id_users_id_fk",
           "tableFrom": "user_server_access",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1085,12 +1050,8 @@
           "name": "user_server_access_server_name_mcp_servers_name_fk",
           "tableFrom": "user_server_access",
           "tableTo": "mcp_servers",
-          "columnsFrom": [
-            "server_name"
-          ],
-          "columnsTo": [
-            "name"
-          ],
+          "columnsFrom": ["server_name"],
+          "columnsTo": ["name"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1098,10 +1059,7 @@
       "compositePrimaryKeys": {
         "user_server_access_user_id_server_name_pk": {
           "name": "user_server_access_user_id_server_name_pk",
-          "columns": [
-            "user_id",
-            "server_name"
-          ]
+          "columns": ["user_id", "server_name"]
         }
       },
       "uniqueConstraints": {},
@@ -1173,9 +1131,7 @@
         "users_username_unique": {
           "name": "users_username_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "username"
-          ]
+          "columns": ["username"]
         }
       },
       "policies": {},
@@ -1187,10 +1143,7 @@
     "public.user_role": {
       "name": "user_role",
       "schema": "public",
-      "values": [
-        "admin",
-        "user"
-      ]
+      "values": ["admin", "user"]
     }
   },
   "schemas": {},

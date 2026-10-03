@@ -67,12 +67,18 @@ async function verifyPostgres(connectionString) {
     const account = decodeURIComponent(url.username || '(empty)');
     const address = `${url.hostname}:${url.port || 5432}/${url.pathname.slice(1)}`;
     if (error?.code === '28P01' || error?.code === '28000') {
-      throw new Error(`PostgreSQL rejected user "${account}" at ${address} (${error.code}). Set a working DATABASE_URL in .env.local, or create/reset this database role. The app has not started.`);
+      throw new Error(
+        `PostgreSQL rejected user "${account}" at ${address} (${error.code}). Set a working DATABASE_URL in .env.local, or create/reset this database role. The app has not started.`,
+      );
     }
     if (error?.code === '3D000') {
-      throw new Error(`PostgreSQL database at ${address} does not exist. Create it or set DATABASE_URL in .env.local. The app has not started.`);
+      throw new Error(
+        `PostgreSQL database at ${address} does not exist. Create it or set DATABASE_URL in .env.local. The app has not started.`,
+      );
     }
-    throw new Error(`PostgreSQL connection failed at ${address}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `PostgreSQL connection failed at ${address}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   } finally {
     await client.end().catch(() => undefined);
   }
@@ -83,9 +89,11 @@ async function verifyRedis(url) {
   const Redis = requireGateway('ioredis');
   const client = new Redis(url, { lazyConnect: true, connectTimeout: 3000, retryStrategy: null });
   try {
-    if (await client.ping() !== 'PONG') throw new Error('PING did not return PONG');
+    if ((await client.ping()) !== 'PONG') throw new Error('PING did not return PONG');
   } catch (error) {
-    throw new Error(`Redis PING failed at ${new URL(url).host}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `Redis PING failed at ${new URL(url).host}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   } finally {
     client.disconnect();
   }
@@ -153,7 +161,9 @@ async function main() {
   loadLocalEnv();
   ensureLocalSecrets();
   const configPath = process.env.CONFIG_FILE
-    ? (isAbsolute(process.env.CONFIG_FILE) ? process.env.CONFIG_FILE : resolve(root, process.env.CONFIG_FILE))
+    ? isAbsolute(process.env.CONFIG_FILE)
+      ? process.env.CONFIG_FILE
+      : resolve(root, process.env.CONFIG_FILE)
     : join(root, 'config/default.json');
   process.env.CONFIG_FILE = configPath;
   const config = JSON.parse(readFileSync(configPath, 'utf8'));
@@ -168,7 +178,9 @@ async function main() {
   ];
   for (const [label, host, port] of dependencies) {
     if (!(await tcpOpen(host, port))) {
-      throw new Error(`${label} is not reachable at ${host}:${port}. Start it locally and check config/default.json or .env.local.`);
+      throw new Error(
+        `${label} is not reachable at ${host}:${port}. Start it locally and check config/default.json or .env.local.`,
+      );
     }
   }
   await verifyPostgres(postgres.toString());
@@ -181,7 +193,9 @@ async function main() {
   ];
   for (const [label, host, port] of listeners) {
     if (await tcpOpen(host, port)) {
-      throw new Error(`${label} port ${host}:${port} is already in use. Stop the existing service or change the local configuration.`);
+      throw new Error(
+        `${label} port ${host}:${port} is already in use. Stop the existing service or change the local configuration.`,
+      );
     }
   }
 
@@ -194,7 +208,9 @@ async function main() {
   await waitFor('Gateway', `http://localhost:${config.gateway.port}/health`);
   start('admin-web', '@mcp/admin-web');
   await waitFor('Admin Web', 'http://localhost:5173/');
-  console.log('\n[local] Ready: http://localhost:5173  |  connections: /connections  |  gateway: http://localhost:8000');
+  console.log(
+    '\n[local] Ready: http://localhost:5173  |  connections: /connections  |  gateway: http://localhost:8000',
+  );
   console.log('[local] Press Ctrl+C to stop all Node services. PostgreSQL and Redis remain running.\n');
 }
 

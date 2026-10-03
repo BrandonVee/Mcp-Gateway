@@ -1,20 +1,16 @@
-import { ReloadOutlined } from "@ant-design/icons";
-import { Button, Card, Col, Result, Row, Skeleton } from "antd";
-import { useI18n } from "../i18n";
+import { ReloadOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Result, Row, Skeleton } from 'antd';
+import { useI18n } from '../i18n';
 
 export function PageSkeleton() {
   const { t } = useI18n();
   return (
-    <div className="page-stack page-enter" aria-label={t("app.loading.label")}>
+    <div className="page-stack page-enter" aria-label={t('app.loading.label')}>
       <Row gutter={[16, 16]}>
         {Array.from({ length: 4 }, (_, index) => (
           <Col xs={24} sm={12} xl={6} key={index}>
             <Card className="metric-card skeleton-card">
-              <Skeleton
-                active
-                paragraph={{ rows: 1 }}
-                title={{ width: "42%" }}
-              />
+              <Skeleton active paragraph={{ rows: 1 }} title={{ width: '42%' }} />
             </Card>
           </Col>
         ))}
@@ -49,16 +45,11 @@ export function DataLoadError({
     <Card className="data-load-error" bordered={false}>
       <Result
         status="warning"
-        title={t("app.loading.errorTitle")}
+        title={t('app.loading.errorTitle')}
         subTitle={message}
         extra={
-          <Button
-            type="primary"
-            icon={<ReloadOutlined />}
-            loading={loading}
-            onClick={onRetry}
-          >
-            {t("app.loading.retry")}
+          <Button type="primary" icon={<ReloadOutlined />} loading={loading} onClick={onRetry}>
+            {t('app.loading.retry')}
           </Button>
         }
       />

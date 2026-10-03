@@ -5,13 +5,13 @@ services:
     restart: unless-stopped
     stop_grace_period: 15s
     read_only: true
-    tmpfs: ["/tmp"]
-    cap_drop: ["ALL"]
-    security_opt: ["no-new-privileges:true"]
+    tmpfs: ['/tmp']
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
     environment:
       AUTH_TRUSTED_PROXY_IPS: ${AUTH_TRUSTED_PROXY_IPS:-}
       MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
-    ports: ["127.0.0.1:${MCP_HTTP_PORT:-8080}:8080"]
-    volumes: ["app_data:/app/data"]
+    ports: ['127.0.0.1:${MCP_HTTP_PORT:-8080}:8080']
+    volumes: ['app_data:/app/data']
 volumes:
   app_data:

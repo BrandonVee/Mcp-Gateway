@@ -7,9 +7,9 @@ services:
       POSTGRES_DB: mcp
       POSTGRES_USER: mcp
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run scripts/deploy.sh first}
-    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    volumes: ['postgres_data:/var/lib/postgresql/data']
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
+      test: ['CMD-SHELL', 'pg_isready -U mcp -d mcp']
       interval: 3s
       timeout: 3s
       retries: 30
@@ -18,12 +18,12 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    command: ['sh', '-c', 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?run scripts/deploy.sh first}
-    volumes: ["redis_data:/data"]
+    volumes: ['redis_data:/data']
     healthcheck:
-      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      test: ['CMD-SHELL', 'REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG']
       interval: 3s
       timeout: 3s
       retries: 30
@@ -38,9 +38,9 @@ services:
     restart: unless-stopped
     stop_grace_period: 15s
     read_only: true
-    tmpfs: ["/tmp"]
-    cap_drop: ["ALL"]
-    security_opt: ["no-new-privileges:true"]
+    tmpfs: ['/tmp']
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
     environment:
       NODE_ENV: production
       SYSTEM_CONFIG_MODE: database
@@ -59,7 +59,7 @@ services:
     volumes:
       - ${MCP_DEPLOY_DIR:-./single-host}/config.json:/app/config/production.json:ro
     ports:
-      - "127.0.0.1:${MCP_HTTP_PORT:-8080}:8080"
+      - '127.0.0.1:${MCP_HTTP_PORT:-8080}:8080'
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

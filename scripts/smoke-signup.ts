@@ -7,7 +7,8 @@ import { writeFileSync } from 'node:fs';
 const AUTH = process.env.AUTH_URL ?? 'http://localhost:9001';
 const GATEWAY = process.env.GATEWAY_URL ?? 'http://localhost:8000';
 for (const base of [AUTH, GATEWAY]) {
-  if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname)) throw new Error('Run signup smoke tests only against a disposable local stack');
+  if (!['localhost', '127.0.0.1'].includes(new URL(base).hostname))
+    throw new Error('Run signup smoke tests only against a disposable local stack');
 }
 const suffix = randomBytes(5).toString('hex');
 const defaultName = `signup-${suffix}`;
@@ -19,19 +20,39 @@ const consoleName = `console-${suffix}`;
 const consoleName2 = `console2-${suffix}`;
 const password = 'signup-test-password-123';
 let adminCookie = '';
-const cookie = (response: Response, name: string) => response.headers.getSetCookie()
-  .map((value) => value.split(';')[0]).find((value) => value.startsWith(`${name}=`)) ?? '';
-const hiddenFields = (html: string) => new URLSearchParams([...html.matchAll(/name="([^"]+)" value="([^"]*)"/g)]
-  .map((match) => [match[1], match[2].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')]));
+const cookie = (response: Response, name: string) =>
+  response.headers
+    .getSetCookie()
+    .map((value) => value.split(';')[0])
+    .find((value) => value.startsWith(`${name}=`)) ?? '';
+const hiddenFields = (html: string) =>
+  new URLSearchParams(
+    [...html.matchAll(/name="([^"]+)" value="([^"]*)"/g)].map((match) => [
+      match[1],
+      match[2]
+        .replace(/&quot;/g, '"')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&'),
+    ]),
+  );
 async function admin(path: string, method = 'GET', body?: unknown) {
   return fetch(`${AUTH}/admin${path}`, {
-    method, redirect: 'manual', headers: { cookie: adminCookie, origin: new URL(AUTH).origin, 'content-type': 'application/json' },
+    method,
+    redirect: 'manual',
+    headers: { cookie: adminCookie, origin: new URL(AUTH).origin, 'content-type': 'application/json' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
 const upstream = createServer((_req, response) => {
   response.writeHead(200, { 'content-type': 'application/json' });
-  response.end(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { protocolVersion: '2025-06-18', capabilities: {}, serverInfo: { name: 'signup-test', version: '1' } } }));
+  response.end(
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      result: { protocolVersion: '2025-06-18', capabilities: {}, serverInfo: { name: 'signup-test', version: '1' } },
+    }),
+  );
 });
 
 async function main() {
@@ -47,28 +68,53 @@ async function main() {
   adminCookie = cookie(login, 'auth_session');
   assert.ok(adminCookie);
   try {
-    for (const [name, signup_access] of [[defaultName, true], [privateName, false], [pausedName, true]] as const) {
-      const created = await admin('/servers', 'POST', { name, display_name: name, signup_access, auth_mode: 'none', instances: [{ url: upstreamUrl }] });
+    for (const [name, signup_access] of [
+      [defaultName, true],
+      [privateName, false],
+      [pausedName, true],
+    ] as const) {
+      const created = await admin('/servers', 'POST', {
+        name,
+        display_name: name,
+        signup_access,
+        auth_mode: 'none',
+        instances: [{ url: upstreamUrl }],
+      });
       assert.equal(created.status, 201, await created.text());
     }
     assert.equal((await admin(`/servers/${pausedName}`, 'PATCH', { enabled: false })).status, 200);
-    assert.equal((await admin(`/servers/${defaultName}/users`, 'PUT', { user_ids: [], signup_access: 'false' })).status, 400);
-    assert.equal((await admin(`/servers/${defaultName}/users`, 'PUT', { user_ids: [], signup_access: false })).status, 200);
+    assert.equal(
+      (await admin(`/servers/${defaultName}/users`, 'PUT', { user_ids: [], signup_access: 'false' })).status,
+      400,
+    );
+    assert.equal(
+      (await admin(`/servers/${defaultName}/users`, 'PUT', { user_ids: [], signup_access: false })).status,
+      200,
+    );
     assert.equal((await (await admin(`/servers/${defaultName}/users`)).json()).signup_access, false);
-    assert.equal((await admin(`/servers/${defaultName}/users`, 'PUT', { user_ids: [], signup_access: true })).status, 200);
+    assert.equal(
+      (await admin(`/servers/${defaultName}/users`, 'PUT', { user_ids: [], signup_access: true })).status,
+      200,
+    );
     const redirectUri = 'http://127.0.0.1:55945/oauth/callback';
     const clientResponse = await fetch(`${AUTH}/register`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ client_name: 'WorkBuddy', redirect_uris: [redirectUri] }),
     });
-    assert.equal(clientResponse.status, 201,
-      clientResponse.status === 201 ? undefined : await clientResponse.text());
+    assert.equal(clientResponse.status, 201, clientResponse.status === 201 ? undefined : await clientResponse.text());
     const client = await clientResponse.json();
     const verifier = randomBytes(32).toString('base64url');
     const q = new URLSearchParams({
-      response_type: 'code', client_id: client.client_id, redirect_uri: redirectUri,
-      code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
-      state: `signup-state-${suffix}`, scope: 'mcp', resource: `${GATEWAY}/mcp/${defaultName}`, lang: 'zh-CN',
+      response_type: 'code',
+      client_id: client.client_id,
+      redirect_uri: redirectUri,
+      code_challenge: createHash('sha256').update(verifier).digest('base64url'),
+      code_challenge_method: 'S256',
+      state: `signup-state-${suffix}`,
+      scope: 'mcp',
+      resource: `${GATEWAY}/mcp/${defaultName}`,
+      lang: 'zh-CN',
     });
     const authorizeUrl = `${AUTH}/authorize?${q}`;
     if (process.env.MCP_SIGNUP_PREVIEW_FILE) writeFileSync(process.env.MCP_SIGNUP_PREVIEW_FILE, authorizeUrl);
@@ -88,24 +134,50 @@ async function main() {
       body.set('password', password);
       body.set('confirm_password', confirmation);
       // None of these caller-supplied privilege fields may affect registration.
-      body.set('role', 'admin'); body.set('all_servers', 'true'); body.set('servers', '*');
-      return { body, headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: cookie(page, 'mcp_signup_form'), origin: new URL(AUTH).origin } };
+      body.set('role', 'admin');
+      body.set('all_servers', 'true');
+      body.set('servers', '*');
+      return {
+        body,
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookie(page, 'mcp_signup_form'),
+          origin: new URL(AUTH).origin,
+        },
+      };
     };
     const missingCsrf = await signupForm();
     missingCsrf.body.delete('form_token');
-    assert.equal((await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...missingCsrf, redirect: 'manual' })).status, 403);
+    assert.equal(
+      (await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...missingCsrf, redirect: 'manual' })).status,
+      403,
+    );
     const malformedCsrf = await signupForm();
     malformedCsrf.headers.cookie = `mcp_signup_form=${encodeURIComponent('界'.repeat(43))}`;
-    assert.equal((await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...malformedCsrf, redirect: 'manual' })).status, 403);
+    assert.equal(
+      (await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...malformedCsrf, redirect: 'manual' })).status,
+      403,
+    );
     const crossOrigin = await signupForm();
     crossOrigin.headers.origin = 'https://attacker.example.test';
-    assert.equal((await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...crossOrigin, redirect: 'manual' })).status, 403);
-    const mismatch = await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...await signupForm(firstUsername, 'wrong-confirmation'), redirect: 'manual' });
+    assert.equal(
+      (await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...crossOrigin, redirect: 'manual' })).status,
+      403,
+    );
+    const mismatch = await fetch(`${AUTH}/authorize/signup`, {
+      method: 'POST',
+      ...(await signupForm(firstUsername, 'wrong-confirmation')),
+      redirect: 'manual',
+    });
     assert.equal(mismatch.status, 400);
     const mismatchHtml = await mismatch.text();
     assert.ok(mismatchHtml.includes('两次输入的密码不一致'));
     assert.equal(mismatchHtml.includes(password), false);
-    const signup = await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...await signupForm(), redirect: 'manual' });
+    const signup = await fetch(`${AUTH}/authorize/signup`, {
+      method: 'POST',
+      ...(await signupForm()),
+      redirect: 'manual',
+    });
     assert.equal(signup.status, 303, await signup.text());
     const registeredCookie = cookie(signup, 'auth_session');
     assert.ok(registeredCookie);
@@ -121,12 +193,21 @@ async function main() {
       const form = new URLSearchParams(q);
       form.set('resource', resource);
       const authorized = await fetch(`${AUTH}/authorize/submit`, {
-        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: registeredCookie }, body: form, redirect: 'manual',
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: registeredCookie },
+        body: form,
+        redirect: 'manual',
       });
       assert.equal(authorized.status, 302);
       const callback = new URL(authorized.headers.get('location')!);
       assert.equal(callback.searchParams.get('state'), q.get('state'));
-      const body = new URLSearchParams({ grant_type: 'authorization_code', client_id: client.client_id, redirect_uri: redirectUri, code: callback.searchParams.get('code')!, code_verifier: verifier });
+      const body = new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: client.client_id,
+        redirect_uri: redirectUri,
+        code: callback.searchParams.get('code')!,
+        code_verifier: verifier,
+      });
       const tokens = await fetch(`${AUTH}/token`, { method: 'POST', body });
       assert.equal(tokens.status, 200);
       const token = (await tokens.json()).access_token as string;
@@ -140,29 +221,57 @@ async function main() {
     assert.equal(claims.aud, q.get('resource'));
     assert.deepEqual(claims.mcp_servers, [defaultName]);
     assert.equal((await fetch(`${AUTH}/admin/servers`, { headers: { cookie: registeredCookie } })).status, 403);
-    const duplicate = await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...await signupForm(), redirect: 'manual' });
+    const duplicate = await fetch(`${AUTH}/authorize/signup`, {
+      method: 'POST',
+      ...(await signupForm()),
+      redirect: 'manual',
+    });
     assert.equal(duplicate.status, 409);
     const directoryToken = await exchange(GATEWAY);
     const headers = { authorization: `Bearer ${directoryToken}`, 'content-type': 'application/json' };
-    const initialized = await fetch(`${GATEWAY}/mcp/${defaultName}`, { method: 'POST', headers, body: '{"jsonrpc":"2.0","id":1,"method":"initialize"}' });
+    const initialized = await fetch(`${GATEWAY}/mcp/${defaultName}`, {
+      method: 'POST',
+      headers,
+      body: '{"jsonrpc":"2.0","id":1,"method":"initialize"}',
+    });
     assert.equal(initialized.status, 200, await initialized.text());
     assert.equal((await fetch(`${GATEWAY}/mcp/${privateName}`, { method: 'POST', headers, body: '{}' })).status, 403);
-    console.log('PASS: signup, CSRF, validation, session, consent, PKCE callback, token exchange, default grants, and Gateway access');
+    console.log(
+      'PASS: signup, CSRF, validation, session, consent, PKCE callback, token exchange, default grants, and Gateway access',
+    );
 
     // The console entry uses the same validation, grants and session as the OAuth flow.
-    const signupJson = (body: Record<string, unknown>, origin = new URL(AUTH).origin) => fetch(`${AUTH}/me/signup`, {
-      method: 'POST', headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body),
-    });
+    const signupJson = (body: Record<string, unknown>, origin = new URL(AUTH).origin) =>
+      fetch(`${AUTH}/me/signup`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin },
+        body: JSON.stringify(body),
+      });
     const status = await fetch(`${AUTH}/me/signup`, { headers: { origin: new URL(AUTH).origin } });
     assert.equal(status.status, 200);
     assert.equal(status.headers.get('cache-control'), 'no-store');
     assert.equal((await status.json()).registration_enabled, true);
     assert.equal((await signupJson({ username: 'bad name', password, confirm_password: password })).status, 400);
-    const weak = await signupJson({ username: consoleName, password: password.slice(0, 11), confirm_password: password.slice(0, 11) });
+    const weak = await signupJson({
+      username: consoleName,
+      password: password.slice(0, 11),
+      confirm_password: password.slice(0, 11),
+    });
     assert.equal(weak.status, 400);
     assert.equal((await weak.json()).error, 'invalid_password');
-    assert.equal((await signupJson({ username: consoleName, password, confirm_password: 'wrong-confirmation' })).status, 400);
-    assert.equal((await signupJson({ username: consoleName, password, confirm_password: password }, 'https://attacker.example.test')).status, 403);
+    assert.equal(
+      (await signupJson({ username: consoleName, password, confirm_password: 'wrong-confirmation' })).status,
+      400,
+    );
+    assert.equal(
+      (
+        await signupJson(
+          { username: consoleName, password, confirm_password: password },
+          'https://attacker.example.test',
+        )
+      ).status,
+      403,
+    );
     const created = await signupJson({ username: consoleName, password, confirm_password: password });
     assert.equal(created.status, 201, created.status === 201 ? undefined : await created.text());
     const createdBody = await created.json();
@@ -173,7 +282,13 @@ async function main() {
     assert.equal((await me.json()).role, 'user', 'console registration signs the new account in');
     assert.equal((await signupJson({ username: consoleName, password, confirm_password: password })).status, 409);
     // Caller-supplied privilege fields must not change the created account.
-    const elevated = await signupJson({ username: consoleName2, password, confirm_password: password, role: 'admin', all_servers: true });
+    const elevated = await signupJson({
+      username: consoleName2,
+      password,
+      confirm_password: password,
+      role: 'admin',
+      all_servers: true,
+    });
     assert.equal(elevated.status, 201);
     assert.equal((await elevated.json()).role, 'user');
     const registered = (await (await admin('/users')).json()).users as Array<{ username: string; servers: string[] }>;
@@ -181,23 +296,43 @@ async function main() {
     assert.deepEqual(registered.find((user) => user.username === consoleName2)?.servers, [defaultName]);
     console.log('PASS: console self-registration validates, signs in, rejects duplicates and keeps default grants');
 
-    assert.equal((await admin(`/servers/${defaultName}/users`, 'PUT', { user_ids: [claims.uid], signup_access: false })).status, 200);
-    const later = await fetch(`${AUTH}/authorize/signup`, { method: 'POST', ...await signupForm(secondUsername), redirect: 'manual' });
+    assert.equal(
+      (await admin(`/servers/${defaultName}/users`, 'PUT', { user_ids: [claims.uid], signup_access: false })).status,
+      200,
+    );
+    const later = await fetch(`${AUTH}/authorize/signup`, {
+      method: 'POST',
+      ...(await signupForm(secondUsername)),
+      redirect: 'manual',
+    });
     assert.equal(later.status, 303);
     const laterCookie = cookie(later, 'auth_session');
-    const laterConsent = await fetch(new URL(later.headers.get('location')!, AUTH), { headers: { cookie: laterCookie } });
+    const laterConsent = await fetch(new URL(later.headers.get('location')!, AUTH), {
+      headers: { cookie: laterCookie },
+    });
     assert.ok((await laterConsent.text()).includes('需要管理员开通访问权限'));
-    const users = (await (await admin('/users')).json()).users as Array<{ id: number; username: string; servers: string[] }>;
+    const users = (await (await admin('/users')).json()).users as Array<{
+      id: number;
+      username: string;
+      servers: string[];
+    }>;
     assert.deepEqual(users.find((user) => user.username === firstUsername)?.servers, [defaultName]);
     assert.deepEqual(users.find((user) => user.username === secondUsername)?.servers, []);
     assert.equal((await admin(`/servers/${privateName}/users`, 'PUT', { user_ids: [claims.uid] })).status, 200);
     const afterGrant = (await (await admin('/users')).json()).users as typeof users;
-    assert.deepEqual(afterGrant.find((user) => user.username === firstUsername)?.servers.sort(), [defaultName, privateName].sort());
-    console.log('PASS: changing signup defaults affects future registrations, preserves existing access, and supports manual grants');
+    assert.deepEqual(
+      afterGrant.find((user) => user.username === firstUsername)?.servers.sort(),
+      [defaultName, privateName].sort(),
+    );
+    console.log(
+      'PASS: changing signup defaults affects future registrations, preserves existing access, and supports manual grants',
+    );
     let limited = false;
     for (let attempt = 0; attempt < 11; attempt++) {
       const probe = await fetch(`${AUTH}/authorize/signup`, {
-        method: 'POST', ...await signupForm(`rate-${suffix}`, 'wrong-confirmation'), redirect: 'manual',
+        method: 'POST',
+        ...(await signupForm(`rate-${suffix}`, 'wrong-confirmation')),
+        redirect: 'manual',
       });
       if (probe.status === 429) {
         assert.equal(probe.headers.get('retry-after'), '3600');
@@ -210,7 +345,11 @@ async function main() {
     console.log('PASS: public signup rate limits and retry headers');
     let consoleLimited = false;
     for (let attempt = 0; attempt < 12; attempt++) {
-      const probe = await signupJson({ username: `rate-console-${suffix}`, password, confirm_password: 'wrong-confirmation' });
+      const probe = await signupJson({
+        username: `rate-console-${suffix}`,
+        password,
+        confirm_password: 'wrong-confirmation',
+      });
       if (probe.status === 429) {
         assert.equal(probe.headers.get('retry-after'), '3600');
         consoleLimited = true;
@@ -223,9 +362,17 @@ async function main() {
   } finally {
     if (adminCookie) {
       const users = (await (await admin('/users')).json()).users as Array<{ id: number; username: string }>;
-      for (const user of users.filter((user) => [firstUsername, secondUsername, consoleName, consoleName2].includes(user.username))) await admin(`/users/${user.id}`, 'DELETE');
+      for (const user of users.filter((user) =>
+        [firstUsername, secondUsername, consoleName, consoleName2].includes(user.username),
+      ))
+        await admin(`/users/${user.id}`, 'DELETE');
       for (const name of [defaultName, privateName, pausedName]) await admin(`/servers/${name}`, 'DELETE');
     }
   }
 }
-main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(() => upstream.close());
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(() => upstream.close());

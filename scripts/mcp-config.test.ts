@@ -3,7 +3,12 @@ import { test } from 'node:test';
 import { mcpConfig, mcpServerUrl } from '../packages/admin-web/src/features/connections/mcp-config.js';
 import type { ConnectionServer } from '../packages/admin-web/src/types.js';
 
-const server = (name: string): ConnectionServer => ({ name, display_name: name, auth_mode: 'none', connection_status: 'not_required' });
+const server = (name: string): ConnectionServer => ({
+  name,
+  display_name: name,
+  auth_mode: 'none',
+  connection_status: 'not_required',
+});
 
 test('copying one service returns only entries inside mcpServers with the Gateway URL', () => {
   const copied = JSON.parse(mcpConfig([server('hscode')], 'http://localhost:8000'));

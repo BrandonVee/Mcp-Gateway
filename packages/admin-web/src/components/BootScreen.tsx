@@ -1,6 +1,6 @@
-import { LoadingOutlined, RadarChartOutlined } from "@ant-design/icons";
-import { Flex, Typography } from "antd";
-import { useI18n } from "../i18n";
+import { LoadingOutlined, RadarChartOutlined } from '@ant-design/icons';
+import { Flex, Typography } from 'antd';
+import { useI18n } from '../i18n';
 
 export function BootScreen() {
   const { t } = useI18n();
@@ -10,9 +10,9 @@ export function BootScreen() {
         <RadarChartOutlined />
       </div>
       <Flex vertical align="center" gap={8}>
-        <Typography.Text strong>{t("app.boot.title")}</Typography.Text>
+        <Typography.Text strong>{t('app.boot.title')}</Typography.Text>
         <Typography.Text type="secondary" className="mono-label">
-          <LoadingOutlined spin /> {t("app.boot.initializingDetail")}
+          <LoadingOutlined spin /> {t('app.boot.initializingDetail')}
         </Typography.Text>
       </Flex>
     </main>

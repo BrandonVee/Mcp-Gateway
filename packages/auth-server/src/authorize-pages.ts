@@ -1,75 +1,144 @@
+import escapeHtml from 'escape-html';
 import { registrationEnabled } from '@mcp/shared';
 
 export type AuthPageLanguage = 'zh-CN' | 'en-US';
-export type AuthPageError = 'missingCredentials' | 'invalidCredentials' | 'invalidUsername' | 'invalidPassword'
-  | 'passwordMismatch' | 'usernameTaken' | 'invalidForm' | 'tooManyAttempts' | 'serviceUnavailable' | 'registrationDisabled';
-export interface AuthPageDetails { clientName: string; resourceName?: string }
+export type AuthPageError =
+  | 'missingCredentials'
+  | 'invalidCredentials'
+  | 'invalidUsername'
+  | 'invalidPassword'
+  | 'passwordMismatch'
+  | 'usernameTaken'
+  | 'invalidForm'
+  | 'tooManyAttempts'
+  | 'serviceUnavailable'
+  | 'registrationDisabled';
+export interface AuthPageDetails {
+  clientName: string;
+  resourceName?: string;
+}
 
 const text = {
   'zh-CN': {
-    signInTitle: 'MCP Gateway - 登录', signInHeading: '登录并授权',
-    signInDescription: '登录你的账号，继续当前客户端的连接。', signInSubmit: '登录并授权',
-    signupTitle: 'MCP Gateway - 创建账号', signupHeading: '创建你的账号',
-    signupDescription: '注册后将继续本次授权，无需重新打开客户端。', signupSubmit: '创建账号并继续',
-    consentTitle: 'MCP Gateway - 授权', consentHeading: '授权客户端',
-    consentDescription: '确认以下连接信息，完成后将返回客户端。', authorize: '确认授权',
-    brand: '统一连接入口', heroHeading: '一个账号，连接你的 MCP 服务。',
+    signInTitle: 'MCP Gateway - 登录',
+    signInHeading: '登录并授权',
+    signInDescription: '登录你的账号，继续当前客户端的连接。',
+    signInSubmit: '登录并授权',
+    signupTitle: 'MCP Gateway - 创建账号',
+    signupHeading: '创建你的账号',
+    signupDescription: '注册后将继续本次授权，无需重新打开客户端。',
+    signupSubmit: '创建账号并继续',
+    consentTitle: 'MCP Gateway - 授权',
+    consentHeading: '授权客户端',
+    consentDescription: '确认以下连接信息，完成后将返回客户端。',
+    authorize: '确认授权',
+    brand: '统一连接入口',
+    heroHeading: '一个账号，连接你的 MCP 服务。',
     heroDescription: '登录或创建账号，确认授权，继续在你的客户端中使用工具。',
-    stepAccount: '登录账号', stepConsent: '确认授权', stepReturn: '返回客户端',
-    username: '用户名', password: '密码', confirmPassword: '确认密码',
+    stepAccount: '登录账号',
+    stepConsent: '确认授权',
+    stepReturn: '返回客户端',
+    username: '用户名',
+    password: '密码',
+    confirmPassword: '确认密码',
     usernameHelp: '2–64 个字符，可使用字母、数字、点、下划线和连字符。',
-    passwordHelp: '12–256 个字符。', usernamePlaceholder: '输入用户名',
-    passwordPlaceholder: '输入密码', newPasswordPlaceholder: '设置密码', confirmPasswordPlaceholder: '再次输入密码',
-    noAccount: '还没有账号？', createAccount: '创建账号', alreadyRegistered: '已有账号？', signIn: '返回登录',
-    client: '请求客户端', resource: '请求服务', requestsScope: '请求授权范围', signedInAs: '当前用户',
-    registered: '账号已创建，请确认授权以完成连接。', footer: '完成授权后将返回发起连接的客户端。',
+    passwordHelp: '12–256 个字符。',
+    usernamePlaceholder: '输入用户名',
+    passwordPlaceholder: '输入密码',
+    newPasswordPlaceholder: '设置密码',
+    confirmPasswordPlaceholder: '再次输入密码',
+    noAccount: '还没有账号？',
+    createAccount: '创建账号',
+    alreadyRegistered: '已有账号？',
+    signIn: '返回登录',
+    client: '请求客户端',
+    resource: '请求服务',
+    requestsScope: '请求授权范围',
+    signedInAs: '当前用户',
+    registered: '账号已创建，请确认授权以完成连接。',
+    footer: '完成授权后将返回发起连接的客户端。',
     needsAccess: '当前服务需要管理员开通访问权限。你仍可完成客户端登录。',
     languageMenu: '切换语言',
-    missingCredentials: '请输入用户名和密码。', invalidCredentials: '用户名或密码错误，或账号已停用。',
+    missingCredentials: '请输入用户名和密码。',
+    invalidCredentials: '用户名或密码错误，或账号已停用。',
     invalidUsername: '用户名须为 2–64 个字母、数字、点、下划线或连字符。',
-    invalidPassword: '密码须为 12–256 个字符。', passwordMismatch: '两次输入的密码不一致。',
+    invalidPassword: '密码须为 12–256 个字符。',
+    passwordMismatch: '两次输入的密码不一致。',
     usernameTaken: '该用户名已被使用，请更换用户名或返回登录。',
-    invalidForm: '页面已过期，请重新提交表单。', tooManyAttempts: '操作过于频繁，请稍后再试。',
+    invalidForm: '页面已过期，请重新提交表单。',
+    tooManyAttempts: '操作过于频繁，请稍后再试。',
     serviceUnavailable: '暂时无法创建账号，请稍后再试。',
     registrationDisabled: '自行注册已关闭，请登录已有账号，或联系管理员创建账号。',
   },
   'en-US': {
-    signInTitle: 'MCP Gateway - Sign in', signInHeading: 'Sign in to authorize',
-    signInDescription: 'Sign in to continue connecting your client.', signInSubmit: 'Sign in and authorize',
-    signupTitle: 'MCP Gateway - Create account', signupHeading: 'Create your account',
-    signupDescription: 'Continue this authorization after signing up, without restarting your client.', signupSubmit: 'Create account and continue',
-    consentTitle: 'MCP Gateway - Authorize', consentHeading: 'Authorize client',
-    consentDescription: 'Review this connection before returning to your client.', authorize: 'Authorize',
-    brand: 'One place to connect', heroHeading: 'One account. Your MCP services.',
+    signInTitle: 'MCP Gateway - Sign in',
+    signInHeading: 'Sign in to authorize',
+    signInDescription: 'Sign in to continue connecting your client.',
+    signInSubmit: 'Sign in and authorize',
+    signupTitle: 'MCP Gateway - Create account',
+    signupHeading: 'Create your account',
+    signupDescription: 'Continue this authorization after signing up, without restarting your client.',
+    signupSubmit: 'Create account and continue',
+    consentTitle: 'MCP Gateway - Authorize',
+    consentHeading: 'Authorize client',
+    consentDescription: 'Review this connection before returning to your client.',
+    authorize: 'Authorize',
+    brand: 'One place to connect',
+    heroHeading: 'One account. Your MCP services.',
     heroDescription: 'Sign in or create an account, approve the connection, and continue using tools in your client.',
-    stepAccount: 'Sign in', stepConsent: 'Authorize', stepReturn: 'Return to client',
-    username: 'Username', password: 'Password', confirmPassword: 'Confirm password',
-    usernameHelp: '2–64 letters, numbers, dots, underscores, or hyphens.', passwordHelp: '12–256 characters.',
-    usernamePlaceholder: 'Enter your username', passwordPlaceholder: 'Enter your password',
-    newPasswordPlaceholder: 'Choose a password', confirmPasswordPlaceholder: 'Repeat your password',
-    noAccount: 'New here?', createAccount: 'Create an account', alreadyRegistered: 'Already have an account?', signIn: 'Back to sign in',
-    client: 'Requesting client', resource: 'Requested service', requestsScope: 'Requested scope', signedInAs: 'Signed in as',
-    registered: 'Account created. Authorize the connection to continue.', footer: 'After authorization, you will return to the client that requested this connection.',
+    stepAccount: 'Sign in',
+    stepConsent: 'Authorize',
+    stepReturn: 'Return to client',
+    username: 'Username',
+    password: 'Password',
+    confirmPassword: 'Confirm password',
+    usernameHelp: '2–64 letters, numbers, dots, underscores, or hyphens.',
+    passwordHelp: '12–256 characters.',
+    usernamePlaceholder: 'Enter your username',
+    passwordPlaceholder: 'Enter your password',
+    newPasswordPlaceholder: 'Choose a password',
+    confirmPasswordPlaceholder: 'Repeat your password',
+    noAccount: 'New here?',
+    createAccount: 'Create an account',
+    alreadyRegistered: 'Already have an account?',
+    signIn: 'Back to sign in',
+    client: 'Requesting client',
+    resource: 'Requested service',
+    requestsScope: 'Requested scope',
+    signedInAs: 'Signed in as',
+    registered: 'Account created. Authorize the connection to continue.',
+    footer: 'After authorization, you will return to the client that requested this connection.',
     needsAccess: 'An administrator needs to grant access to this service. You can still complete client sign-in.',
     languageMenu: 'Select language',
-    missingCredentials: 'Enter your username and password.', invalidCredentials: 'Invalid username or password, or account disabled.',
+    missingCredentials: 'Enter your username and password.',
+    invalidCredentials: 'Invalid username or password, or account disabled.',
     invalidUsername: 'Use 2–64 letters, numbers, dots, underscores, or hyphens for your username.',
-    invalidPassword: 'Use a password with 12–256 characters.', passwordMismatch: 'The passwords do not match.',
+    invalidPassword: 'Use a password with 12–256 characters.',
+    passwordMismatch: 'The passwords do not match.',
     usernameTaken: 'This username is already in use. Choose another or sign in.',
-    invalidForm: 'This page has expired. Please submit the form again.', tooManyAttempts: 'Too many attempts. Please try again later.',
+    invalidForm: 'This page has expired. Please submit the form again.',
+    tooManyAttempts: 'Too many attempts. Please try again later.',
     serviceUnavailable: 'Unable to create an account right now. Please try again later.',
-    registrationDisabled: 'Self-registration is closed. Sign in to an existing account or ask an administrator to create one.',
+    registrationDisabled:
+      'Self-registration is closed. Sign in to an existing account or ask an administrator to create one.',
   },
 } as const;
 
 export function pageLanguage(requested: string | undefined, acceptLanguage: string | undefined): AuthPageLanguage {
   if (requested === 'zh-CN' || requested === 'en-US') return requested;
-  const preferences = (acceptLanguage ?? '').split(',').map((entry, index) => {
-    const [tag, ...parameters] = entry.trim().split(';');
-    const quality = parameters.find((parameter) => /^q=/i.test(parameter.trim()));
-    const weight = quality ? Number(quality.trim().slice(2)) : 1;
-    return { tag: tag.toLowerCase(), weight: Number.isFinite(weight) && weight >= 0 && weight <= 1 ? weight : 0, index };
-  }).sort((a, b) => b.weight - a.weight || a.index - b.index);
+  const preferences = (acceptLanguage ?? '')
+    .split(',')
+    .map((entry, index) => {
+      const [tag, ...parameters] = entry.trim().split(';');
+      const quality = parameters.find((parameter) => /^q=/i.test(parameter.trim()));
+      const weight = quality ? Number(quality.trim().slice(2)) : 1;
+      return {
+        tag: tag.toLowerCase(),
+        weight: Number.isFinite(weight) && weight >= 0 && weight <= 1 ? weight : 0,
+        index,
+      };
+    })
+    .sort((a, b) => b.weight - a.weight || a.index - b.index);
   for (const preference of preferences) {
     if (preference.weight === 0) continue;
     if (/^zh(?:-|$)/.test(preference.tag)) return 'zh-CN';
@@ -78,25 +147,45 @@ export function pageLanguage(requested: string | undefined, acceptLanguage: stri
   return 'en-US';
 }
 
-const FIELDS = ['response_type', 'client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method', 'resource'] as const;
+const FIELDS = [
+  'response_type',
+  'client_id',
+  'redirect_uri',
+  'scope',
+  'state',
+  'code_challenge',
+  'code_challenge_method',
+  'resource',
+] as const;
 export function authorizationParams(input: Record<string, unknown>): Record<string, string> {
-  return Object.fromEntries(FIELDS.map((key) => [key, typeof input[key] === 'string' ? input[key] : key === 'scope' ? 'mcp' : '']));
+  return Object.fromEntries(
+    FIELDS.map((key) => [key, typeof input[key] === 'string' ? input[key] : key === 'scope' ? 'mcp' : '']),
+  );
 }
 
-export function authorizationLink(path: '/authorize' | '/authorize/signup', q: Record<string, string>, language: AuthPageLanguage): string {
+export function authorizationLink(
+  path: '/authorize' | '/authorize/signup',
+  q: Record<string, string>,
+  language: AuthPageLanguage,
+): string {
   const params = new URLSearchParams(authorizationParams(q));
   params.set('lang', language);
   return `${path}?${params}`;
 }
 
+// OAuth parameters and user names land in both element text and quoted
+// attributes, so every interpolation goes through an HTML escaper.
 function esc(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return escapeHtml(value);
 }
 function hidden(name: string, value: string): string {
   return `<input type="hidden" name="${esc(name)}" value="${esc(value)}">`;
 }
 function hiddenFields(q: Record<string, string>, language: AuthPageLanguage): string {
-  return [hidden('lang', language), ...Object.entries(authorizationParams(q)).map(([key, value]) => hidden(key, value))].join('\n');
+  return [
+    hidden('lang', language),
+    ...Object.entries(authorizationParams(q)).map(([key, value]) => hidden(key, value)),
+  ].join('\n');
 }
 
 const STYLE = `<style>
@@ -112,13 +201,23 @@ a{color:#7cbcff;text-decoration:none}a:hover{color:#b7dcff;text-decoration:under
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>`;
 
-const MARK = '<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1"/><rect x="19" y="5" width="8" height="8" rx="1"/><rect x="5" y="19" width="8" height="8" rx="1"/><rect x="19" y="19" width="8" height="8" rx="1"/></svg>';
-const ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>';
+const MARK =
+  '<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1"/><rect x="19" y="5" width="8" height="8" rx="1"/><rect x="5" y="19" width="8" height="8" rx="1"/><rect x="19" y="19" width="8" height="8" rx="1"/></svg>';
+const ARROW =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>';
 
-function shell(title: string, q: Record<string, string>, language: AuthPageLanguage, content: string, path: '/authorize' | '/authorize/signup'): string {
+function shell(
+  title: string,
+  q: Record<string, string>,
+  language: AuthPageLanguage,
+  content: string,
+  path: '/authorize' | '/authorize/signup',
+): string {
   const copy = text[language];
-  const languageLink = (target: AuthPageLanguage, label: string) => target === language
-    ? `<strong aria-current="true">${label}</strong>` : `<a href="${esc(authorizationLink(path, q, target))}">${label}</a>`;
+  const languageLink = (target: AuthPageLanguage, label: string) =>
+    target === language
+      ? `<strong aria-current="true">${label}</strong>`
+      : `<a href="${esc(authorizationLink(path, q, target))}">${label}</a>`;
   return `<!doctype html>
 <html lang="${language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#070b13"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><title>${title}</title>${STYLE}</head>
 <body><main class="page"><header class="topbar"><div class="brand"><span class="mark">${MARK}</span><span><strong>MCP Gateway</strong><small>${copy.brand}</small></span></div><nav class="languages" aria-label="${copy.languageMenu}">${languageLink('zh-CN', '中文')}${languageLink('en-US', 'English')}</nav></header>
@@ -134,30 +233,68 @@ function errorNotice(error: AuthPageError | undefined, language: AuthPageLanguag
   return error ? `<p class="notice error" role="alert">${text[language][error]}</p>` : '';
 }
 
-export function loginPage(q: Record<string, string>, language: AuthPageLanguage, details: AuthPageDetails, error?: AuthPageError, username = ''): string {
+export function loginPage(
+  q: Record<string, string>,
+  language: AuthPageLanguage,
+  details: AuthPageDetails,
+  error?: AuthPageError,
+  username = '',
+): string {
   const copy = text[language];
-  return shell(copy.signInTitle, q, language, `<h2 id="page-title">${copy.signInHeading}</h2><p class="description">${copy.signInDescription}</p>${requestDetails(q, details, language)}${errorNotice(error, language)}
+  return shell(
+    copy.signInTitle,
+    q,
+    language,
+    `<h2 id="page-title">${copy.signInHeading}</h2><p class="description">${copy.signInDescription}</p>${requestDetails(q, details, language)}${errorNotice(error, language)}
 <form method="post" action="/authorize/submit">${hiddenFields(q, language)}
 <div class="field"><label for="username">${copy.username}</label><input id="username" name="username" autocomplete="username" placeholder="${copy.usernamePlaceholder}" value="${esc(username)}" maxlength="64" required></div>
 <div class="field"><label for="password">${copy.password}</label><input id="password" name="password" type="password" autocomplete="current-password" placeholder="${copy.passwordPlaceholder}" required></div>
 <button class="submit" type="submit">${copy.signInSubmit}${ARROW}</button></form>
-${registrationEnabled() ? `<p class="alternate">${copy.noAccount}<a href="${esc(authorizationLink('/authorize/signup', q, language))}">${copy.createAccount}</a></p>` : ''}`, '/authorize');
+${registrationEnabled() ? `<p class="alternate">${copy.noAccount}<a href="${esc(authorizationLink('/authorize/signup', q, language))}">${copy.createAccount}</a></p>` : ''}`,
+    '/authorize',
+  );
 }
 
-export function signupPage(q: Record<string, string>, language: AuthPageLanguage, details: AuthPageDetails, csrfToken: string, error?: AuthPageError, username = ''): string {
+export function signupPage(
+  q: Record<string, string>,
+  language: AuthPageLanguage,
+  details: AuthPageDetails,
+  csrfToken: string,
+  error?: AuthPageError,
+  username = '',
+): string {
   const copy = text[language];
-  return shell(copy.signupTitle, q, language, `<h2 id="page-title">${copy.signupHeading}</h2><p class="description">${copy.signupDescription}</p>${requestDetails(q, details, language)}${errorNotice(error, language)}
+  return shell(
+    copy.signupTitle,
+    q,
+    language,
+    `<h2 id="page-title">${copy.signupHeading}</h2><p class="description">${copy.signupDescription}</p>${requestDetails(q, details, language)}${errorNotice(error, language)}
 <form method="post" action="/authorize/signup">${hiddenFields(q, language)}${hidden('form_token', csrfToken)}
 <div class="field"><label for="username">${copy.username}</label><input id="username" name="username" autocomplete="username" placeholder="${copy.usernamePlaceholder}" value="${esc(username)}" minlength="2" maxlength="64" pattern="[a-zA-Z0-9._\\-]{2,64}" aria-describedby="username-help" required><small id="username-help">${copy.usernameHelp}</small></div>
 <div class="field"><label for="password">${copy.password}</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="${copy.newPasswordPlaceholder}" minlength="12" maxlength="256" aria-describedby="password-help" required><small id="password-help">${copy.passwordHelp}</small></div>
 <div class="field"><label for="confirm-password">${copy.confirmPassword}</label><input id="confirm-password" name="confirm_password" type="password" autocomplete="new-password" placeholder="${copy.confirmPasswordPlaceholder}" minlength="12" maxlength="256" required></div>
 <button class="submit" type="submit">${copy.signupSubmit}${ARROW}</button></form>
-<p class="alternate">${copy.alreadyRegistered}<a href="${esc(authorizationLink('/authorize', q, language))}">${copy.signIn}</a></p>`, '/authorize/signup');
+<p class="alternate">${copy.alreadyRegistered}<a href="${esc(authorizationLink('/authorize', q, language))}">${copy.signIn}</a></p>`,
+    '/authorize/signup',
+  );
 }
 
-export function consentPage(q: Record<string, string>, user: string, language: AuthPageLanguage, details: AuthPageDetails, registered = false, needsAccess = false): string {
+export function consentPage(
+  q: Record<string, string>,
+  user: string,
+  language: AuthPageLanguage,
+  details: AuthPageDetails,
+  registered = false,
+  needsAccess = false,
+): string {
   const copy = text[language];
-  return shell(copy.consentTitle, q, language, `<h2 id="page-title">${copy.consentHeading}</h2><p class="description">${copy.consentDescription}</p>${registered ? `<p class="notice success" role="status">${copy.registered}</p>` : ''}
+  return shell(
+    copy.consentTitle,
+    q,
+    language,
+    `<h2 id="page-title">${copy.consentHeading}</h2><p class="description">${copy.consentDescription}</p>${registered ? `<p class="notice success" role="status">${copy.registered}</p>` : ''}
 <div class="account"><span class="avatar" aria-hidden="true">${esc(user.slice(0, 1).toUpperCase())}</span><span>${copy.signedInAs}<strong>${esc(user)}</strong></span></div>${requestDetails(q, details, language)}${needsAccess ? `<p class="notice" role="status">${copy.needsAccess}</p>` : ''}
-<form method="post" action="/authorize/submit">${hiddenFields(q, language)}<button class="submit" type="submit">${copy.authorize}${ARROW}</button></form>`, '/authorize');
+<form method="post" action="/authorize/submit">${hiddenFields(q, language)}<button class="submit" type="submit">${copy.authorize}${ARROW}</button></form>`,
+    '/authorize',
+  );
 }
