@@ -4,7 +4,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { compareVersions, parseReleases, stableVersion } from '../packages/auth-server/src/update-releases';
+import {
+  compareVersions,
+  parseReleases,
+  parseImageTags,
+  fetchPublishedReleases,
+  stableVersion,
+} from '../packages/auth-server/src/update-releases';
 import {
   getUpdateStatus,
   officialUpdateImage,
@@ -148,4 +154,39 @@ test('status, cached release checks and selected updates use the running image a
     await new Promise<void>((resolve) => server.close(() => resolve()));
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('GitHub failures fall back to published Docker Hub digests without requiring credentials', async () => {
+  const calls: string[] = [];
+  const hub = {
+    results: [
+      { name: 'v0.5.3', digest, tag_status: 'active', images: [{ digest: oldDigest, status: 'active' }] },
+      { name: 'latest', digest, tag_status: 'active' },
+      { name: 'v0.6.0', digest, tag_status: 'inactive' },
+      { name: 'v0.7.0-beta', digest, tag_status: 'active' },
+      { name: 'v0.8.0', digest: 'bad', tag_status: 'active' },
+    ],
+  };
+  const releases = await fetchPublishedReleases(async (url) => {
+    calls.push(String(url));
+    return calls.length === 1 ? new Response('{}', { status: 403 }) : new Response(JSON.stringify(hub));
+  });
+  assert.equal(calls.length, 2);
+  assert.match(calls[1], /^https:\/\/hub\.docker\.com\//);
+  assert.deepEqual(
+    releases.map((release) => release.tag),
+    ['v0.5.3'],
+  );
+  assert.equal(runningVersion({ RepoDigests: [`brandonvee/mcp-gateway@${oldDigest}`] }, releases), '0.5.3');
+  assert.throws(() => parseImageTags({ results: null }));
+  await assert.rejects(
+    fetchPublishedReleases(async () => new Response('{}', { status: 429 })),
+    /image version check failed/,
+  );
+  await assert.rejects(
+    fetchPublishedReleases(async () => {
+      throw new Error('network unavailable');
+    }),
+    /network unavailable/,
+  );
 });

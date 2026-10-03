@@ -118,7 +118,10 @@ export function runningVersion(image: ImageInspect, releases: UpdateRelease[], e
   const digests = image.RepoDigests?.map((value) => value.split('@')[1]) ?? [];
   const revision = image.Config?.Labels?.['org.opencontainers.image.revision'];
   const release = releases.find(
-    (item) => digests.includes(item.digest) || (item.revision && item.revision === revision),
+    (item) =>
+      digests.includes(item.digest) ||
+      item.platform_digests?.some((digest) => digests.includes(digest)) ||
+      (item.revision && item.revision === revision),
   );
   return (
     release?.version ||
