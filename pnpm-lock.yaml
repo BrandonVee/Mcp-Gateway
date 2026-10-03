@@ -14,18 +14,12 @@ importers:
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.4
-      '@types/semver':
-        specifier: ^7.8.0
-        version: 7.8.0
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
       prettier:
         specifier: ^3.4.2
         version: 3.9.9
-      semver:
-        specifier: ^7.8.5
-        version: 7.8.5
       tsx:
         specifier: ^4.19.2
         version: 4.23.15
@@ -1320,9 +1314,6 @@ packages:
 
   '@types/react@19.3.0':
     resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
-
-  '@types/semver@7.8.0':
-    resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
 
   '@types/send@0.17.6':
     resolution: {integrity: sha512-Uqt8rPBE8SY0RK8JB1EzVOIZ32uqy8HwdxCnoCOsYrvnswqmFZ/k+9Ikidlk/ImhsdvBsloHbAlewb2IEBV/Og==}
@@ -3365,8 +3356,6 @@ snapshots:
   '@types/react@19.3.0':
     dependencies:
       csstype: 3.2.3
-
-  '@types/semver@7.8.0': {}
 
   '@types/send@0.17.6':
     dependencies:

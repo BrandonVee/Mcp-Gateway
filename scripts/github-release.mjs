@@ -1,36 +1,47 @@
-import semver from 'semver';
+// Release tooling: keep this script dependency-free. The release workflow copies
+// it out of the workspace and runs it from a bare checkout, with no install step
+// and no node_modules to resolve imports from.
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-// Release tags are plain vMAJOR.MINOR.PATCH. Parsing and ordering come from
-// semver so prereleases, build metadata and zero-padding follow one
-// implementation instead of a local parser.
-const isReleaseTag = (tag) => typeof tag === 'string' && /^v\d+\.\d+\.\d+$/.test(tag) && Boolean(semver.valid(tag));
+const versionPattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const parts = (tag) => versionPattern.exec(tag)?.slice(1).map(Number);
+const compare = (a, b) => {
+  const left = parts(a),
+    right = parts(b);
+  return left[0] - right[0] || left[1] - right[1] || left[2] - right[2];
+};
 const versionSubject = /^chore\(release\): v\d+\.\d+\.\d+ \[skip ci\]$/;
 
 export function nextReleaseTag(tags, headTags, commits) {
-  const stable = tags.filter(isReleaseTag).sort(semver.compare);
+  const stable = tags.filter((tag) => parts(tag)?.every(Number.isSafeInteger)).sort(compare);
   const current = headTags
     .filter((tag) => stable.includes(tag))
-    .sort(semver.compare)
+    .sort(compare)
     .at(-1);
   if (current) return current;
   const previous = stable.at(-1);
   if (!previous) return 'v0.1.0';
-  const bump = commits.some((message) => /^(?:\w+)(?:\([^\n)]*\))?!:|^BREAKING[ -]CHANGE:/m.test(message))
-    ? 'major'
-    : commits.some((message) => /^feat(?:\([^\n)]*\))?:/m.test(message))
-      ? 'minor'
-      : 'patch';
-  return `v${semver.inc(previous, bump)}`;
+  let [major, minor, patch] = parts(previous);
+  if (commits.some((message) => /^(?:\w+)(?:\([^\n)]*\))?!:|^BREAKING[ -]CHANGE:/m.test(message))) {
+    major++;
+    minor = 0;
+    patch = 0;
+  } else if (commits.some((message) => /^feat(?:\([^\n)]*\))?:/m.test(message))) {
+    minor++;
+    patch = 0;
+  } else patch++;
+  return `v${major}.${minor}.${patch}`;
 }
 
 export function prepareRelease(cwd = process.cwd()) {
   const git = (args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
-  const tags = git(['tag', '--list', 'v*']).split('\n').filter(isReleaseTag);
-  const previous = [...tags].sort(semver.compare).at(-1);
+  const tags = git(['tag', '--list', 'v*'])
+    .split('\n')
+    .filter((tag) => parts(tag)?.every(Number.isSafeInteger));
+  const previous = [...tags].sort(compare).at(-1);
   const sha = git(['rev-parse', 'HEAD']);
   // The bot writes the released version back after publishing; it must not
   // become the next version's only change.
@@ -48,7 +59,7 @@ export function versionCommitForSource(sha, source, cwd = process.cwd()) {
     if (git(['show', '-s', '--format=%ae', sha]) !== '41898282+github-actions[bot]@users.noreply.github.com')
       return undefined;
     const tag = /^chore\(release\): (v\d+\.\d+\.\d+) \[skip ci\]$/.exec(git(['show', '-s', '--format=%s', sha]))?.[1];
-    if (!isReleaseTag(tag ?? '')) return undefined;
+    if (!versionPattern.test(tag ?? '')) return undefined;
     const files = git(['diff', '--name-only', source, sha]).split('\n');
     if (!files.length || files.some((file) => file !== 'package.json' && !/^packages\/[^/]+\/package.json$/.test(file)))
       return undefined;
@@ -70,7 +81,11 @@ export function versionCommitForSource(sha, source, cwd = process.cwd()) {
 export function existingReleaseCandidate(cwd = process.cwd()) {
   const git = (args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
   const source = git(['rev-parse', 'HEAD']);
-  const tags = git(['tag', '--list', 'v*']).split('\n').filter(isReleaseTag).sort(semver.compare).reverse();
+  const tags = git(['tag', '--list', 'v*'])
+    .split('\n')
+    .filter((tag) => parts(tag)?.every(Number.isSafeInteger))
+    .sort(compare)
+    .reverse();
   for (const tag of tags) {
     const sha = git(['rev-parse', `${tag}^{commit}`]);
     if (sha === source) return { tag, version: tag.slice(1), sha, short_sha: sha.slice(0, 12) };
@@ -114,7 +129,7 @@ async function assertTagCommit(api, tag, sha) {
 const recordedDigest = (release) => /Digest:\s*`?(sha256:[a-f\d]{64})\b/.exec(release.body ?? '')?.[1];
 
 export async function publishedReleaseForCommit(options) {
-  if (!isReleaseTag(options.tag) || !/^[a-f\d]{40}$/.test(options.sha))
+  if (!versionPattern.test(options.tag) || !/^[a-f\d]{40}$/.test(options.sha))
     throw new Error('Invalid release tag or commit');
   const api = releaseApi(options);
   const release = await api(`releases/tags/${options.tag}`);
@@ -155,9 +170,12 @@ export async function resolveRelease({
     throw new Error(`Release resolution cannot resolve ${requested}`);
   }
   if (git(['rev-parse', 'HEAD']) !== sha) throw new Error('Release checkout must be at the requested commit');
-  let resolved = tag && isReleaseTag(tag) ? tag : undefined;
+  let resolved = tag && versionPattern.test(tag) ? tag : undefined;
   if (!resolved) {
-    const pointed = git(['tag', '--points-at', sha]).split('\n').filter(isReleaseTag).sort(semver.compare);
+    const pointed = git(['tag', '--points-at', sha])
+      .split('\n')
+      .filter((candidate) => versionPattern.test(candidate))
+      .sort(compare);
     resolved = pointed.at(-1);
   }
   if (!resolved) throw new Error('manual releases need a tag at the published commit');
@@ -177,7 +195,7 @@ export async function resolveRelease({
 }
 
 export function commitVersion({ tag, cwd = process.cwd() }) {
-  if (!isReleaseTag(tag)) throw new Error('Invalid release tag');
+  if (!versionPattern.test(tag)) throw new Error('Invalid release tag');
   const git = (args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
   if (git(['status', '--porcelain'])) throw new Error('Version preparation requires a clean working tree');
   const version = tag.slice(1);
@@ -201,7 +219,7 @@ export function commitVersion({ tag, cwd = process.cwd() }) {
   // the previous version. Only a commit released as another version is off limits.
   const released = git(['tag', '--points-at', sha])
     .split('\n')
-    .filter((candidate) => isReleaseTag(candidate) && candidate !== tag);
+    .filter((candidate) => versionPattern.test(candidate) && candidate !== tag);
   if (released.length)
     throw new Error(`Commit ${sha} is already released as ${released.join(', ')}; refusing to write ${tag}`);
   for (const update of updates) writeFileSync(join(cwd, update.file), update.content);
@@ -230,12 +248,12 @@ export function pushVersionCommit({ sha, branch = 'main', remote = 'origin', cwd
 
 /** Write the released version back to the default branch after publishing. */
 export function syncVersion({ tag, branch = 'main', remote = 'origin', cwd = process.cwd() }) {
-  if (!isReleaseTag(tag)) throw new Error('Invalid release tag');
+  if (!versionPattern.test(tag)) throw new Error('Invalid release tag');
   const git = (args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   git(['fetch', remote, branch]);
   const head = git(['rev-parse', `refs/remotes/${remote}/${branch}`]);
   const current = JSON.parse(git(['show', `${head}:package.json`])).version;
-  if (isReleaseTag(`v${current}`) && semver.compare(`v${current}`, tag) >= 0) {
+  if (parts(`v${current}`) && compare(`v${current}`, tag) >= 0) {
     // Re-publishing an older tag must never move the branch version backwards.
     return {
       tag,
@@ -263,7 +281,7 @@ export async function publishRelease({
   apiUrl = 'https://api.github.com',
   fetchImpl = fetch,
 }) {
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repository) || !isReleaseTag(tag) || !/^[a-f\d]{40}$/.test(sha))
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository) || !versionPattern.test(tag) || !/^[a-f\d]{40}$/.test(sha))
     throw new Error('Invalid release repository, tag, or commit');
   if (!token || !/^sha256:[a-f\d]{64}$/.test(digest))
     throw new Error('Release requires a GitHub token and a published image digest');
@@ -280,7 +298,7 @@ export async function publishRelease({
     return existing;
   }
   const latest = await api('releases/latest');
-  if (isReleaseTag(latest?.tag_name) && semver.compare(tag, latest.tag_name) < 0) makeLatest = 'false';
+  if (parts(latest?.tag_name)?.every(Number.isSafeInteger) && compare(tag, latest.tag_name) < 0) makeLatest = 'false';
   if (!ref) {
     const annotated = await api('git/tags', 'POST', {
       tag,
