@@ -60,20 +60,20 @@ git pull --ff-only
 
 回退至旧五容器代码时，先用当前 Compose 停止并移除 `mcp-server` 容器，然后切换到原提交执行原 `deploy.sh`，让旧脚本重建内网链接；保留数据库卷和密钥。数据库迁移的回退须结合版本兼容性评估，需要恢复时先保存当前备份。
 
-### 网页端一键更新（可选）
+### 网页端一键更新（默认开启）
 
-开启后，管理后台「系统设置」会多出「系统更新」卡片，点击即可拉取最新镜像并重建应用容器，无需登录服务器：
+部署脚本默认启用网页更新，无需额外设置环境变量。部署后，在管理后台「系统设置 → 系统更新」点击即可拉取最新镜像并重建应用容器：
 
 ```bash
-MCP_UPDATE_ENABLED=true ./scripts/deploy.sh --yes
+./scripts/deploy.sh --yes
 ```
 
-**开启前请确认风险**：该开关会把宿主机的 Docker socket 挂进应用容器，容器内进程等价于宿主机 root。只在受信任的管理员环境开启，并注意：
+部署脚本会挂载宿主机 Docker socket 并配置访问权限，使应用可以替换自身容器。该权限允许操作宿主机 Docker，管理员账号应妥善管理。
 
 - 更新复用当前容器的环境变量、挂载和网络配置，**不复制**旧镜像的启动命令；若 `deploy.sh` 之后新增了环境变量，仍需重跑 `./scripts/deploy.sh` 才会生效。
 - 更新时应用会短暂中断（通常十几秒）。新容器在 90 秒内未通过健康检查时，更新脚本会删除新容器并恢复原来的容器；若连回滚都失败，需到服务器执行 `./scripts/deploy.sh`。
 - 更新过程记录在 `deploy/single-host/update.log`。
-- 关闭该能力：`MCP_UPDATE_ENABLED=false ./scripts/deploy.sh --yes` 后重启即可，页面上的卡片会自动消失。
+- 关闭该能力：`MCP_UPDATE_ENABLED=false ./scripts/deploy.sh --yes` 会重新部署应用并移除 socket 挂载，页面上的卡片会自动消失。显式关闭的设置会保存，后续部署沿用；重新开启时用 `MCP_UPDATE_ENABLED=true ./scripts/deploy.sh --yes`。
 
 ### 升级影响与管理员恢复
 

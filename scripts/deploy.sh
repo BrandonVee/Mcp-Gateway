@@ -170,12 +170,13 @@ if $interactive; then
 fi
 umask 077
 mkdir -p "$MCP_DEPLOY_DIR"
-# The console update button is opt-in: it gives the application container the
-# host Engine socket, which is root on the host. Off unless asked for explicitly.
-export MCP_UPDATE_ENABLED=${MCP_UPDATE_ENABLED:-false}
+# Web updates are enabled by default. An explicit false setting is saved and
+# respected on later deployments, without mounting the host Docker socket.
+export MCP_UPDATE_ENABLED=${MCP_UPDATE_ENABLED:-true}
+[[ "$MCP_UPDATE_ENABLED" == true || "$MCP_UPDATE_ENABLED" == false ]] || fail 'MCP_UPDATE_ENABLED 须为 true 或 false'
 if [[ "$MCP_UPDATE_ENABLED" == true ]]; then
   export DOCKER_SOCKET=${DOCKER_SOCKET:-/var/run/docker.sock}
-  [[ -S "$DOCKER_SOCKET" ]] || fail "未找到 Docker socket：$DOCKER_SOCKET（设置 DOCKER_SOCKET 指定路径）"
+  [[ -S "$DOCKER_SOCKET" ]] || fail "未找到 Docker socket：${DOCKER_SOCKET}（设置 DOCKER_SOCKET 指定路径）"
   docker_gid=$(stat -c %g "$DOCKER_SOCKET")
   if [[ "$docker_gid" == 0 ]]; then
     # A root-only socket is unusable for the unprivileged container user.

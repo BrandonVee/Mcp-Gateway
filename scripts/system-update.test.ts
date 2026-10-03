@@ -95,7 +95,7 @@ test('updates target :latest unless an explicit image is configured', () => {
   assert.equal(updateTargetImage({}), 'brandonvee/mcp-gateway:latest');
 });
 
-test('self-update is opt-in and defaults to the standard socket', () => {
+test('self-update uses the deployment flag and defaults to the standard socket', () => {
   assert.equal(updateEnabled({ MCP_UPDATE_ENABLED: 'true' }), true);
   assert.equal(updateEnabled({ MCP_UPDATE_ENABLED: 'false' }), false);
   assert.equal(updateEnabled({}), false);

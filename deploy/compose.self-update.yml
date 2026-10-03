@@ -1,8 +1,8 @@
-# Opt-in overlay for the web console "update" button.
+# Overlay for the web console "update" button, enabled by deploy.sh by default.
 #
 # Mounting the Engine socket into the application container grants it root on the
-# host, so this file is only added to the deployment when MCP_UPDATE_ENABLED=true
-# (scripts/deploy.sh appends it with -f). Without it the update endpoint is
+# host. MCP_UPDATE_ENABLED=false skips this file; otherwise scripts/deploy.sh
+# appends it with -f. Without it the update endpoint is
 # disabled and the button never renders.
 services:
   mcp-server:

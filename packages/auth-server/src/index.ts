@@ -82,6 +82,9 @@ app.use('*', async (c, next) => {
     }
     if (
       !systemConfigured() &&
+      // The shared browser login must remain reachable so an administrator can
+      // sign in and finish setup before OAuth and personal MCP access open.
+      c.req.path !== '/me/session' &&
       (/^\/(authorize(?:\/|$)|token$|register$|me(?:\/|$)|oauth(?:\/|$))/.test(c.req.path) ||
         c.req.path.startsWith('/.well-known/'))
     )

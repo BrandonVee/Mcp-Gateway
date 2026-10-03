@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync, statSync, rmSync 
 import { tmpdir } from 'node:os';
 import { join, resolve, delimiter } from 'node:path';
 import { test } from 'node:test';
+import { createServer } from 'node:net';
 import { readDeploymentEnvironment } from './deploy-env.js';
 
 const script = resolve('scripts/deploy.sh');
@@ -21,6 +22,9 @@ const environmentKeys = [
   'CREDENTIAL_ENCRYPT_KEY',
   'ADMIN_PASSWORD',
   'AUTH_TRUSTED_PROXY_IPS',
+  'MCP_UPDATE_ENABLED',
+  'DOCKER_SOCKET',
+  'DOCKER_GID',
 ];
 
 function sandbox() {
@@ -42,6 +46,12 @@ function sandbox() {
     ].join('\n'),
     { mode: 0o700 },
   );
+  writeFileSync(
+    join(directory, 'stat'),
+    '#!/usr/bin/env bash\nif [[ "$1" == -c && "$2" == %g ]]; then echo "${MOCK_SOCKET_GID:-999}"; else /usr/bin/stat "$@"; fi\n',
+    { mode: 0o700 },
+  );
+  writeFileSync(join(directory, 'getent'), '#!/usr/bin/env bash\necho "docker:x:998:"\n', { mode: 0o700 });
   const env = { ...process.env };
   for (const key of environmentKeys) delete env[key];
   Object.assign(env, {
@@ -49,6 +59,8 @@ function sandbox() {
     MOCK_DOCKER_LOG: log,
     MCP_DEPLOY_DIR: deployment,
     COMPOSE_PROJECT_NAME: 'mcp-installer-test',
+    // These tests cover other installer options; web-update defaults are exercised below.
+    MCP_UPDATE_ENABLED: 'false',
   });
   return {
     deployment,
@@ -59,6 +71,93 @@ function sandbox() {
     cleanup: () => rmSync(directory, { recursive: true, force: true }),
   };
 }
+
+async function updateSandbox() {
+  const setup = sandbox();
+  // Keep Unix socket paths short enough for both macOS and Linux.
+  const directory = mkdtempSync('/tmp/mcp-update-socket-test-');
+  const socketPath = join(directory, 'docker.sock');
+  const server = createServer();
+  await new Promise<void>((done, reject) => {
+    server.once('error', reject);
+    server.listen(socketPath, done);
+  });
+  return {
+    ...setup,
+    updateEnv: { MCP_UPDATE_ENABLED: '', DOCKER_SOCKET: socketPath },
+    cleanup: async () => {
+      await new Promise<void>((done, reject) => server.close((error) => (error ? reject(error) : done())));
+      rmSync(directory, { recursive: true, force: true });
+      setup.cleanup();
+    },
+  };
+}
+
+test('web updates are enabled by default with the socket overlay, group and persistent log', async () => {
+  const setup = await updateSandbox();
+  try {
+    const result = setup.run(['--yes'], '', setup.updateEnv);
+    assert.equal(result.status, 0, result.stderr);
+    const saved = readDeploymentEnvironment(setup.envFile);
+    assert.equal(saved.MCP_UPDATE_ENABLED, 'true');
+    assert.equal(saved.DOCKER_SOCKET, setup.updateEnv.DOCKER_SOCKET);
+    assert.equal(saved.DOCKER_GID, '999');
+    assert.ok(existsSync(join(setup.deployment, 'update.log')));
+    assert.match(setup.commands(), /-f .*compose\.self-update\.yml .*up -d --no-build/);
+    assert.equal(setup.run(['--yes', '--prepare-only'], '', setup.updateEnv).status, 0);
+    assert.deepEqual(readDeploymentEnvironment(setup.envFile), saved);
+  } finally {
+    await setup.cleanup();
+  }
+});
+
+test('explicitly disabling web updates persists without a socket and can be reversed', async () => {
+  const setup = await updateSandbox();
+  try {
+    const disabled = { MCP_UPDATE_ENABLED: 'false', DOCKER_SOCKET: '/missing/docker.sock' };
+    const result = setup.run(['--yes'], '', disabled);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readDeploymentEnvironment(setup.envFile).MCP_UPDATE_ENABLED, 'false');
+    assert.ok(!setup.commands().includes('compose.self-update.yml'));
+    assert.ok(!existsSync(join(setup.deployment, 'update.log')));
+    assert.equal(setup.run(['--yes'], '', { MCP_UPDATE_ENABLED: '', DOCKER_SOCKET: '' }).status, 0);
+    assert.equal(readDeploymentEnvironment(setup.envFile).MCP_UPDATE_ENABLED, 'false');
+    assert.ok(!setup.commands().includes('compose.self-update.yml'));
+    assert.equal(setup.run(['--yes'], '', { ...setup.updateEnv, MCP_UPDATE_ENABLED: 'true' }).status, 0);
+    assert.equal(readDeploymentEnvironment(setup.envFile).MCP_UPDATE_ENABLED, 'true');
+    assert.match(setup.commands(), /compose\.self-update\.yml/);
+  } finally {
+    await setup.cleanup();
+  }
+});
+
+test('default web updates report a missing socket or invalid flag before saving configuration', () => {
+  const setup = sandbox();
+  try {
+    const missing = setup.run(['--yes'], '', { MCP_UPDATE_ENABLED: '', DOCKER_SOCKET: '/missing/docker.sock' });
+    assert.equal(missing.status, 1);
+    assert.match(missing.stderr, /未找到 Docker socket/);
+    assert.equal(existsSync(setup.envFile), false);
+    const invalid = setup.run(['--yes'], '', { MCP_UPDATE_ENABLED: 'invalid' });
+    assert.equal(invalid.status, 1);
+    assert.match(invalid.stderr, /MCP_UPDATE_ENABLED 须为 true 或 false/);
+    assert.equal(existsSync(setup.envFile), false);
+    assert.ok(!setup.commands().includes(' up '));
+  } finally {
+    setup.cleanup();
+  }
+});
+
+test('default web updates resolve the docker group when the socket group is root', async () => {
+  const setup = await updateSandbox();
+  try {
+    const result = setup.run(['--yes', '--prepare-only'], '', { ...setup.updateEnv, MOCK_SOCKET_GID: '0' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(readDeploymentEnvironment(setup.envFile).DOCKER_GID, '998');
+  } finally {
+    await setup.cleanup();
+  }
+});
 
 test('interactive setup validates input and preserves a literal hidden password on repeat deployment', () => {
   const setup = sandbox();

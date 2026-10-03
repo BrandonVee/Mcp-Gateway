@@ -47,7 +47,7 @@ export function useControlPlane(
           },
         })),
         api.systemSettings(),
-        // Self-update is opt-in; a deployment without it answers 503.
+        // Deployments that disable web updates answer 503 for this endpoint.
         api.systemUpdate().catch(() => null),
       ]);
       setSettings(settingsData);

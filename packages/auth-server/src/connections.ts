@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { authIssuer, adminWebUrl, registrationEnabled } from '@mcp/shared';
+import { authIssuer, adminWebUrl, bootstrapOriginAllowed, registrationEnabled, systemConfigured } from '@mcp/shared';
 import { createLoginSession, db, deleteLoginSession, getSessionUser, verifyUser } from './db.js';
 import { decryptCredential, encryptCredential } from './credential-crypto.js';
 import { mcpServers, oauthConnectionStates, userMcpCredentials, userServerAccess, users } from './schema.js';
@@ -159,8 +159,12 @@ export function createConnectionsRouter(): Hono {
   router.use('/me/*', async (c, next) => {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
       const origin = c.req.header('origin');
-      const accepted = [new URL(authIssuer()).origin, new URL(adminWebUrl()).origin];
-      if (origin && !accepted.includes(origin)) return c.json({ error: 'invalid_origin' }, 403);
+      const allowed =
+        !origin ||
+        (!systemConfigured()
+          ? bootstrapOriginAllowed(origin, c.req.header('host'))
+          : [authIssuer(), adminWebUrl()].map((url) => new URL(url).origin).includes(origin));
+      if (!allowed) return c.json({ error: 'invalid_origin' }, 403);
       const expectedIdentity = c.req.header('x-session-identity');
       // Sign-in and self-registration are the only anonymous writes.
       const anonymous = c.req.method === 'POST' && (c.req.path === '/me/session' || c.req.path === '/me/signup');
@@ -225,7 +229,7 @@ export function createConnectionsRouter(): Hono {
     setCookie(c, cookieName, token, {
       httpOnly: true,
       sameSite: 'Lax',
-      secure: authIssuer().startsWith('https://'),
+      secure: process.env.NODE_ENV === 'production' || authIssuer().startsWith('https://'),
       path: '/',
       maxAge: 7 * 24 * 3600,
     });

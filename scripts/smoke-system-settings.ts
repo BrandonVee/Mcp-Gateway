@@ -65,17 +65,42 @@ async function main() {
     '/.well-known/oauth-authorization-server',
     '/.well-known/oauth-protected-resource',
     '/mcp/example',
+    '/api/me/signup',
+    '/api/me/connections',
   ]) {
     const post = ['/token', '/register'].includes(path);
     const { response } = await request(path, post ? 'POST' : 'GET', post ? {} : undefined);
     assert.equal(response.status, 503, `${path} stays closed before setup`);
   }
   assert.equal((await request('/api/admin/system-settings')).response.status, 403);
+  assert.equal((await request('/api/me/session')).response.status, 401, 'browser login is reachable before setup');
   const credentials = { username: 'admin', password: saved.ADMIN_PASSWORD };
   assert.equal(
     (await request('/api/admin/session', 'POST', credentials, 'https://attacker.example.test')).response.status,
     403,
   );
+  assert.equal(
+    (await request('/api/me/session', 'POST', credentials, 'https://attacker.example.test')).response.status,
+    403,
+    'initial browser login rejects other origins',
+  );
+  const initialLogin = await request('/api/me/session', 'POST', credentials);
+  assert.equal(initialLogin.response.status, 200);
+  assert.equal(initialLogin.data.role, 'admin');
+  assert.ok(initialLogin.response.headers.get('set-cookie')?.includes('Secure'));
+  cookie = initialLogin.response.headers.get('set-cookie')!.split(';')[0];
+  assert.equal((await request('/api/me/session')).data.authenticated, true);
+  assert.equal((await request('/api/admin/system-settings')).data.configured, false);
+  assert.equal(
+    (await request('/api/me/session', 'DELETE', undefined, 'https://attacker.example.test')).response.status,
+    403,
+  );
+  const initialLogout = await request('/api/me/session', 'DELETE');
+  assert.equal(initialLogout.response.status, 200);
+  assert.match(initialLogout.response.headers.get('set-cookie') ?? '', /Max-Age=0/);
+  assert.equal((await request('/api/me/session')).response.status, 401);
+  cookie = '';
+  console.log('PASS: shared browser login reaches initial setup with secure cookies and origin checks');
   const login = await request('/api/admin/session', 'POST', credentials);
   assert.equal(login.response.status, 200);
   const setCookie = login.response.headers.get('set-cookie')!;

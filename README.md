@@ -95,6 +95,8 @@ curl --fail https://mcp.example.com/healthz    # 替换为实际域名
 
 镜像部署默认跟随 `latest`，每次重跑都会拉最新已发布版本；需要固定版本时用 `MCP_VERSION=v0.3.2 ./scripts/deploy.sh --yes`（也可在交互提示里输入版本）。本机构建仍按当前代码的提交号打标签。
 
+部署脚本默认开启网页更新，登录后在「系统设置 → 系统更新」可直接更新到最新镜像，无需额外设置环境变量。需要关闭时使用 `MCP_UPDATE_ENABLED=false ./scripts/deploy.sh --yes`，该选择会保存并在后续部署中沿用。详见 [网页端一键更新](docs/production.md#网页端一键更新默认开启)。
+
 备份默认写入 `backups/`，包含 PostgreSQL、配置和凭据加密密钥（权限 `0600`，保留 14 天，**不含 Redis 会话**）。定时备份与恢复步骤见 [备份与恢复](docs/production.md#备份与恢复)。不要用 `down -v` 停止生产部署，它会删除数据库卷。
 
 ### 常见部署问题
