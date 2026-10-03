@@ -2,7 +2,13 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { posix } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { hostname } from 'node:os';
-import { compareVersions, getUpdateReleases, stableVersion, type UpdateRelease } from './update-releases.js';
+import {
+  compareVersions,
+  getUpdateReleases,
+  stableVersion,
+  type ReleaseCheckFailure,
+  type UpdateRelease,
+} from './update-releases.js';
 
 /**
  * Self-update through the Docker Engine socket.
@@ -284,6 +290,7 @@ export interface UpdateStatus {
   update_available: boolean | null;
   releases: UpdateRelease[];
   release_check_error: boolean;
+  release_check_failures: ReleaseCheckFailure[];
   releases_supported: boolean;
   checked_at: number | null;
   target_image: string;
@@ -293,7 +300,11 @@ export interface UpdateStatus {
   container_name: string;
 }
 
-export async function getUpdateStatus(env: NodeJS.ProcessEnv = process.env, refresh = false): Promise<UpdateStatus> {
+export async function getUpdateStatus(
+  env: NodeJS.ProcessEnv = process.env,
+  refresh = false,
+  runtimeOnly = false,
+): Promise<UpdateStatus> {
   const socketPath = dockerSocket(env);
   const status: UpdateStatus = {
     enabled: updateEnabled(env),
@@ -304,6 +315,7 @@ export async function getUpdateStatus(env: NodeJS.ProcessEnv = process.env, refr
     update_available: null,
     releases: [],
     release_check_error: false,
+    release_check_failures: [],
     releases_supported: false,
     checked_at: null,
     target_image: '',
@@ -325,9 +337,10 @@ export async function getUpdateStatus(env: NodeJS.ProcessEnv = process.env, refr
     status.target_image = updateTargetImage(inspect, env);
     status.image_id = String((response.json as { Image?: unknown }).Image ?? '');
     status.releases_supported = officialUpdateImage(status.target_image);
-    const catalog = status.releases_supported ? await getUpdateReleases(refresh) : null;
+    const catalog = status.releases_supported && !runtimeOnly ? await getUpdateReleases(refresh) : null;
     status.releases = catalog?.releases ?? [];
     status.release_check_error = catalog?.error ?? false;
+    status.release_check_failures = catalog?.failures ?? [];
     status.checked_at = catalog?.checked_at ?? null;
     status.latest_version = status.releases[0]?.version ?? '';
     const imageResponse = await dockerRequest('GET', `/images/${encodeURIComponent(status.image_id)}/json`, {

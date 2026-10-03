@@ -449,7 +449,9 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   router.get('/admin/system-update', async (c) => {
     c.header('Cache-Control', 'no-store');
     if (!updateEnabled()) return c.json({ error: 'system_update_disabled' }, 503);
-    return c.json(await getUpdateStatus(process.env, c.req.query('check') === 'true'));
+    return c.json(
+      await getUpdateStatus(process.env, c.req.query('check') === 'true', c.req.query('runtime') === 'true'),
+    );
   });
 
   router.get('/admin/system-update/tasks/:id', async (c) => {

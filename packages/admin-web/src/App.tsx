@@ -134,7 +134,10 @@ function ControlPlane({
           const started = await controlPlane.api.startSystemUpdate(tag);
           message.success(t('settings.updateRunning'));
           const outcome = await waitForSystemUpdate(
-            controlPlane.api,
+            {
+              systemUpdate: () => controlPlane.api.systemUpdate(false, true),
+              systemUpdateTask: controlPlane.api.systemUpdateTask,
+            },
             started.container_id || before,
             started.updater_id,
           );

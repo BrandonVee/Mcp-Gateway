@@ -10,6 +10,10 @@ import {
   parseImageTags,
   fetchPublishedReleases,
   stableVersion,
+  createReleaseCatalog,
+  createReleaseDispatcher,
+  ReleaseLookupError,
+  releaseFailureReason,
 } from '../packages/auth-server/src/update-releases';
 import {
   getUpdateStatus,
@@ -123,6 +127,9 @@ test('status, cached release checks and selected updates use the running image a
   });
   await new Promise<void>((resolve) => server.listen(socket, resolve));
   try {
+    const runtimeStatus = await getUpdateStatus(env, false, true);
+    assert.equal(runtimeStatus.container_id, 'old');
+    assert.equal(checks, 0, 'replacement polls must not wait for internet metadata');
     const status = await getUpdateStatus(env);
     assert.equal(status.version, '0.5.2');
     assert.equal(status.container_ready, true);
@@ -130,7 +137,7 @@ test('status, cached release checks and selected updates use the running image a
     assert.equal(status.update_available, true);
     assert.equal(status.release_check_error, false);
     await getUpdateStatus(env);
-    assert.equal(checks, 1);
+    assert.equal(checks, 2);
     currentDigest = digest;
     assert.equal((await getUpdateStatus(env)).update_available, false);
     await assert.rejects(startUpdate(env, 'v999.0.0'), /invalid_update_version/);
@@ -195,13 +202,19 @@ test('GitHub failures fall back to published Docker Hub digests without requirin
   assert.throws(() => parseImageTags({ results: null }));
   await assert.rejects(
     fetchPublishedReleases(async () => new Response('{}', { status: 429 })),
-    /image version check failed/,
+    (error: unknown) =>
+      error instanceof ReleaseLookupError &&
+      error.failures.length === 2 &&
+      error.failures.every((failure) => failure.reason === 'rate_limited' && failure.http_status === 429),
   );
   await assert.rejects(
     fetchPublishedReleases(async () => {
       throw new Error('network unavailable');
     }),
-    /network unavailable/,
+    (error: unknown) =>
+      error instanceof ReleaseLookupError &&
+      error.failures.length === 2 &&
+      error.failures.every((failure) => failure.reason === 'network'),
   );
 });
 
@@ -239,4 +252,118 @@ test('worker status distinguishes running, failed, removed and unrelated Docker 
     await new Promise<void>((resolve) => server.close(() => resolve()));
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('a slow or unreachable source cannot delay the other successful catalog', async () => {
+  const releases = await fetchPublishedReleases(async (url, init) => {
+    if (String(url).includes('api.github.com'))
+      return new Promise<Response>((_resolve, reject) =>
+        init?.signal?.addEventListener('abort', () => reject(new Error('cancelled'))),
+      );
+    return new Response(JSON.stringify({ results: [{ name: 'v0.5.4', tag_status: 'active', digest }] }));
+  });
+  assert.equal(releases[0].version, '0.5.4');
+});
+
+test('manual checks bypass failure cooldown and failed checks keep cached data explicitly stale', async () => {
+  let time = 100_000,
+    calls = 0,
+    failing = false;
+  const failure = new ReleaseLookupError([{ source: 'dockerhub', reason: 'dns' }]);
+  const catalog = createReleaseCatalog(
+    async () => {
+      calls++;
+      if (failing) throw failure;
+      return parseReleases([release('v0.5.4')]);
+    },
+    () => time,
+  );
+  assert.equal((await catalog()).error, false);
+  await catalog();
+  assert.equal(calls, 1);
+  failing = true;
+  const stale = await catalog(true);
+  assert.equal(stale.error, true);
+  assert.equal(stale.releases[0].version, '0.5.4');
+  assert.deepEqual(stale.failures, failure.failures);
+  await catalog();
+  assert.equal(calls, 2);
+  failing = false;
+  assert.equal((await catalog(true)).error, false);
+  assert.equal(calls, 3);
+  failing = true;
+  await catalog(true);
+  time += 30_001;
+  assert.equal((await catalog()).error, true);
+  assert.equal(calls, 5, 'failed manual checks must not revert to a fresh cache after cooldown');
+});
+
+test('failure categories preserve useful causes without returning exception text or proxy credentials', () => {
+  assert.equal(releaseFailureReason(new DOMException('timed out', 'TimeoutError')), 'timeout');
+  assert.equal(releaseFailureReason(new Error('fetch failed', { cause: { code: 'ENOTFOUND' } })), 'dns');
+  assert.equal(releaseFailureReason(new Error('fetch failed', { cause: { code: 'CERT_HAS_EXPIRED' } })), 'tls');
+  assert.equal(
+    releaseFailureReason({ cause: { errors: [{ code: 'ENETUNREACH' }, { code: 'ETIMEDOUT' }] } }),
+    'timeout',
+  );
+  assert.equal(releaseFailureReason(new Error('secret proxy credentials')), 'network');
+});
+
+test('version request transport honors configured HTTP proxy and NO_PROXY without changing global requests', async () => {
+  let tunneled = 0;
+  const proxy = createServer((_request, response) => response.writeHead(500).end());
+  proxy.on('connect', (request, socket) => {
+    tunneled++;
+    assert.equal(request.url, 'catalog.example.test:80');
+    socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+    socket.once('data', () =>
+      socket.end(
+        'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 16\r\nConnection: close\r\n\r\n{"via":"proxy"} ',
+      ),
+    );
+  });
+  const direct = createServer((_request, response) => response.end('direct'));
+  await Promise.all([
+    new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve)),
+    new Promise<void>((resolve) => direct.listen(0, '127.0.0.1', resolve)),
+  ]);
+  const proxyPort = (proxy.address() as { port: number }).port;
+  const directPort = (direct.address() as { port: number }).port;
+  const transport = createReleaseDispatcher({ HTTP_PROXY: `http://127.0.0.1:${proxyPort}`, NO_PROXY: '127.0.0.1' });
+  try {
+    const proxied = await fetch('http://catalog.example.test/releases', { dispatcher: transport } as RequestInit);
+    assert.deepEqual(await proxied.json(), { via: 'proxy' });
+    const bypassed = await fetch(`http://127.0.0.1:${directPort}/releases`, { dispatcher: transport } as RequestInit);
+    assert.equal(await bypassed.text(), 'direct');
+    assert.equal(tunneled, 1);
+  } finally {
+    await transport.close();
+    await Promise.all([
+      new Promise<void>((resolve) => proxy.close(() => resolve())),
+      new Promise<void>((resolve) => direct.close(() => resolve())),
+    ]);
+  }
+});
+
+test('invalid proxy schemes are rejected without exposing credentials', () => {
+  assert.throws(
+    () => createReleaseDispatcher({ HTTPS_PROXY: 'socks5://user:secret@127.0.0.1:1080' }),
+    /^Error: invalid_release_proxy$/,
+  );
+});
+
+test('response-body connection failures remain network failures rather than invalid version metadata', async () => {
+  await assert.rejects(
+    fetchPublishedReleases(
+      async () =>
+        ({
+          ok: true,
+          json: async () => {
+            throw new Error('body lost', { cause: { code: 'ECONNRESET' } });
+          },
+        }) as Response,
+    ),
+    (error: unknown) =>
+      error instanceof ReleaseLookupError && error.failures.every((failure) => failure.reason === 'network'),
+  );
 });

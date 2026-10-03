@@ -168,8 +168,10 @@ export function apiForSession(session?: PlatformSession) {
         method: 'PUT',
         body: JSON.stringify(body),
       }),
-    systemUpdate: (check = false) =>
-      request<SystemUpdateStatus>(`/api/admin/system-update${check ? '?check=true' : ''}`),
+    systemUpdate: (check = false, runtimeOnly = false) =>
+      request<SystemUpdateStatus>(
+        `/api/admin/system-update?${new URLSearchParams({ check: String(check), runtime: String(runtimeOnly) })}`,
+      ),
     systemUpdateTask: (id: string) =>
       request<{ status: 'running' | 'succeeded' | 'failed' | 'missing' | 'unknown' }>(
         `/api/admin/system-update/tasks/${encodeURIComponent(id)}`,

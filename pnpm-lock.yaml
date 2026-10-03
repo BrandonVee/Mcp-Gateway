@@ -87,6 +87,9 @@ importers:
       pg:
         specifier: ^8.23.0
         version: 8.23.0
+      undici:
+        specifier: ^7.29.1
+        version: 7.29.1
       zod:
         specifier: ^3.25.76
         version: 3.25.76

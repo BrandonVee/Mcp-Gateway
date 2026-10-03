@@ -398,7 +398,12 @@ export function SettingsPage({
                       </strong>
                       <p>
                         {update.latest_version
-                          ? t('settings.updateLatestVersion', { version: update.latest_version })
+                          ? t(
+                              update.release_check_error
+                                ? 'settings.updateCachedVersion'
+                                : 'settings.updateLatestVersion',
+                              { version: update.latest_version },
+                            )
                           : t('settings.updateLatestUnknown')}
                       </p>
                       <Tag
@@ -422,6 +427,16 @@ export function SettingsPage({
                                   : 'settings.updateComparisonUnknown',
                         )}
                       </Tag>
+                      {update.release_check_error &&
+                        update.release_check_failures?.map((failure) => (
+                          <p key={failure.source}>
+                            {t('settings.updateSourceFailure', {
+                              source: failure.source === 'github' ? 'GitHub' : 'Docker Hub',
+                              reason: t(`settings.updateFailure.${failure.reason}`),
+                            })}
+                            {failure.http_status ? ` (HTTP ${failure.http_status})` : ''}
+                          </p>
+                        ))}
                       <p>{t('settings.updateImage', { image: update.image || '—' })}</p>
                       <p>{t('settings.updateContainer', { container: update.container_name || '—' })}</p>
                     </div>
