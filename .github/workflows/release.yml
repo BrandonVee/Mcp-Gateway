@@ -121,6 +121,7 @@ jobs:
           context: .
           file: Dockerfile.production
           target: app
+          build-args: MCP_BUILD_VERSION=${{ steps.release.outputs.version }}
           # A dry run stays on one platform: the docker exporter cannot load a manifest list.
           platforms: ${{ inputs.dry_run && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ inputs.dry_run != true }}

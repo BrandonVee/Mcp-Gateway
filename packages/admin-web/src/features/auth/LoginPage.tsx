@@ -245,7 +245,7 @@ export function LoginPage({
                 {t('auth.signup.switchToLogin')}
               </Button>
             ) : registrationEnabled ? (
-              <Button type="link" onClick={() => switchMode('signup')}>
+              <Button disabled={busy} type="link" onClick={() => switchMode('signup')}>
                 {t('auth.signup.switchToSignup')}
               </Button>
             ) : null}

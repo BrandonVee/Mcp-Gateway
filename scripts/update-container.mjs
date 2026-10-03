@@ -74,7 +74,7 @@ async function pull() {
   const digest = at >= 0;
   const tagged = !digest && colon > targetImage.lastIndexOf('/');
   const repo = tagged ? targetImage.slice(0, colon) : targetImage;
-  const tag = tagged ? targetImage.slice(colon + 1) : 'latest';
+  const tag = digest ? '' : tagged ? targetImage.slice(colon + 1) : 'latest';
   for (let attempt = 1; attempt <= 2; attempt++) {
     log(`pulling ${repo}:${tag} (attempt ${attempt})`);
     const response = await request('POST', '/images/create', {
@@ -114,7 +114,7 @@ function createSpec(inspect, imageId) {
   return {
     Image: imageId,
     Env: inspect.Config?.Env ?? [],
-    Labels: inspect.Config?.Labels ?? {},
+    Labels: { ...(inspect.Config?.Labels ?? {}), 'com.mcp.update.image': targetImage },
     HostConfig: hostConfig,
     NetworkingConfig: { EndpointsConfig: endpointsConfig },
   };
@@ -160,34 +160,38 @@ async function main() {
   await request('DELETE', `/containers/${rollbackName}`, { query: { force: 'true' } }).catch(() => undefined);
   const renamed = await request('POST', `/containers/${oldId}/rename`, { query: { name: rollbackName } });
   if (!ok(renamed)) throw new Error(`cannot rename ${name}: ${renamed.text.slice(0, 200)}`);
-  await request('POST', `/containers/${oldId}/stop`, { query: { t: '15' } }).catch(() => undefined);
-  log('stopped the previous container');
+  let newId;
+  try {
+    const stopped = await request('POST', `/containers/${oldId}/stop`, { query: { t: '15' } });
+    if (!ok(stopped)) throw new Error(`cannot stop ${name}: ${stopped.text.slice(0, 200)}`);
+    log('stopped the previous container');
 
-  const created = await request('POST', '/containers/create', {
-    query: { name },
-    body: createSpec(inspect, imageId),
-  });
-  const newId = json(created)?.Id;
-  if (!ok(created) || !newId) throw new Error(`cannot create ${name}: ${created.text.slice(0, 200)}`);
-  const started = await request('POST', `/containers/${newId}/start`);
-  if (!ok(started)) throw new Error(`cannot start ${name}: ${started.text.slice(0, 200)}`);
-  log(`started ${newId}`);
-
-  if (await waitForHealth(hostPort(inspect))) {
-    await request('DELETE', `/containers/${oldId}`, { query: { force: 'true' } }).catch(() => undefined);
-    log(`update complete: ${name} now runs ${imageId}`);
+    const created = await request('POST', '/containers/create', {
+      query: { name },
+      body: createSpec(inspect, imageId),
+    });
+    newId = json(created)?.Id;
+    if (!ok(created) || !newId) throw new Error(`cannot create ${name}: ${created.text.slice(0, 200)}`);
+    const started = await request('POST', `/containers/${newId}/start`);
+    if (!ok(started)) throw new Error(`cannot start ${name}: ${started.text.slice(0, 200)}`);
+    log(`started ${newId}`);
+    if (!(await waitForHealth(hostPort(inspect)))) throw new Error('new container never became healthy');
+  } catch (error) {
+    // Creation/start failures must restore the previous container too.
+    log(`${error instanceof Error ? error.message : String(error)}; rolling back`);
+    if (newId) await request('DELETE', `/containers/${newId}`, { query: { force: 'true' } }).catch(() => undefined);
+    const restored = await request('POST', `/containers/${oldId}/rename`, { query: { name } }).catch(() => undefined);
+    const restarted = await request('POST', `/containers/${oldId}/start`).catch(() => undefined);
+    log(
+      restored && ok(restored) && restarted && ok(restarted)
+        ? 'rolled back to the previous container'
+        : 'rollback failed: run deploy.sh on the host',
+    );
+    process.exitCode = 1;
     return;
   }
-
-  // Roll back: drop the replacement and bring the previous container back.
-  log('new container never became healthy; rolling back');
-  await request('DELETE', `/containers/${newId}`, { query: { force: 'true' } }).catch(() => undefined);
-  await request('POST', `/containers/${oldId}/rename`, { query: { name } }).catch(() => undefined);
-  const restarted = await request('POST', `/containers/${oldId}/start`).catch(() => undefined);
-  log(
-    restarted && ok(restarted) ? 'rolled back to the previous container' : 'rollback failed: run deploy.sh on the host',
-  );
-  process.exitCode = 1;
+  await request('DELETE', `/containers/${oldId}`, { query: { force: 'true' } }).catch(() => undefined);
+  log(`update complete: ${name} now runs ${imageId}`);
 }
 
 main().catch((error) => {

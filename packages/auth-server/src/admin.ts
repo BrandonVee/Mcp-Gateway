@@ -25,8 +25,7 @@ import {
 } from './schema.js';
 import { randomUUID } from 'node:crypto';
 import {
-  normalizeUpstreamEndpoint,
-  gatewayPublicUrl,
+  normalizeUpstreamHost,
   adminWebUrl,
   databaseSettingsEnabled,
   systemConfigured,
@@ -36,10 +35,11 @@ import {
   upstreamAllowlistEnabled,
 } from '@mcp/shared';
 import { encryptCredential } from './credential-crypto.js';
-import { getUpdateStatus, startUpdate, updateEnabled } from './system-update.js';
+import { DockerError, getUpdateStatus, startUpdate, updateEnabled } from './system-update.js';
 import { limitLoginAccount } from './rate-limit.js';
 import { trustedAdminBearerClient } from './admin-bearer.js';
-import { currentSystemSettings, saveSystemSettings } from './system-settings.js';
+import { addUpstreamHost, currentSystemSettings, saveSystemSettings } from './system-settings.js';
+import { validateMcpEndpoint } from './upstream-endpoint.js';
 import { systemOptionDefaults, registrationEnabled } from '@mcp/shared';
 import { registerMonitoringRoutes } from './monitoring-api.js';
 import { revokeUserConnection } from './connection-lifecycle.js';
@@ -62,13 +62,34 @@ const serverName = z
   .regex(SERVER_NAME_RE, NAME_MESSAGE);
 const serverDescription = z.string({ invalid_type_error: DESCRIPTION_MESSAGE }).max(2000, DESCRIPTION_MESSAGE);
 const signupAccess = z.boolean({ invalid_type_error: 'signup_access must be a boolean' });
+const userCreateSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .regex(/^[a-zA-Z0-9._-]{2,64}$/, 'invalid_username'),
+  password: z.string().min(12, 'invalid_password').max(256, 'invalid_password'),
+  role: z.enum(['admin', 'user']).default('user'),
+  servers: z.array(z.string()).optional(),
+});
+const instanceId = z
+  .string({ invalid_type_error: 'invalid_instance_payload' })
+  .trim()
+  .max(256, 'invalid_instance_payload');
+const instanceCreateSchema = z.object({
+  id: instanceId.optional(),
+  url: z.string({ required_error: 'invalid_upstream_endpoint', invalid_type_error: 'invalid_upstream_endpoint' }),
+});
+const instancePatchSchema = z.object({
+  url: z.string({ invalid_type_error: 'invalid_upstream_endpoint' }).optional(),
+  enabled: z.boolean({ invalid_type_error: 'invalid_instance_payload' }).optional(),
+});
 const serverCreateSchema = z
   .object({
     name: serverName,
     display_name: z.string({ invalid_type_error: 'display_name must be a string' }).optional(),
     description: serverDescription.optional(),
     signup_access: signupAccess.optional(),
-    instances: z.array(z.object({ id: z.string().optional(), url: z.string().optional() })).optional(),
+    instances: z.array(instanceCreateSchema).optional(),
   })
   .passthrough();
 const serverPatchSchema = z
@@ -84,21 +105,6 @@ const serverPatchSchema = z
     signup_access: signupAccess.optional(),
   })
   .passthrough();
-
-function normalizeMcpEndpoint(value: string): string | null {
-  try {
-    const normalized = normalizeUpstreamEndpoint(value);
-    if (!normalized) return null;
-    const url = new URL(normalized);
-    // A Gateway route is a client-facing URL, never an upstream instance.
-    // Accepting it here creates a proxy loop and repeated OAuth challenges.
-    const publicUrl = gatewayPublicUrl();
-    if (publicUrl && url.origin === new URL(publicUrl).origin && /^\/mcp(?:\/|$)/.test(url.pathname)) return null;
-    return normalized;
-  } catch {
-    return null;
-  }
-}
 
 function validOAuthUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false;
@@ -191,7 +197,7 @@ function authSettings(
             ? existing.oauthClientSecret
             : null;
     values.oauthScopes =
-      typeof body.oauth_scopes === 'string' ? body.oauth_scopes.trim() : (existing?.oauthScopes ?? null);
+      typeof body.oauth_scopes === 'string' ? body.oauth_scopes.trim() || null : (existing?.oauthScopes ?? null);
     values.oauthResource =
       body.oauth_resource === ''
         ? null
@@ -396,6 +402,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     return c.json({
       managed: process.env.SYSTEM_CONFIG_MODE !== 'file',
       configured: systemConfigured(),
+      public_url_requires_https: process.env.NODE_ENV === 'production',
       ...systemOptionDefaults,
       registration_enabled: registrationEnabled(),
       ...(databaseSettingsEnabled()
@@ -413,13 +420,36 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const settings = normalizeSystemSettings(await c.req.json().catch(() => null));
     if (!settings) return c.json({ error: 'invalid_system_settings' }, 400);
     await saveSystemSettings(settings);
-    return c.json({ managed: true, configured: true, ...settings });
+    return c.json({
+      managed: true,
+      configured: true,
+      public_url_requires_https: process.env.NODE_ENV === 'production',
+      ...settings,
+    });
+  });
+
+  router.post('/admin/system-settings/upstream-hosts', async (c) => {
+    if (process.env.SYSTEM_CONFIG_MODE === 'file')
+      return c.json({ error: 'system_settings_managed_by_environment' }, 409);
+    const body = await c.req.json().catch(() => null);
+    const host = normalizeUpstreamHost(body?.host);
+    if (!host) return c.json({ error: 'invalid_upstream_host' }, 400);
+    if (!systemConfigured()) return c.json({ error: 'system_settings_required' }, 409);
+    const settings = await addUpstreamHost(host);
+    if (!settings) return c.json({ error: 'upstream_host_limit_reached' }, 400);
+    return c.json({
+      managed: true,
+      configured: true,
+      public_url_requires_https: process.env.NODE_ENV === 'production',
+      ...systemOptionDefaults,
+      ...settings,
+    });
   });
 
   router.get('/admin/system-update', async (c) => {
     c.header('Cache-Control', 'no-store');
     if (!updateEnabled()) return c.json({ error: 'system_update_disabled' }, 503);
-    return c.json(await getUpdateStatus());
+    return c.json(await getUpdateStatus(process.env, c.req.query('check') === 'true'));
   });
 
   router.post('/admin/system-update', async (c) => {
@@ -427,8 +457,15 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     try {
       // Returns as soon as the updater container exists: pulling the image
       // happens there, well past the proxy's response timeout.
-      return c.json(await startUpdate(), 202);
+      const body = await c.req.json().catch(() => null);
+      const parsed = z
+        .object({ tag: z.string().max(64).optional() })
+        .strict()
+        .safeParse(body);
+      if (!parsed.success) return c.json({ error: 'invalid_update_version' }, 400);
+      return c.json(await startUpdate(process.env, parsed.data.tag ?? 'latest'), 202);
     } catch (error) {
+      if (error instanceof DockerError) return c.json({ error: error.message }, error.status as 400 | 409 | 503);
       return c.json({ error: 'system_update_failed' }, 503);
     }
   });
@@ -499,22 +536,16 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   });
 
   router.post('/admin/users', async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    const { username, password, role, servers } = body as {
-      username?: string;
-      password?: string;
-      role?: string;
-      servers?: unknown;
-    };
-    if (!username || !/^[a-zA-Z0-9._-]{2,64}$/.test(username))
-      return jsonError(c, 'username must be 2-64 chars [a-zA-Z0-9._-]');
-    if (!password || password.length < 12) return jsonError(c, 'password must be at least 12 characters');
-    const userRole = role ?? 'user';
-    if (userRole !== 'admin' && userRole !== 'user') return jsonError(c, 'role must be admin or user');
-    if (servers !== undefined && (!Array.isArray(servers) || !servers.every((name) => typeof name === 'string'))) {
-      return jsonError(c, 'servers must be an array of server names');
+    const parsed = userCreateSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) {
+      const field = parsed.error.issues[0]?.path[0];
+      return jsonError(
+        c,
+        field === 'username' ? 'invalid_username' : field === 'password' ? 'invalid_password' : 'invalid_user_payload',
+      );
     }
-    const requestedServers = [...new Set((servers ?? []) as string[])];
+    const { username, password, role: userRole, servers } = parsed.data;
+    const requestedServers = userRole === 'admin' ? [] : [...new Set(servers ?? [])];
     if (requestedServers.includes('*') && requestedServers.length !== 1)
       return jsonError(c, 'wildcard must be the only server grant');
     for (const name of requestedServers) {
@@ -525,7 +556,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         .where(eq(mcpServers.name, name))
         .limit(1);
       if (!SERVER_NAME_RE.test(name) || !server) {
-        return jsonError(c, `unknown server: ${name}`);
+        return c.json({ error: 'unknown_server', server: name }, 400);
       }
     }
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
@@ -533,19 +564,29 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       return jsonError(c, 'username already exists', 409);
     }
     const now = Date.now();
-    const [created] = await db
-      .insert(users)
-      .values({
-        username,
-        passwordHash: scryptHash(password),
-        role: userRole,
-        disabled: false,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning({ id: users.id });
+    const created = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(users)
+        .values({
+          username,
+          passwordHash: scryptHash(password),
+          role: userRole,
+          allServers: userRole !== 'admin' && requestedServers.includes('*'),
+          disabled: false,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoNothing({ target: users.username })
+        .returning({ id: users.id });
+      if (!created) return null;
+      if (userRole !== 'admin' && !requestedServers.includes('*') && requestedServers.length)
+        await tx
+          .insert(userServerAccess)
+          .values(requestedServers.map((serverName) => ({ userId: created.id, serverName, createdAt: now })));
+      return created;
+    });
+    if (!created) return jsonError(c, 'username already exists', 409);
     const id = created.id;
-    if (userRole !== 'admin') await replaceUserServers(id, requestedServers);
     return c.json(
       { id, username, role: userRole, disabled: false, servers: userRole === 'admin' ? ['*'] : requestedServers },
       201,
@@ -583,10 +624,10 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       const [server] = await db
         .select({ name: mcpServers.name })
         .from(mcpServers)
-        .where(and(eq(mcpServers.name, name), eq(mcpServers.enabled, true)))
+        .where(eq(mcpServers.name, name))
         .limit(1);
       if (!SERVER_NAME_RE.test(name) || !server) {
-        return jsonError(c, `unknown or disabled server: ${name}`);
+        return c.json({ error: 'unknown_server', server: name }, 400);
       }
     }
     await replaceUserServers(id, names);
@@ -777,6 +818,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         oauthResource: mcpServers.oauthResource,
         oauthIssuer: mcpServers.oauthIssuer,
         oauthClientAuthMethod: mcpServers.oauthClientAuthMethod,
+        oauthClientSecretConfigured: sql<boolean>`${mcpServers.oauthClientSecret} IS NOT NULL`,
         createdAt: mcpServers.createdAt,
         userCount: count(userServerAccess.userId),
       })
@@ -807,6 +849,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
           oauth_resource: row.oauthResource,
           oauth_issuer: row.oauthIssuer,
           oauth_client_auth_method: row.oauthClientAuthMethod,
+          oauth_client_secret_configured: row.oauthClientSecretConfigured,
           user_count: Number(row.userCount) + Number(wildcardUserCount),
           created_at: row.createdAt,
           instances,
@@ -837,33 +880,46 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const requestedInstances = body.instances ?? [];
     const normalizedInstances: Array<{ id: string; url: string }> = [];
     for (const instance of requestedInstances) {
-      const url = typeof instance.url === 'string' ? normalizeMcpEndpoint(instance.url) : null;
-      if (!url) return jsonError(c, `invalid or gateway self-referential MCP endpoint URL: ${instance.url ?? ''}`);
-      normalizedInstances.push({ id: instance.id?.trim() || randomUUID(), url });
+      const endpoint = validateMcpEndpoint(instance.url);
+      if (endpoint.error) return c.json(endpoint, 400);
+      normalizedInstances.push({ id: instance.id?.trim() || randomUUID(), url: endpoint.url });
     }
-    await db.transaction(async (tx) => {
-      await tx.insert(mcpServers).values({
-        name,
-        displayName,
-        description,
-        enabled: true,
-        signupAccess: body.signup_access ?? false,
-        createdAt: now,
-        updatedAt: now,
-        ...auth.values,
+    try {
+      await db.transaction(async (tx) => {
+        await tx.insert(mcpServers).values({
+          name,
+          displayName,
+          description,
+          enabled: true,
+          signupAccess: body.signup_access ?? false,
+          createdAt: now,
+          updatedAt: now,
+          ...auth.values,
+        });
+        if (normalizedInstances.length) {
+          await tx.insert(mcpServerInstances).values(
+            normalizedInstances.map((instance) => ({
+              ...instance,
+              serverName: name,
+              enabled: true,
+              createdAt: now,
+              updatedAt: now,
+            })),
+          );
+        }
       });
-      if (normalizedInstances.length) {
-        await tx.insert(mcpServerInstances).values(
-          normalizedInstances.map((instance) => ({
-            ...instance,
-            serverName: name,
-            enabled: true,
-            createdAt: now,
-            updatedAt: now,
-          })),
+    } catch (error) {
+      const failure = error as { code?: string; constraint?: string; cause?: { code?: string; constraint?: string } };
+      if (failure.code === '23505' || failure.cause?.code === '23505')
+        return jsonError(
+          c,
+          (failure.constraint ?? failure.cause?.constraint) === 'mcp_server_instances_pkey'
+            ? 'instance_already_exists'
+            : 'server already exists',
+          409,
         );
-      }
-    });
+      throw error;
+    }
     return c.json(
       {
         name,
@@ -886,13 +942,20 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       .where(eq(mcpServers.name, serverName))
       .limit(1);
     if (!server) return jsonError(c, 'server not found', 404);
-    const body = (await c.req.json().catch(() => ({}))) as { id?: string; url?: string };
-    const url = typeof body.url === 'string' ? normalizeMcpEndpoint(body.url) : null;
-    if (!url)
-      return jsonError(c, 'url must be an http(s) upstream MCP endpoint and must not point back to the Gateway');
+    const parsed = instanceCreateSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return jsonError(c, parsed.error.issues[0]?.message ?? 'invalid_instance_payload');
+    const body = parsed.data;
+    const endpoint = validateMcpEndpoint(body.url);
+    if (endpoint.error) return c.json(endpoint, 400);
+    const url = endpoint.url;
     const id = body.id?.trim() || randomUUID();
     const now = Date.now();
-    await db.insert(mcpServerInstances).values({ id, serverName, url, enabled: true, createdAt: now, updatedAt: now });
+    const inserted = await db
+      .insert(mcpServerInstances)
+      .values({ id, serverName, url, enabled: true, createdAt: now, updatedAt: now })
+      .onConflictDoNothing()
+      .returning({ id: mcpServerInstances.id });
+    if (!inserted.length) return jsonError(c, 'instance_already_exists', 409);
     return c.json({ id, server_name: serverName, url, enabled: true }, 201);
   });
 
@@ -904,13 +967,14 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       .where(and(eq(mcpServerInstances.id, id), eq(mcpServerInstances.serverName, name)))
       .limit(1);
     if (!instance) return jsonError(c, 'server instance not found', 404);
-    const body = (await c.req.json().catch(() => ({}))) as { url?: string; enabled?: boolean };
+    const parsed = instancePatchSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return jsonError(c, parsed.error.issues[0]?.message ?? 'invalid_instance_payload');
+    const body = parsed.data;
     const changes: Partial<typeof mcpServerInstances.$inferInsert> = { updatedAt: Date.now() };
     if (body.url !== undefined) {
-      const url = normalizeMcpEndpoint(body.url);
-      if (!url)
-        return jsonError(c, 'url must be an http(s) upstream MCP endpoint and must not point back to the Gateway');
-      changes.url = url;
+      const endpoint = validateMcpEndpoint(body.url);
+      if (endpoint.error) return c.json(endpoint, 400);
+      changes.url = endpoint.url;
     }
     if (body.enabled !== undefined) changes.enabled = body.enabled;
     await db.update(mcpServerInstances).set(changes).where(eq(mcpServerInstances.id, id));
@@ -961,7 +1025,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
                   existing.oauthTokenUrl !== auth.values.oauthTokenUrl ||
                   existing.oauthClientId !== auth.values.oauthClientId ||
                   existing.oauthClientSecret !== auth.values.oauthClientSecret ||
-                  existing.oauthScopes !== auth.values.oauthScopes ||
+                  (existing.oauthScopes ?? '') !== (auth.values.oauthScopes ?? '') ||
                   existing.oauthResource !== auth.values.oauthResource ||
                   existing.oauthIssuer !== auth.values.oauthIssuer ||
                   existing.oauthClientAuthMethod !== auth.values.oauthClientAuthMethod))),

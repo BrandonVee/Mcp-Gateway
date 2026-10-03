@@ -2,8 +2,51 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { applySystemSettings, currentSystemSettings, normalizeUpstreamEndpoint } from '../packages/shared/src/index.js';
 import { refreshServerConfigs, serverConfigs } from '../packages/gateway/src/config.js';
+import { validateMcpEndpoint } from '../packages/auth-server/src/upstream-endpoint.js';
+import { normalizeUpstreamHost } from '../packages/shared/src/index.js';
 
 const endpoint = 'http://38.58.57.4:8765/mcp/hscode';
+
+test('registration distinguishes an untrusted host from malformed URLs and Gateway loops', () => {
+  const env = { MCP_UPSTREAM_ALLOWLIST_ENABLED: 'true', MCP_UPSTREAM_ALLOWED_HOSTS: 'trusted.example.com' };
+  const gateway = 'https://gateway.example.com';
+  assert.deepEqual(validateMcpEndpoint(endpoint, env, gateway), {
+    error: 'upstream_host_not_allowed',
+    host: '38.58.57.4',
+  });
+  assert.deepEqual(validateMcpEndpoint('https://TRUSTED.example.com:8443', env, gateway), {
+    url: 'https://trusted.example.com:8443/mcp',
+  });
+  for (const value of [
+    undefined,
+    42,
+    'invalid',
+    'file:///etc/passwd',
+    'https://user:secret@other.example/mcp',
+    `${endpoint}#fragment`,
+  ])
+    assert.deepEqual(validateMcpEndpoint(value, env, gateway), { error: 'invalid_upstream_endpoint' });
+  for (const path of ['/', '/mcp', '/mcp/service'])
+    assert.deepEqual(validateMcpEndpoint(gateway + path, env, gateway), { error: 'gateway_self_referential_endpoint' });
+  assert.deepEqual(validateMcpEndpoint(endpoint, { ...env, MCP_UPSTREAM_ALLOWLIST_ENABLED: 'false' }, gateway), {
+    url: endpoint,
+  });
+});
+
+test('quick-add accepts hostnames and IPs while rejecting schemes, ports and paths', () => {
+  for (const host of ['mcp-a', '192.168.1.10', 'api.example.com']) assert.equal(normalizeUpstreamHost(host), host);
+  assert.equal(normalizeUpstreamHost(' API.Example.Com '), 'api.example.com');
+  for (const value of [
+    null,
+    42,
+    '',
+    'https://api.example.com',
+    'api.example.com:443',
+    'api.example.com/mcp',
+    'api..example.com',
+  ])
+    assert.equal(normalizeUpstreamHost(value), null);
+});
 
 test('explicit allowlist policy applies in both production and development', () => {
   for (const NODE_ENV of ['production', 'development']) {

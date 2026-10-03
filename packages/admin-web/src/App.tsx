@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
-import { App as AntApp, ConfigProvider } from 'antd';
+import { Alert, App as AntApp, Button, ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
 import { AppShell } from './components/AppShell';
@@ -7,7 +7,7 @@ import { BootScreen } from './components/BootScreen';
 import { DataLoadError, PageSkeleton } from './components/DataLoadState';
 import { useControlPlane } from './hooks/useControlPlane';
 import { appTheme } from './theme';
-import type { DialogState, PlatformSession, View } from './types';
+import type { DialogState, PlatformSession, SystemSettings, View } from './types';
 import { I18nProvider, useI18n } from './i18n';
 import { usePlatformSession } from './features/auth/usePlatformSession';
 
@@ -115,15 +115,16 @@ function ControlPlane({
   }, [controlPlane.settings]);
   const [dialog, setDialog] = useState<DialogState>({ type: null });
   const [updating, setUpdating] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
 
   // An update replaces this container, so wait for a new container id instead of
   // trusting the response: the page reloads when the replacement answers.
   const waitForReplacement = async (containerId: string) => {
-    for (let attempt = 0; attempt < 40; attempt++) {
+    for (let attempt = 0; attempt < 200; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, 3_000));
       try {
         const status = await controlPlane.api.systemUpdate();
-        if (status.container_id && status.container_id !== containerId) return true;
+        if (status.container_id && status.container_id !== containerId && status.container_ready !== false) return true;
       } catch {
         /* The application is restarting. */
       }
@@ -131,18 +132,20 @@ function ControlPlane({
     return false;
   };
 
-  const startUpdate = () => {
+  const startUpdate = (tag: string) => {
     const before = controlPlane.update?.container_id ?? '';
     modal.confirm({
       title: t('settings.updateConfirmTitle'),
-      content: t('settings.updateConfirmBody'),
+      content: t('settings.updateConfirmBody', {
+        version: tag === 'latest' ? controlPlane.update?.target_image || t('settings.updateLatest') : tag,
+      }),
       okText: t('settings.updateOk'),
       okButtonProps: { danger: true },
       cancelText: t('common.cancel'),
       onOk: async () => {
         setUpdating(true);
         try {
-          const started = await controlPlane.api.startSystemUpdate();
+          const started = await controlPlane.api.startSystemUpdate(tag);
           message.success(t('settings.updateRunning'));
           if (!(await waitForReplacement(started.container_id || before))) {
             message.error(t('settings.updateTimeout'));
@@ -161,12 +164,38 @@ function ControlPlane({
 
   const execute = async (operation: () => Promise<unknown>, success: string) => {
     try {
-      await controlPlane.execute(operation);
+      const result = await controlPlane.execute(operation);
       message.success(success);
+      if (result.refreshError) message.warning(t('common.savedRefreshFailed'));
       setDialog({ type: null });
+      return true;
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('common.operationFailed'));
+      return false;
     }
+  };
+  const confirmResult = async (result: Promise<boolean>) => {
+    if (!(await result)) throw new Error('Operation failed');
+  };
+  const addUpstreamHost = async (host: string) => {
+    const result = await controlPlane.execute(() => controlPlane.addUpstreamHost(host));
+    message.success(t('serverDialog.upstreamHostAdded', { host }));
+    if (result.refreshError) message.warning(t('common.savedRefreshFailed'));
+  };
+  const navigate = (next: View) => {
+    if (next === view || controlPlane.busy) return;
+    if (settingsDirty) {
+      modal.confirm({
+        title: t('settings.discardTitle'),
+        content: t('settings.discardHelp'),
+        okText: t('settings.discard'),
+        cancelText: t('common.cancel'),
+        onOk: () => {
+          setSettingsDirty(false);
+          setView(next);
+        },
+      });
+    } else setView(next);
   };
 
   const refresh = async () => {
@@ -188,8 +217,8 @@ function ControlPlane({
       serverCount={controlPlane.servers.length}
       refreshing={controlPlane.busy}
       loggingOut={controlPlane.loggingOut}
-      lastUpdatedAt={controlPlane.lastUpdatedAt}
-      onNavigate={setView}
+      health={controlPlane.health}
+      onNavigate={navigate}
       onRefresh={refresh}
       onLogout={async () => {
         try {
@@ -209,22 +238,50 @@ function ControlPlane({
         />
       ) : (
         <>
+          {controlPlane.loadError && (
+            <Alert
+              type="warning"
+              showIcon
+              message={t('common.dataMayBeStale')}
+              description={controlPlane.loadError}
+              action={
+                <Button onClick={() => void refresh()} loading={controlPlane.busy}>
+                  {t('common.refresh')}
+                </Button>
+              }
+            />
+          )}
           {view === 'settings' && controlPlane.settings && (
             <SettingsPage
               settings={controlPlane.settings}
               update={controlPlane.update}
               updating={updating}
-              onSave={(body) => execute(() => controlPlane.api.saveSystemSettings(body), t('settings.saved'))}
+              onSave={async (body) => {
+                let saved: SystemSettings | null = null;
+                const success = await execute(async () => {
+                  saved = await controlPlane.saveSystemSettings(body);
+                }, t('settings.saved'));
+                return success ? saved : null;
+              }}
+              onDirtyChange={setSettingsDirty}
               onUpdate={startUpdate}
+              onCheckUpdate={controlPlane.refreshUpdate}
             />
           )}
           {view === 'overview' && (
-            <OverviewPage users={controlPlane.users} servers={controlPlane.servers} health={controlPlane.health} />
+            <OverviewPage
+              users={controlPlane.users}
+              servers={controlPlane.servers}
+              health={controlPlane.health}
+              authHealth={controlPlane.authHealth}
+              settings={controlPlane.settings}
+            />
           )}
 
           {view === 'users' && (
             <UsersPage
               users={controlPlane.users}
+              busy={controlPlane.busy}
               onCreate={() => setDialog({ type: 'create-user' })}
               onAssign={(user) => setDialog({ type: 'assign-user', user })}
               onPassword={(user) => setDialog({ type: 'reset-password', user })}
@@ -242,7 +299,7 @@ function ControlPlane({
                     okText: t('app.disableSign'),
                     okButtonProps: { danger: true },
                     cancelText: t('common.cancel'),
-                    onOk: update,
+                    onOk: () => confirmResult(update()),
                   });
               }}
               onDelete={(user) =>
@@ -252,7 +309,7 @@ function ControlPlane({
                   okText: t('app.delete'),
                   okButtonProps: { danger: true },
                   cancelText: t('common.cancel'),
-                  onOk: () => execute(() => controlPlane.api.deleteUser(user.id), t('app.userDeleted')),
+                  onOk: () => confirmResult(execute(() => controlPlane.api.deleteUser(user.id), t('app.userDeleted'))),
                 })
               }
             />
@@ -262,6 +319,10 @@ function ControlPlane({
             <ServersPage
               servers={controlPlane.servers}
               users={controlPlane.users}
+              busy={controlPlane.busy}
+              settings={controlPlane.settings}
+              onAddUpstreamHost={addUpstreamHost}
+              onOpenSettings={() => navigate('settings')}
               onCreate={() => setDialog({ type: 'create-server' })}
               onEdit={(server) => setDialog({ type: 'edit-server', server })}
               onEditInstance={(server, instance) => setDialog({ type: 'edit-instance', server, instance })}
@@ -294,7 +355,12 @@ function ControlPlane({
                   okButtonProps: { danger: true },
                   cancelText: t('common.cancel'),
                   onOk: () =>
-                    execute(() => controlPlane.api.deleteInstance(server.name, instance.id), t('app.instanceDeleted')),
+                    confirmResult(
+                      execute(
+                        () => controlPlane.api.deleteInstance(server.name, instance.id),
+                        t('app.instanceDeleted'),
+                      ),
+                    ),
                 })
               }
               onDelete={(server) =>
@@ -304,7 +370,8 @@ function ControlPlane({
                   okText: t('app.delete'),
                   okButtonProps: { danger: true },
                   cancelText: t('common.cancel'),
-                  onOk: () => execute(() => controlPlane.api.deleteServer(server.name), t('app.serverDeleted')),
+                  onOk: () =>
+                    confirmResult(execute(() => controlPlane.api.deleteServer(server.name), t('app.serverDeleted'))),
                 })
               }
             />
@@ -315,6 +382,7 @@ function ControlPlane({
               users={controlPlane.users}
               servers={controlPlane.servers}
               connections={controlPlane.connections}
+              busy={controlPlane.busy}
               onRevoke={(user, server) =>
                 modal.confirm({
                   title: t('app.revokeUserServerConnection', { user: user.username, server: server.display_name }),
@@ -323,7 +391,12 @@ function ControlPlane({
                   okButtonProps: { danger: true },
                   cancelText: t('common.cancel'),
                   onOk: () =>
-                    execute(() => controlPlane.api.revokeConnection(user.id, server.name), t('app.connectionRevoked')),
+                    confirmResult(
+                      execute(
+                        () => controlPlane.api.revokeConnection(user.id, server.name),
+                        t('app.connectionRevoked'),
+                      ),
+                    ),
                 })
               }
             />
@@ -348,6 +421,8 @@ function ControlPlane({
           <ServerDialogs
             state={dialog}
             users={controlPlane.users}
+            settings={controlPlane.settings}
+            onAddUpstreamHost={addUpstreamHost}
             busy={controlPlane.busy}
             onClose={() => setDialog({ type: null })}
             onCreate={(data) => execute(() => controlPlane.api.createServer(data), t('app.mcpServerRegistered'))}

@@ -24,4 +24,26 @@ export async function saveSystemSettings(settings: SystemSettings): Promise<void
   applySystemSettings(settings);
 }
 
+/** Append to the latest persisted list without replacing unrelated settings. */
+export async function addUpstreamHost(host: string): Promise<SystemSettings | null> {
+  const settings = await db.transaction(async (tx) => {
+    const [row] = await tx.select().from(meta).where(eq(meta.key, 'system_settings')).limit(1).for('update');
+    if (!row) return null;
+    const current = normalizeSystemSettings(JSON.parse(row.value));
+    if (!current) throw new Error('Invalid stored system settings');
+    const next = normalizeSystemSettings({
+      ...current,
+      upstream_hosts: [...new Set([...current.upstream_hosts, host])],
+    });
+    if (!next) return null;
+    await tx
+      .update(meta)
+      .set({ value: JSON.stringify(next) })
+      .where(eq(meta.key, 'system_settings'));
+    return next;
+  });
+  if (settings) applySystemSettings(settings);
+  return settings;
+}
+
 export { currentSystemSettings };

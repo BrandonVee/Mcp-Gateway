@@ -18,9 +18,18 @@ import type {
   McpServer,
   McpInstance,
   ServerAuthInput,
+  SystemSettings,
 } from '../../types';
+import { submitDialog } from '../../utils/operations';
+import { isEndpointUrl, isOAuthUrl, validationRule } from '../../utils/validation';
+import { untrustedUpstreamHost } from './upstream-allowlist';
 
-interface ServerDialogsProps {
+interface UpstreamAllowlistProps {
+  settings: SystemSettings | null;
+  onAddUpstreamHost: (host: string) => Promise<void>;
+}
+
+interface ServerDialogsProps extends UpstreamAllowlistProps {
   state: DialogState;
   users: AdminUser[];
   busy: boolean;
@@ -47,9 +56,9 @@ interface ServerFormValues {
   oauth_token_url?: string;
   oauth_client_id?: string;
   oauth_client_secret?: string;
-  oauth_scopes?: string;
-  oauth_resource?: string;
-  oauth_issuer?: string;
+  oauth_scopes?: string | null;
+  oauth_resource?: string | null;
+  oauth_issuer?: string | null;
   oauth_client_auth_method?: 'none' | 'client_secret_basic' | 'client_secret_post';
 }
 
@@ -70,11 +79,11 @@ export function ServerDialogs(props: ServerDialogsProps) {
   }
 
   if (props.state.type === 'add-instance') {
-    return <AddInstanceDialog {...props} server={props.state.server} />;
+    return <AddInstanceDialog key={props.state.server.name} {...props} server={props.state.server} />;
   }
 
   if (props.state.type === 'configure-server-auth')
-    return <ConfigureAuthDialog {...props} server={props.state.server} />;
+    return <ConfigureAuthDialog key={props.state.server.name} {...props} server={props.state.server} />;
 
   if (props.state.type === 'configure-server-users')
     return <ConfigureUsersDialog key={props.state.server.name} {...props} server={props.state.server} />;
@@ -82,20 +91,26 @@ export function ServerDialogs(props: ServerDialogsProps) {
   return null;
 }
 
-function CreateServerDialog({ busy, onClose, onCreate }: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onCreate'>) {
+function CreateServerDialog({
+  busy,
+  onClose,
+  onCreate,
+  ...allowlist
+}: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onCreate'> & UpstreamAllowlistProps) {
   const { t } = useI18n();
   const [form] = Form.useForm<ServerFormValues>();
 
   const submit = async () => {
-    const values = await form.validateFields();
-    onCreate({
-      name: values.name,
-      display_name: values.displayName || values.name,
-      description: values.description?.trim() ?? '',
-      signup_access: values.signup_access,
-      instances: [{ id: values.instanceId || undefined, url: values.url }],
-      ...authFields(values),
-    });
+    await submitDialog(form, (values) =>
+      onCreate({
+        name: values.name,
+        display_name: values.displayName || values.name,
+        description: values.description?.trim() ?? '',
+        signup_access: values.signup_access,
+        instances: [{ id: values.instanceId || undefined, url: values.url }],
+        ...authFields(values),
+      }),
+    );
   };
 
   return (
@@ -112,6 +127,10 @@ function CreateServerDialog({ busy, onClose, onCreate }: Pick<ServerDialogsProps
       okText={t('serverDialog.registerSync')}
       cancelText={t('common.cancel')}
       confirmLoading={busy}
+      closable={!busy}
+      keyboard={!busy}
+      maskClosable={!busy}
+      cancelButtonProps={{ disabled: busy }}
       onCancel={onClose}
       onOk={submit}
     >
@@ -124,6 +143,7 @@ function CreateServerDialog({ busy, onClose, onCreate }: Pick<ServerDialogsProps
       />
       <Form
         form={form}
+        disabled={busy}
         layout="vertical"
         requiredMark={false}
         initialValues={{
@@ -158,7 +178,11 @@ function CreateServerDialog({ busy, onClose, onCreate }: Pick<ServerDialogsProps
         >
           <Switch />
         </Form.Item>
-        <Form.Item name="instanceId" label={t('serverDialog.instanceIdOptional')}>
+        <Form.Item
+          name="instanceId"
+          label={t('serverDialog.instanceIdOptional')}
+          rules={[{ max: 256, message: t('api.invalidInstancePayload') }]}
+        >
           <Input placeholder={t('serverDialog.leaveBlankGenerateUuid')} />
         </Form.Item>
         <Form.Item
@@ -171,6 +195,7 @@ function CreateServerDialog({ busy, onClose, onCreate }: Pick<ServerDialogsProps
         >
           <Input prefix={<LinkOutlined />} placeholder="https://mcp.example.com/mcp" />
         </Form.Item>
+        <UpstreamAllowlistHint {...allowlist} busy={busy} />
         <AuthFormFields />
       </Form>
     </Modal>
@@ -183,19 +208,54 @@ function CreateServerDialog({ busy, onClose, onCreate }: Pick<ServerDialogsProps
  * any absolute http(s) URL with a host is accepted.
  */
 export function endpointUrlRule(message: string) {
-  return {
-    validator: (_rule: unknown, value: unknown) => {
-      try {
-        const url = new URL(String(value ?? '').trim());
-        // Same shape the backend accepts: absolute http(s), no embedded credentials.
-        if ((url.protocol === 'http:' || url.protocol === 'https:') && url.hostname && !url.username && !url.password)
-          return Promise.resolve();
-      } catch {
-        /* Reported as an invalid URL below. */
-      }
-      return Promise.reject(new Error(message));
-    },
+  return validationRule(isEndpointUrl, message);
+}
+
+function UpstreamAllowlistHint({ settings, onAddUpstreamHost, busy }: UpstreamAllowlistProps & { busy: boolean }) {
+  const { t } = useI18n();
+  const value = Form.useWatch('url');
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<{ host: string; message: string } | null>(null);
+  const host = untrustedUpstreamHost(value, settings);
+  if (!host || !settings) return null;
+
+  const addHost = async () => {
+    setAdding(true);
+    setError(null);
+    try {
+      await onAddUpstreamHost(host);
+    } catch (cause) {
+      setError({ host, message: cause instanceof Error ? cause.message : t('common.operationFailed') });
+    } finally {
+      setAdding(false);
+    }
   };
+
+  return (
+    <Alert
+      type="warning"
+      showIcon
+      className="dialog-alert"
+      message={t('serverDialog.upstreamHostBlocked', { host })}
+      description={
+        (error?.host === host ? error.message : null) ??
+        t(
+          !settings.managed
+            ? 'settings.environmentManaged'
+            : !settings.configured
+              ? 'settings.setupRequired'
+              : 'serverDialog.upstreamQuickAddHelp',
+        )
+      }
+      action={
+        settings.managed && settings.configured ? (
+          <Button size="small" loading={adding} disabled={busy} onClick={() => void addHost()}>
+            {t('serverDialog.addUpstreamHost')}
+          </Button>
+        ) : undefined
+      }
+    />
+  );
 }
 
 function DescriptionField() {
@@ -228,9 +288,13 @@ function EditServerDialog({
       okText={t('serverDialog.saveSettings')}
       cancelText={t('common.cancel')}
       confirmLoading={busy}
+      closable={!busy}
+      keyboard={!busy}
+      maskClosable={!busy}
+      cancelButtonProps={{ disabled: busy }}
       onCancel={onClose}
       onOk={() =>
-        form.validateFields().then((values) =>
+        submitDialog(form, (values) =>
           onEdit(server, {
             name: values.name.trim(),
             display_name: values.display_name.trim(),
@@ -241,6 +305,7 @@ function EditServerDialog({
     >
       <Form
         form={form}
+        disabled={busy}
         layout="vertical"
         requiredMark={false}
         initialValues={{ name: server.name, display_name: server.display_name, description: server.description ?? '' }}
@@ -291,7 +356,9 @@ function EditInstanceDialog({
   busy,
   onClose,
   onEditInstance,
-}: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onEditInstance'> & { server: McpServer; instance: McpInstance }) {
+  ...allowlist
+}: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onEditInstance'> &
+  UpstreamAllowlistProps & { server: McpServer; instance: McpInstance }) {
   const { t } = useI18n();
   const [form] = Form.useForm<{ url: string }>();
   return (
@@ -302,10 +369,14 @@ function EditInstanceDialog({
       okText={t('serverDialog.saveSettings')}
       cancelText={t('common.cancel')}
       confirmLoading={busy}
+      closable={!busy}
+      keyboard={!busy}
+      maskClosable={!busy}
+      cancelButtonProps={{ disabled: busy }}
       onCancel={onClose}
-      onOk={() => form.validateFields().then((values) => onEditInstance(server, instance, { url: values.url.trim() }))}
+      onOk={() => submitDialog(form, (values) => onEditInstance(server, instance, { url: values.url.trim() }))}
     >
-      <Form form={form} layout="vertical" requiredMark={false} initialValues={{ url: instance.url }}>
+      <Form form={form} disabled={busy} layout="vertical" requiredMark={false} initialValues={{ url: instance.url }}>
         <Form.Item label={t('serverDialog.instanceId')}>
           <Input value={instance.id} disabled />
         </Form.Item>
@@ -320,12 +391,13 @@ function EditInstanceDialog({
         >
           <Input prefix={<LinkOutlined />} autoFocus />
         </Form.Item>
+        <UpstreamAllowlistHint {...allowlist} busy={busy} />
       </Form>
     </Modal>
   );
 }
 
-function authFields(values: ServerFormValues): ServerAuthInput {
+export function authFields(values: ServerFormValues): ServerAuthInput {
   return {
     auth_mode: values.auth_mode,
     ...(values.auth_mode === 'api_key'
@@ -333,20 +405,21 @@ function authFields(values: ServerFormValues): ServerAuthInput {
       : {}),
     ...(values.auth_mode === 'oauth'
       ? {
-          oauth_authorize_url: values.oauth_authorize_url,
-          oauth_token_url: values.oauth_token_url,
-          oauth_client_id: values.oauth_client_id,
-          oauth_client_secret: values.oauth_client_secret || undefined,
-          oauth_scopes: values.oauth_scopes,
-          oauth_resource: values.oauth_resource,
-          oauth_issuer: values.oauth_issuer,
+          oauth_authorize_url: values.oauth_authorize_url?.trim(),
+          oauth_token_url: values.oauth_token_url?.trim(),
+          oauth_client_id: values.oauth_client_id?.trim(),
+          oauth_client_secret:
+            values.oauth_client_auth_method === 'none' ? undefined : values.oauth_client_secret || undefined,
+          oauth_scopes: values.oauth_scopes?.trim() ?? '',
+          oauth_resource: values.oauth_resource?.trim() ?? '',
+          oauth_issuer: values.oauth_issuer?.trim() ?? '',
           oauth_client_auth_method: values.oauth_client_auth_method,
         }
       : {}),
   };
 }
 
-function AuthFormFields() {
+function AuthFormFields({ server }: { server?: McpServer } = {}) {
   const { t } = useI18n();
   return (
     <>
@@ -366,11 +439,24 @@ function AuthFormFields() {
               <Form.Item
                 name="api_key_header"
                 label={t('serverDialog.upstreamHeader')}
-                rules={[{ required: true, message: t('serverDialog.enterUpstreamHeader') }]}
+                rules={[
+                  { required: true, message: t('serverDialog.enterUpstreamHeader') },
+                  { pattern: /^(authorization|x-[a-z0-9-]{1,60})$/i, message: t('api.invalidKeyHeader') },
+                ]}
               >
                 <Input placeholder={t('serverDialog.authorizationXApiKey')} />
               </Form.Item>
-              <Form.Item name="api_key_prefix" label={t('serverDialog.valuePrefix')}>
+              <Form.Item
+                name="api_key_prefix"
+                label={t('serverDialog.valuePrefix')}
+                rules={[
+                  validationRule(
+                    (value) => value.length <= 100 && !/[\x00-\x1f\x7f]/.test(value),
+                    t('api.invalidKeyPrefix'),
+                    true,
+                  ),
+                ]}
+              >
                 <Input placeholder={t('serverDialog.bearerOptional')} />
               </Form.Item>
               <Alert type="info" showIcon message={t('serverDialog.usersEnterOwnKeyConnections')} />
@@ -380,22 +466,29 @@ function AuthFormFields() {
               <Form.Item
                 name="oauth_authorize_url"
                 label={t('serverDialog.authorizationEndpoint')}
-                rules={[{ required: true }, endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl'))]}
+                rules={[
+                  { required: true, message: t('api.invalidOAuthUrl') },
+                  validationRule(isOAuthUrl, t('api.invalidOAuthUrl')),
+                ]}
               >
                 <Input placeholder="https://provider.example/authorize" />
               </Form.Item>
               <Form.Item
                 name="oauth_token_url"
                 label={t('serverDialog.tokenEndpoint')}
-                rules={[{ required: true }, endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl'))]}
+                rules={[
+                  { required: true, message: t('api.invalidOAuthUrl') },
+                  validationRule(isOAuthUrl, t('api.invalidOAuthUrl')),
+                ]}
               >
                 <Input placeholder="https://provider.example/token" />
               </Form.Item>
-              <Form.Item name="oauth_client_id" label={t('serverDialog.clientId')} rules={[{ required: true }]}>
+              <Form.Item
+                name="oauth_client_id"
+                label={t('serverDialog.clientId')}
+                rules={[{ required: true, whitespace: true, message: t('api.oauthClientIdRequired') }]}
+              >
                 <Input />
-              </Form.Item>
-              <Form.Item name="oauth_client_secret" label={t('serverDialog.clientSecretOptionalPublicClients')}>
-                <Input.Password autoComplete="off" />
               </Form.Item>
               <Form.Item
                 name="oauth_client_auth_method"
@@ -410,13 +503,49 @@ function AuthFormFields() {
                   ]}
                 />
               </Form.Item>
-              <Form.Item name="oauth_scopes" label={t('serverDialog.scopes')}>
+              <Form.Item
+                noStyle
+                shouldUpdate={(previous, next) => previous.oauth_client_auth_method !== next.oauth_client_auth_method}
+              >
+                {({ getFieldValue }) =>
+                  getFieldValue('oauth_client_auth_method') !== 'none' && (
+                    <Form.Item
+                      name="oauth_client_secret"
+                      label={t('serverDialog.clientSecret')}
+                      extra={t(
+                        server?.oauth_client_secret_configured
+                          ? 'serverDialog.secretRetained'
+                          : 'api.oauthSecretRequired',
+                      )}
+                      rules={[
+                        { required: !server?.oauth_client_secret_configured, message: t('api.oauthSecretRequired') },
+                        { max: 4096, message: t('api.invalidOAuthSecret') },
+                      ]}
+                    >
+                      <Input.Password autoComplete="new-password" />
+                    </Form.Item>
+                  )
+                }
+              </Form.Item>
+              <Form.Item
+                name="oauth_scopes"
+                label={t('serverDialog.scopes')}
+                rules={[{ max: 1000, message: t('api.invalidOAuthScopes') }]}
+              >
                 <Input placeholder="read write" />
               </Form.Item>
-              <Form.Item name="oauth_resource" label={t('serverDialog.resourceUrlOptional')}>
+              <Form.Item
+                name="oauth_resource"
+                label={t('serverDialog.resourceUrlOptional')}
+                rules={[validationRule(isOAuthUrl, t('api.invalidOAuthResource'), true)]}
+              >
                 <Input placeholder="https://mcp.example.com/mcp" />
               </Form.Item>
-              <Form.Item name="oauth_issuer" label={t('serverDialog.responseIssuerOptionalUseWhen')}>
+              <Form.Item
+                name="oauth_issuer"
+                label={t('serverDialog.responseIssuerOptionalUseWhen')}
+                rules={[validationRule(isOAuthUrl, t('api.invalidOAuthIssuer'), true)]}
+              >
                 <Input placeholder="https://provider.example" />
               </Form.Item>
               <Alert type="info" showIcon message={t('serverDialog.registerCallbackProviderHttpsAuth')} />
@@ -444,11 +573,16 @@ function ConfigureAuthDialog({
       okText={t('serverDialog.saveSettings')}
       cancelText={t('common.cancel')}
       confirmLoading={busy}
+      closable={!busy}
+      keyboard={!busy}
+      maskClosable={!busy}
+      cancelButtonProps={{ disabled: busy }}
       onCancel={onClose}
-      onOk={() => form.validateFields().then((values) => onConfigureAuth(server, authFields(values)))}
+      onOk={() => submitDialog(form, (values) => onConfigureAuth(server, authFields(values)))}
     >
       <Form
         form={form}
+        disabled={busy}
         layout="vertical"
         requiredMark={false}
         initialValues={{
@@ -464,7 +598,8 @@ function ConfigureAuthDialog({
           oauth_client_auth_method: server.oauth_client_auth_method,
         }}
       >
-        <AuthFormFields />
+        <Alert type="warning" showIcon className="dialog-alert" message={t('serverDialog.authChangeHelp')} />
+        <AuthFormFields server={server} />
       </Form>
     </Modal>
   );
@@ -534,8 +669,12 @@ function ConfigureUsersDialog({
       }
       okText={t('serverDialog.saveGrants')}
       cancelText={t('common.cancel')}
-      okButtonProps={{ disabled: !changed }}
+      okButtonProps={{ disabled: busy || !changed }}
       confirmLoading={busy}
+      closable={!busy}
+      keyboard={!busy}
+      maskClosable={!busy}
+      cancelButtonProps={{ disabled: busy }}
       onCancel={onClose}
       onOk={() => onConfigureUsers(server, selectedIds, signupAccess)}
     >
@@ -544,7 +683,12 @@ function ConfigureUsersDialog({
           <strong>{t('serverDialog.signupAccess')}</strong>
           <p>{t('serverDialog.signupAccessHelp')}</p>
         </div>
-        <Switch checked={signupAccess} onChange={setSignupAccess} aria-label={t('serverDialog.signupAccess')} />
+        <Switch
+          disabled={busy}
+          checked={signupAccess}
+          onChange={setSignupAccess}
+          aria-label={t('serverDialog.signupAccess')}
+        />
       </div>
       <div className="access-summary">
         <div>
@@ -581,12 +725,12 @@ function ConfigureUsersDialog({
         {visibleEditableIds.length > 0 && (
           <span className="access-bulk-actions">
             {visibleEditableIds.some((id) => !selected.has(id)) && (
-              <Button type="link" size="small" onClick={() => setVisible(true)}>
+              <Button disabled={busy} type="link" size="small" onClick={() => setVisible(true)}>
                 {t('serverDialog.grantVisible')}
               </Button>
             )}
             {visibleEditableIds.some((id) => selected.has(id)) && (
-              <Button type="link" size="small" onClick={() => setVisible(false)}>
+              <Button disabled={busy} type="link" size="small" onClick={() => setVisible(false)}>
                 {t('serverDialog.revokeVisible')}
               </Button>
             )}
@@ -635,6 +779,7 @@ function ConfigureUsersDialog({
               <Checkbox
                 className="access-user-row"
                 key={user.id}
+                disabled={busy}
                 checked={selected.has(user.id)}
                 onChange={(event) => toggleUser(user.id, event.target.checked)}
               >
@@ -655,9 +800,11 @@ function AddInstanceDialog({
   busy,
   onClose,
   onAddInstance,
-}: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onAddInstance'> & {
-  server: McpServer;
-}) {
+  ...allowlist
+}: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onAddInstance'> &
+  UpstreamAllowlistProps & {
+    server: McpServer;
+  }) {
   const { t } = useI18n();
   const [form] = Form.useForm<AddInstanceInput>();
 
@@ -674,9 +821,13 @@ function AddInstanceDialog({
       okText={t('serverDialog.addPool')}
       cancelText={t('common.cancel')}
       confirmLoading={busy}
+      closable={!busy}
+      keyboard={!busy}
+      maskClosable={!busy}
+      cancelButtonProps={{ disabled: busy }}
       onCancel={onClose}
       onOk={() =>
-        form.validateFields().then((values) =>
+        submitDialog(form, (values) =>
           onAddInstance(server, {
             id: values.id || undefined,
             url: values.url,
@@ -684,8 +835,12 @@ function AddInstanceDialog({
         )
       }
     >
-      <Form form={form} layout="vertical" requiredMark={false}>
-        <Form.Item name="id" label={t('serverDialog.instanceIdOptional')}>
+      <Form form={form} disabled={busy} layout="vertical" requiredMark={false}>
+        <Form.Item
+          name="id"
+          label={t('serverDialog.instanceIdOptional')}
+          rules={[{ max: 256, message: t('api.invalidInstancePayload') }]}
+        >
           <Input placeholder={t('serverDialog.leaveBlankGenerateUuid')} autoFocus />
         </Form.Item>
         <Form.Item
@@ -698,6 +853,7 @@ function AddInstanceDialog({
         >
           <Input prefix={<LinkOutlined />} placeholder="https://host.example/mcp" />
         </Form.Item>
+        <UpstreamAllowlistHint {...allowlist} busy={busy} />
       </Form>
     </Modal>
   );

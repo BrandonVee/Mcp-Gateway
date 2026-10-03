@@ -8,7 +8,7 @@ import { test } from 'node:test';
 
 // A fake Engine records the call order. Replacing a container is destructive, so
 // the sequence itself is the behaviour worth pinning down without real Docker.
-function fakeEngine(healthPort) {
+function fakeEngine(healthPort, failure = '') {
   const calls = [];
   const server = createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost');
@@ -18,6 +18,8 @@ function fakeEngine(healthPort) {
     };
     if (request.method === 'POST' && url.pathname === '/v1.44/images/create') {
       calls.push('pull');
+      assert.equal(url.searchParams.get('tag'), failure === 'digest' ? null : 'latest');
+      if (failure === 'digest') assert.match(url.searchParams.get('fromImage'), /@sha256:/);
       return reply(200, '{"status":"Pulling"}\n{"status":"Downloaded newer image"}\n');
     }
     if (request.method === 'GET' && url.pathname.startsWith('/v1.44/images/')) {
@@ -46,14 +48,25 @@ function fakeEngine(healthPort) {
     }
     if (request.method === 'POST' && url.pathname === '/v1.44/containers/create') {
       calls.push(`create:${url.searchParams.get('name')}`);
-      return reply(201, JSON.stringify({ Id: 'new-container' }));
+      return reply(
+        failure === 'create' ? 500 : 201,
+        JSON.stringify(failure === 'create' ? { message: 'create failed' } : { Id: 'new-container' }),
+      );
     }
     if (request.method === 'POST' && url.pathname === '/v1.44/containers/new-container/start') {
       calls.push('start');
-      return reply(204);
+      return reply(failure === 'start' ? 500 : 204);
     }
     if (request.method === 'DELETE' && url.pathname === '/v1.44/containers/mcp-server-1-rollback') {
       calls.push('clear-stale-rollback');
+      return reply(204);
+    }
+    if (request.method === 'POST' && url.pathname === '/v1.44/containers/old-container/start') {
+      calls.push('restart-old');
+      return reply(204);
+    }
+    if (request.method === 'DELETE' && url.pathname === '/v1.44/containers/new-container') {
+      calls.push('remove-new');
       return reply(204);
     }
     if (request.method === 'DELETE' && url.pathname === '/v1.44/containers/old-container') {
@@ -105,3 +118,42 @@ test('the updater pulls, replaces the container and only then removes the old on
     'remove-old',
   ]);
 });
+
+for (const failure of ['create', 'start', 'digest']) {
+  test(`the updater handles ${failure} without losing the previous container`, async () => {
+    const socketPath = join(tmpdir(), `mcp-fake-docker-${process.pid}-${failure}.sock`);
+    rmSync(socketPath, { force: true });
+    const health = createServer((_request, response) => response.writeHead(204).end());
+    await new Promise((resolve) => health.listen(0, '127.0.0.1', resolve));
+    const engine = fakeEngine(health.address().port, failure);
+    await new Promise((resolve) => engine.server.listen(socketPath, resolve));
+    try {
+      const child = spawn('node', ['scripts/update-container.mjs'], {
+        env: {
+          ...process.env,
+          MCP_DOCKER_SOCKET: socketPath,
+          MCP_UPDATE_OLD_ID: 'old-container',
+          MCP_UPDATE_IMAGE:
+            failure === 'digest' ? `brandonvee/mcp-gateway@sha256:${'a'.repeat(64)}` : 'brandonvee/mcp-gateway:latest',
+          MCP_UPDATE_LOG: '',
+        },
+        stdio: 'ignore',
+      });
+      const exitCode = await new Promise((resolve) => child.on('exit', resolve));
+      assert.equal(exitCode, failure === 'digest' ? 0 : 1);
+      if (failure === 'digest') assert.ok(engine.calls.includes('remove-old'));
+      else {
+        assert.ok(engine.calls.includes('rename:mcp-server-1'));
+        assert.ok(engine.calls.includes('restart-old'));
+        assert.equal(engine.calls.includes('remove-old'), false);
+        assert.equal(engine.calls.includes('remove-new'), failure === 'start');
+      }
+    } finally {
+      await Promise.all([
+        new Promise((resolve) => health.close(resolve)),
+        new Promise((resolve) => engine.server.close(resolve)),
+      ]);
+      rmSync(socketPath, { force: true });
+    }
+  });
+}

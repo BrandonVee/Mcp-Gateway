@@ -373,8 +373,8 @@ export function createConnectionsRouter(): Hono {
     if (!server) return c.json({ error: 'server_not_found_or_denied' }, 404);
     if (server.authMode !== 'api_key') return c.json({ error: 'server_does_not_use_api_key' }, 400);
     const body = (await c.req.json().catch(() => ({}))) as { api_key?: unknown };
-    const key = body.api_key;
-    if (typeof key !== 'string' || !key || key.length > 4096 || /[\x00-\x1f\x7f]/.test(key))
+    const key = body?.api_key;
+    if (typeof key !== 'string' || !key.trim() || key.length > 4096 || /[\x00-\x1f\x7f]/.test(key))
       return c.json({ error: 'invalid_api_key' }, 400);
     const now = Date.now();
     const secret = encryptCredential(key);

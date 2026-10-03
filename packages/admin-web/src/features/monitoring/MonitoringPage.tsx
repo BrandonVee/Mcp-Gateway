@@ -1,7 +1,7 @@
 import { useI18n, type Language } from '../../i18n';
 import { Alert, Badge, Button, Empty, Input, Select, Spin, Tag } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { UsageMonitoring } from './UsageMonitoring';
 import type { AuditEvent, AuthHealth, GatewayHealth } from '../../types';
@@ -47,9 +47,18 @@ export function MonitoringPage() {
   const [revision, setRevision] = useState(0);
   const [healthCheckedAt, setHealthCheckedAt] = useState<number | null>(null);
   const [checking, setChecking] = useState(false);
+  const identity = JSON.stringify([actor, method, revision, language]);
+  const current = useRef(identity);
+  current.current = identity;
+  const healthLoading = useRef(false);
+  const activeHealth = useRef(true);
 
   const loadHealth = useCallback(async () => {
+    if (healthLoading.current) return;
+    healthLoading.current = true;
     const [authResult, gatewayResult] = await Promise.allSettled([api.authHealth(), api.gatewayHealth()]);
+    healthLoading.current = false;
+    if (!activeHealth.current) return;
     setAuth(authResult.status === 'fulfilled' ? authResult.value : null);
     setGateway(gatewayResult.status === 'fulfilled' ? gatewayResult.value : null);
     setHealthCheckedAt(Date.now());
@@ -57,6 +66,7 @@ export function MonitoringPage() {
 
   useEffect(() => {
     let active = true;
+    activeHealth.current = true;
     const tick = async () => {
       if (!active) return;
       await loadHealth();
@@ -65,6 +75,7 @@ export function MonitoringPage() {
     const timer = window.setInterval(() => void tick(), 10_000);
     return () => {
       active = false;
+      activeHealth.current = false;
       window.clearInterval(timer);
     };
   }, [loadHealth]);
@@ -81,6 +92,7 @@ export function MonitoringPage() {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setLoadingMore(false);
     setError(null);
     void api
       .auditEvents({ limit: PAGE_SIZE, actor: actor || undefined, method: method || undefined })
@@ -101,7 +113,8 @@ export function MonitoringPage() {
   }, [actor, method, revision, t]);
 
   const loadMore = async () => {
-    if (!nextBefore || loadingMore) return;
+    if (!nextBefore || loadingMore || loading) return;
+    const snapshot = current.current;
     setLoadingMore(true);
     try {
       const page = await api.auditEvents({
@@ -110,12 +123,14 @@ export function MonitoringPage() {
         actor: actor || undefined,
         method: method || undefined,
       });
-      setEvents((current) => [...current, ...page.events]);
+      if (current.current !== snapshot) return;
+      setEvents((rows) => [...rows, ...page.events.filter((event) => !rows.some((row) => row.id === event.id))]);
       setNextBefore(page.next_before);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t('monitoring.couldNotLoadOlderEvents'));
+      if (current.current === snapshot)
+        setError(cause instanceof Error ? cause.message : t('monitoring.couldNotLoadOlderEvents'));
     } finally {
-      setLoadingMore(false);
+      if (current.current === snapshot) setLoadingMore(false);
     }
   };
 

@@ -35,6 +35,22 @@ test('API failures are localized instead of displaying backend English', () => {
   assert.equal(apiErrorMessage(409, { error: 'username_taken' }, 'en-US'), 'Username already exists');
   assert.equal(apiErrorMessage(400, { error: 'invalid_username' }, 'zh-CN'), '账号格式不正确');
   assert.equal(apiErrorMessage(400, { error: 'password_mismatch' }, 'en-US'), 'The two passwords do not match');
+  assert.equal(
+    apiErrorMessage(400, { error: 'upstream_host_not_allowed', host: 'mcp-a' }, 'zh-CN'),
+    '上游主机 mcp-a 不在可信上游白名单中，请先加入白名单再提交。',
+  );
+  assert.equal(
+    apiErrorMessage(400, { error: 'upstream_host_not_allowed', host: 'mcp-a' }, 'en-US'),
+    'Upstream host mcp-a is not in the trusted allowlist. Add it before submitting.',
+  );
+  assert.equal(
+    apiErrorMessage(400, { error: 'invalid_upstream_endpoint' }, 'zh-CN'),
+    zh['serverDialog.enterValidHttpHttpsUrl'],
+  );
+  assert.equal(
+    apiErrorMessage(400, { error: 'gateway_self_referential_endpoint' }, 'zh-CN'),
+    zh['serverDialog.gatewayEndpointBlocked'],
+  );
 });
 
 test('HTML entry defaults to Chinese before the app loads', () => {

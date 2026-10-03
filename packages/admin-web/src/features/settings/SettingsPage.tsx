@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Alert, Badge, Button, Form, Input, InputNumber, Switch, Tag } from 'antd';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { App, Alert, Badge, Button, Form, Input, InputNumber, Select, Switch, Tag } from 'antd';
 import {
   BarChartOutlined,
   BellOutlined,
@@ -16,6 +16,8 @@ import {
 import { useI18n } from '../../i18n';
 import type { SystemSettings, SystemSettingsInput, SystemUpdateStatus } from '../../types';
 import './settings.css';
+import { isPublicOrigin, upstreamHosts, validUpstreamHosts, validationRule } from '../../utils/validation';
+import { mergeDraft } from '../../utils/operations';
 
 type SettingsFormValues = Omit<SystemSettingsInput, 'upstream_hosts'> & { upstream_hosts: string };
 type ToggleName =
@@ -84,14 +86,31 @@ export function SettingsPage({
   updating,
   onSave,
   onUpdate,
+  onCheckUpdate,
+  onDirtyChange,
 }: {
   settings: SystemSettings;
   update: SystemUpdateStatus | null;
   updating: boolean;
-  onSave: (body: SystemSettingsInput) => Promise<void>;
-  onUpdate: () => void;
+  onSave: (body: SystemSettingsInput) => Promise<SystemSettings | null>;
+  onUpdate: (tag: string) => void;
+  onCheckUpdate: () => Promise<void>;
+  onDirtyChange: (dirty: boolean) => void;
 }) {
   const { t } = useI18n();
+  const { message } = App.useApp();
+  const [targetTag, setTargetTag] = useState('latest');
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const checkUpdate = async () => {
+    setCheckingUpdate(true);
+    try {
+      await onCheckUpdate();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('common.operationFailed'));
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
   const [form] = Form.useForm<SettingsFormValues>();
   const allowlistEnabled = Form.useWatch('upstream_allowlist_enabled', form) ?? true;
   const [saving, setSaving] = useState(false),
@@ -111,11 +130,32 @@ export function SettingsPage({
     }),
     [settings],
   );
+  const baseline = useRef(initialValues);
+  const draftDirty = useRef(dirty);
+  draftDirty.current = dirty;
 
   useEffect(() => {
-    form.setFieldsValue(initialValues);
-    setDirty(false);
+    const values = draftDirty.current
+      ? mergeDraft(baseline.current, initialValues, form.getFieldsValue(true))
+      : initialValues;
+    baseline.current = initialValues;
+    form.setFieldsValue(values);
+    setDirty(Object.entries(initialValues).some(([key, value]) => values[key as keyof SettingsFormValues] !== value));
   }, [form, initialValues]);
+  useEffect(() => {
+    onDirtyChange(dirty);
+    const protectDraft = (event: BeforeUnloadEvent) => {
+      if (dirty) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', protectDraft);
+    return () => {
+      window.removeEventListener('beforeunload', protectDraft);
+      onDirtyChange(false);
+    };
+  }, [dirty, onDirtyChange]);
   const reset = () => {
     form.resetFields();
     form.setFieldsValue(initialValues);
@@ -141,20 +181,30 @@ export function SettingsPage({
         layout="vertical"
         requiredMark={false}
         initialValues={initialValues}
-        disabled={!settings.managed || saving}
+        disabled={!settings.managed || saving || updating}
         onValuesChange={(_, values: SettingsFormValues) =>
           setDirty(
-            Object.entries(initialValues).some(([key, value]) => values[key as keyof SettingsFormValues] !== value),
+            Object.entries(baseline.current).some(([key, value]) => values[key as keyof SettingsFormValues] !== value),
           )
         }
         onFinish={async (values) => {
           setSaving(true);
           try {
-            await onSave({
+            const saved = await onSave({
               ...values,
               public_url: values.public_url.trim(),
-              upstream_hosts: values.upstream_hosts.split(/[\s,]+/).filter(Boolean),
+              upstream_hosts: upstreamHosts(values.upstream_hosts),
             });
+            if (saved) {
+              const normalized = {
+                ...values,
+                public_url: saved.public_url ?? '',
+                upstream_hosts: saved.upstream_hosts.join('\n'),
+              };
+              baseline.current = normalized;
+              form.setFieldsValue(normalized);
+              setDirty(false);
+            }
           } finally {
             setSaving(false);
           }
@@ -175,7 +225,10 @@ export function SettingsPage({
               extra={t('settings.publicUrlHelp')}
               rules={[
                 { required: true, message: t('settings.addressRequired') },
-                { type: 'url', message: t('settings.invalid') },
+                validationRule(
+                  (value) => isPublicOrigin(value, settings.public_url_requires_https ?? true),
+                  t('settings.invalidPublicUrl'),
+                ),
               ]}
             >
               <Input prefix={<LinkOutlined />} placeholder="https://mcp.example.com" />
@@ -230,10 +283,11 @@ export function SettingsPage({
                   </span>
                 }
                 extra={t('settings.upstreamHelp')}
+                rules={[validationRule(validUpstreamHosts, t('settings.invalidHosts'))]}
               >
                 <Input.TextArea
                   autoSize={{ minRows: 4, maxRows: 8 }}
-                  disabled={!settings.managed || saving || !allowlistEnabled}
+                  disabled={!settings.managed || saving || updating || !allowlistEnabled}
                   placeholder={t('settings.hostsPlaceholder')}
                 />
               </Form.Item>
@@ -342,20 +396,92 @@ export function SettingsPage({
                           ? t('settings.updateVersion', { version: update.version })
                           : t('settings.updateVersionUnknown')}
                       </strong>
+                      <p>
+                        {update.latest_version
+                          ? t('settings.updateLatestVersion', { version: update.latest_version })
+                          : t('settings.updateLatestUnknown')}
+                      </p>
+                      <Tag
+                        color={
+                          update.update_available === true
+                            ? 'blue'
+                            : update.update_available === false
+                              ? 'green'
+                              : 'default'
+                        }
+                      >
+                        {t(
+                          !update.releases_supported
+                            ? 'settings.updateCustomMirror'
+                            : update.release_check_error
+                              ? 'settings.updateCheckFailed'
+                              : update.update_available === true
+                                ? 'settings.updateAvailable'
+                                : update.update_available === false
+                                  ? 'settings.updateCurrent'
+                                  : 'settings.updateComparisonUnknown',
+                        )}
+                      </Tag>
                       <p>{t('settings.updateImage', { image: update.image || '—' })}</p>
                       <p>{t('settings.updateContainer', { container: update.container_name || '—' })}</p>
                     </div>
                   </div>
                   <div className="settings-update-action">
                     <Button
+                      icon={<ReloadOutlined />}
+                      loading={checkingUpdate}
+                      disabled={updating || !update.releases_supported}
+                      onClick={() => void checkUpdate()}
+                    >
+                      {t('settings.updateCheck')}
+                    </Button>
+                    <label htmlFor="update-target">{t('settings.updateTarget')}</label>
+                    <Select
+                      id="update-target"
+                      aria-label={t('settings.updateTarget')}
+                      value={targetTag}
+                      onChange={setTargetTag}
+                      disabled={updating || checkingUpdate}
+                      style={{ width: '100%' }}
+                      options={[
+                        {
+                          value: 'latest',
+                          label: update.target_image.endsWith(':latest')
+                            ? t('settings.updateLatest')
+                            : t('settings.updateDefault', { image: update.target_image }),
+                        },
+                        ...update.releases.map((release) => ({ value: release.tag, label: release.tag })),
+                      ]}
+                    />
+                    <p>
+                      {t('settings.updateTargetImage', {
+                        image: targetTag === 'latest' ? update.target_image : targetTag,
+                      })}
+                    </p>
+                    <Button
                       icon={<CloudUploadOutlined />}
-                      onClick={onUpdate}
+                      onClick={() => onUpdate(targetTag)}
                       loading={updating}
-                      disabled={!update.socket_available}
+                      disabled={
+                        !update.socket_available ||
+                        !update.container_id ||
+                        dirty ||
+                        saving ||
+                        checkingUpdate ||
+                        (targetTag !== 'latest' && !update.releases.some((release) => release.tag === targetTag))
+                      }
                     >
                       {t('settings.updateButton')}
                     </Button>
-                    <p>{t('settings.updateHelp')}</p>
+                    <p>
+                      {t(
+                        !update.socket_available
+                          ? 'api.updateUnavailable'
+                          : dirty
+                            ? 'settings.updateSaveFirst'
+                            : 'settings.updateHelp',
+                      )}
+                    </p>
                   </div>
                 </div>
               </SettingsModule>
@@ -377,7 +503,11 @@ export function SettingsPage({
             </div>
           </div>
           <div className="settings-save-actions">
-            <Button icon={<ReloadOutlined />} onClick={reset} disabled={!settings.managed || !dirty || saving}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={reset}
+              disabled={!settings.managed || !dirty || saving || updating}
+            >
               {t('settings.restore')}
             </Button>
             <Button
@@ -385,7 +515,7 @@ export function SettingsPage({
               htmlType="submit"
               icon={<SaveOutlined />}
               loading={saving}
-              disabled={!settings.managed}
+              disabled={!settings.managed || updating || (settings.configured && !dirty)}
             >
               {t('settings.save')}
             </Button>

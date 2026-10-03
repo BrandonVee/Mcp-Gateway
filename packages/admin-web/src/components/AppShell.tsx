@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import {
   SettingOutlined,
   AppstoreOutlined,
-  ClockCircleOutlined,
   CloudServerOutlined,
   DashboardOutlined,
   LogoutOutlined,
@@ -17,8 +16,7 @@ import {
 } from '@ant-design/icons';
 import { Badge, Button, Flex, Layout, Menu, Space, Tag, Typography } from 'antd';
 import { useState } from 'react';
-import type { View } from '../types';
-import { formatTime } from '../utils/format';
+import type { GatewayHealth, View } from '../types';
 import { CommandPalette } from './CommandPalette';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { useI18n, type MessageKey } from '../i18n';
@@ -61,7 +59,7 @@ interface AppShellProps {
   serverCount: number;
   refreshing: boolean;
   loggingOut: boolean;
-  lastUpdatedAt: number | null;
+  health: GatewayHealth | null;
   onNavigate: (view: View) => void;
   onRefresh: () => void;
   onLogout: () => void;
@@ -74,13 +72,13 @@ export function AppShell({
   serverCount,
   refreshing,
   loggingOut,
-  lastUpdatedAt,
+  health,
   onNavigate,
   onRefresh,
   onLogout,
 }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const current = titles[currentView];
 
   const menuItems = [
@@ -141,9 +139,11 @@ export function AppShell({
           </Button>
           {!collapsed && (
             <div className="system-state">
-              <Badge status="success" />
+              <Badge status={!health ? 'default' : health.ok ? 'success' : 'error'} />
               <span>
-                <strong>{t('nav.servicesOnline')}</strong>
+                <strong>
+                  {t(!health ? 'nav.gatewayUnknown' : health.ok ? 'nav.gatewayHealthy' : 'nav.gatewayUnhealthy')}
+                </strong>
                 <small>{t('app.controlPlaneOnline')}</small>
               </span>
             </div>
@@ -154,6 +154,7 @@ export function AppShell({
             icon={<LogoutOutlined />}
             className="logout-button"
             loading={loggingOut}
+            disabled={refreshing}
             onClick={onLogout}
           >
             {!collapsed && t('nav.signOut')}
@@ -183,11 +184,6 @@ export function AppShell({
           <Space size={10}>
             <LanguageSwitcher />
             <CommandPalette onNavigate={onNavigate} />
-            {lastUpdatedAt && (
-              <Tag icon={<ClockCircleOutlined />} className="updated-tag">
-                {formatTime(lastUpdatedAt, language)}
-              </Tag>
-            )}
             <Tag icon={<SafetyCertificateOutlined />} color="success" className="secure-tag">
               {t('app.secure')}
             </Tag>

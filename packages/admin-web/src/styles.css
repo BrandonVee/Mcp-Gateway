@@ -272,14 +272,6 @@ code,
   letter-spacing: 0.08em;
 }
 
-.updated-tag {
-  margin: 0;
-  color: #758195;
-  background: #f5f7fa;
-  border-color: #e1e6ed;
-  font: 500 9px var(--mono);
-}
-
 .app-content {
   padding: 24px 30px 36px;
 }

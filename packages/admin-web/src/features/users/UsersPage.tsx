@@ -31,6 +31,7 @@ import { initials } from '../../utils/format';
 
 interface UsersPageProps {
   users: AdminUser[];
+  busy: boolean;
   onCreate: () => void;
   onAssign: (user: AdminUser) => void;
   onPassword: (user: AdminUser) => void;
@@ -38,7 +39,7 @@ interface UsersPageProps {
   onDelete: (user: AdminUser) => void;
 }
 
-export function UsersPage({ users, onCreate, onAssign, onPassword, onToggle, onDelete }: UsersPageProps) {
+export function UsersPage({ users, busy, onCreate, onAssign, onPassword, onToggle, onDelete }: UsersPageProps) {
   const { t } = useI18n();
   const [keyword, setKeyword] = useState('');
   const [role, setRole] = useState<'all' | AdminUser['role']>('all');
@@ -120,7 +121,7 @@ export function UsersPage({ users, onCreate, onAssign, onPassword, onToggle, onD
             checked={!disabled}
             checkedChildren={t('users.signEnabled')}
             unCheckedChildren={t('users.signDisabled')}
-            disabled={!disabled && user.can_disable === false}
+            disabled={busy || (!disabled && user.can_disable === false)}
             onChange={() => onToggle(user)}
           />
         </Tooltip>
@@ -135,17 +136,17 @@ export function UsersPage({ users, onCreate, onAssign, onPassword, onToggle, onD
         <Space size={4}>
           {user.role === 'user' && (
             <Tooltip title={t('servers.assignAccess')}>
-              <Button type="text" icon={<LinkOutlined />} onClick={() => onAssign(user)} />
+              <Button disabled={busy} type="text" icon={<LinkOutlined />} onClick={() => onAssign(user)} />
             </Tooltip>
           )}
           <Tooltip title={t('users.resetPassword')}>
-            <Button type="text" icon={<KeyOutlined />} onClick={() => onPassword(user)} />
+            <Button disabled={busy} type="text" icon={<KeyOutlined />} onClick={() => onPassword(user)} />
           </Tooltip>
           <Tooltip title={user.can_delete === false ? t('users.lastAdminProtected') : t('users.deleteUser')}>
             <Button
               type="text"
               danger
-              disabled={user.can_delete === false}
+              disabled={busy || user.can_delete === false}
               icon={<DeleteOutlined />}
               onClick={() => onDelete(user)}
             />
@@ -162,7 +163,7 @@ export function UsersPage({ users, onCreate, onAssign, onPassword, onToggle, onD
         title="users.whoAccessCapability"
         description="users.controlSignMcpAccessMaintain"
         primaryAction={
-          <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>
+          <Button disabled={busy} type="primary" icon={<PlusOutlined />} onClick={onCreate}>
             {t('userDialog.createUser')}
           </Button>
         }
@@ -208,7 +209,25 @@ export function UsersPage({ users, onCreate, onAssign, onPassword, onToggle, onD
           dataSource={filteredUsers}
           pagination={{ pageSize: 10, hideOnSinglePage: true }}
           scroll={{ x: 820 }}
-          locale={{ emptyText: t('overview.noUsers') }}
+          locale={{
+            emptyText: users.length ? (
+              <span>
+                {t('users.noMatchingUsers')}{' '}
+                <Button
+                  type="link"
+                  onClick={() => {
+                    setKeyword('');
+                    setRole('all');
+                    setStatus('all');
+                  }}
+                >
+                  {t('servers.clearFilters')}
+                </Button>
+              </span>
+            ) : (
+              t('overview.noUsers')
+            ),
+          }}
         />
         <div className="table-summary">
           <TeamOutlined />{' '}

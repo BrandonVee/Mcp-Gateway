@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { hostname } from 'node:os';
+import { compareVersions, getUpdateReleases, stableVersion, type UpdateRelease } from './update-releases.js';
 
 /**
  * Self-update through the Docker Engine socket.
@@ -94,17 +95,36 @@ export function selfId(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 let cachedVersion: string | undefined;
-/** The image ships the workspace package.json, so its version is the build version. */
+/** Release builds embed their resolved version, independently of workspace manifests. */
 export function readAppVersion(): string {
-  if (cachedVersion) return cachedVersion;
+  if (cachedVersion !== undefined) return cachedVersion;
   try {
-    cachedVersion = String(
-      (JSON.parse(readFileSync('/app/package.json', 'utf8')) as { version?: unknown }).version ?? '',
+    cachedVersion = stableVersion(
+      (JSON.parse(readFileSync('/app/build-info.json', 'utf8')) as { version?: unknown }).version,
     );
   } catch {
     cachedVersion = '';
   }
   return cachedVersion;
+}
+
+export interface ImageInspect {
+  Config?: { Labels?: Record<string, string> };
+  RepoDigests?: string[];
+  RepoTags?: string[];
+}
+
+export function runningVersion(image: ImageInspect, releases: UpdateRelease[], embedded = ''): string {
+  const digests = image.RepoDigests?.map((value) => value.split('@')[1]) ?? [];
+  const revision = image.Config?.Labels?.['org.opencontainers.image.revision'];
+  const release = releases.find(
+    (item) => digests.includes(item.digest) || (item.revision && item.revision === revision),
+  );
+  return (
+    release?.version ||
+    stableVersion(embedded) ||
+    stableVersion(image.Config?.Labels?.['org.opencontainers.image.version'])
+  );
 }
 
 export interface ContainerInspect {
@@ -200,28 +220,57 @@ export function parsePullProgress(chunks: string[]): { statuses: string[]; error
 export function updateTargetImage(inspect: ContainerInspect, env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.MCP_UPDATE_IMAGE?.trim();
   if (configured) return configured;
-  const current = inspect.Config?.Image ?? '';
-  const [repo] = current.includes(':') ? current.split(/:(?=[^/]*$)/) : [current];
+  const current = inspect.Config?.Labels?.['com.mcp.update.image'] || inspect.Config?.Image || '';
+  const repo = imageRepository(current);
   if (!repo) return `${DEFAULT_UPDATE_IMAGE}:${DEFAULT_UPDATE_TAG}`;
   return `${repo}:${DEFAULT_UPDATE_TAG}`;
+}
+
+export function imageRepository(image: string): string {
+  if (/^sha256:/.test(image)) return '';
+  return image.split('@')[0].replace(/:[^/]*$/, '');
+}
+
+export function officialUpdateImage(image: string): boolean {
+  return [
+    DEFAULT_UPDATE_IMAGE,
+    `docker.io/${DEFAULT_UPDATE_IMAGE}`,
+    `index.docker.io/${DEFAULT_UPDATE_IMAGE}`,
+  ].includes(imageRepository(image));
 }
 
 export interface UpdateStatus {
   enabled: boolean;
   socket_available: boolean;
   version: string;
+  container_ready: boolean;
+  latest_version: string;
+  update_available: boolean | null;
+  releases: UpdateRelease[];
+  release_check_error: boolean;
+  releases_supported: boolean;
+  checked_at: number | null;
+  target_image: string;
   image: string;
   image_id: string;
   container_id: string;
   container_name: string;
 }
 
-export async function getUpdateStatus(env: NodeJS.ProcessEnv = process.env): Promise<UpdateStatus> {
+export async function getUpdateStatus(env: NodeJS.ProcessEnv = process.env, refresh = false): Promise<UpdateStatus> {
   const socketPath = dockerSocket(env);
   const status: UpdateStatus = {
     enabled: updateEnabled(env),
     socket_available: existsSync(socketPath),
     version: readAppVersion(),
+    container_ready: false,
+    latest_version: '',
+    update_available: null,
+    releases: [],
+    release_check_error: false,
+    releases_supported: false,
+    checked_at: null,
+    target_image: '',
     image: '',
     image_id: '',
     container_id: '',
@@ -232,10 +281,27 @@ export async function getUpdateStatus(env: NodeJS.ProcessEnv = process.env): Pro
     const response = await dockerRequest('GET', `/containers/${selfId(env)}/json`, { socketPath, timeoutMs: 2_000 });
     if (response.status < 200 || response.status >= 300) return status;
     const inspect = response.json as ContainerInspect;
+    const state = (response.json as { State?: { Running?: boolean; Health?: { Status?: string } } }).State;
+    status.container_ready = !!state?.Running && (!state.Health || state.Health.Status === 'healthy');
     status.container_id = String(inspect.Id ?? '');
     status.container_name = String(inspect.Name ?? '').replace(/^\//, '');
-    status.image = String(inspect.Config?.Image ?? '');
+    status.image = inspect.Config?.Labels?.['com.mcp.update.image'] || String(inspect.Config?.Image ?? '');
+    status.target_image = updateTargetImage(inspect, env);
     status.image_id = String((response.json as { Image?: unknown }).Image ?? '');
+    status.releases_supported = officialUpdateImage(status.target_image);
+    const catalog = status.releases_supported ? await getUpdateReleases(refresh) : null;
+    status.releases = catalog?.releases ?? [];
+    status.release_check_error = catalog?.error ?? false;
+    status.checked_at = catalog?.checked_at ?? null;
+    status.latest_version = status.releases[0]?.version ?? '';
+    const imageResponse = await dockerRequest('GET', `/images/${encodeURIComponent(status.image_id)}/json`, {
+      socketPath,
+      timeoutMs: 2_000,
+    });
+    if (imageResponse.status === 200)
+      status.version = runningVersion(imageResponse.json as ImageInspect, status.releases, status.version);
+    if (status.version && status.latest_version && !status.release_check_error)
+      status.update_available = compareVersions(status.latest_version, status.version) > 0;
   } catch {
     return status;
   }
@@ -251,7 +317,7 @@ export interface StartedUpdate {
 }
 
 /** Create the updater container and return immediately: the pull happens inside it. */
-export async function startUpdate(env: NodeJS.ProcessEnv = process.env): Promise<StartedUpdate> {
+export async function startUpdate(env: NodeJS.ProcessEnv = process.env, tag = 'latest'): Promise<StartedUpdate> {
   if (!updateEnabled(env)) throw new DockerError('system_update_disabled', 503);
   const socketPath = dockerSocket(env);
   if (!existsSync(socketPath)) throw new DockerError('docker_unavailable', 503);
@@ -261,20 +327,29 @@ export async function startUpdate(env: NodeJS.ProcessEnv = process.env): Promise
   const inspect = inspectResponse.json as ContainerInspect;
   const oldImageId = String((inspectResponse.json as { Image?: unknown }).Image ?? '');
   if (!oldImageId) throw new DockerError('docker_unavailable', 503);
+  let targetImage = updateTargetImage(inspect, env);
+  if (tag !== 'latest') {
+    if (!stableVersion(tag) || !officialUpdateImage(targetImage)) throw new DockerError('invalid_update_version', 400);
+    const catalog = await getUpdateReleases();
+    const release = catalog.releases.find((item) => item.tag === tag);
+    if (!release) throw new DockerError('invalid_update_version', 400);
+    targetImage = `${imageRepository(targetImage)}@${release.digest}`;
+  }
   const logPath = env.MCP_UPDATE_LOG ?? '/app/update.log';
   const updater = await dockerRequest('POST', '/containers/create', {
     socketPath,
-    query: { name: `mcp-updater-${Date.now()}` },
+    query: { name: `mcp-updater-${String(inspect.Id ?? id)}` },
     body: buildUpdaterSpec({
       imageId: oldImageId,
       oldId: String(inspect.Id ?? id),
-      targetImage: updateTargetImage(inspect, env),
+      targetImage,
       socketPath,
       logPath,
       env: inspect.Config?.Env ?? [],
       groupIds: env.DOCKER_GID ? [env.DOCKER_GID] : [],
     }),
   });
+  if (updater.status === 409) throw new DockerError('system_update_in_progress', 409);
   if (updater.status < 200 || updater.status >= 300) throw new DockerError('system_update_failed', 503);
   const created = asRecord(updater.json);
   const updaterId = String(created.Id ?? '');
@@ -290,7 +365,7 @@ export async function startUpdate(env: NodeJS.ProcessEnv = process.env): Promise
     status: 'started',
     container_id: String(inspect.Id ?? id),
     container_name: String(inspect.Name ?? '').replace(/^\//, ''),
-    image: updateTargetImage(inspect, env),
+    image: targetImage,
     updater_id: updaterId,
   };
 }

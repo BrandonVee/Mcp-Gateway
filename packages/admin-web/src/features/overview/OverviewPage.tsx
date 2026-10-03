@@ -11,23 +11,23 @@ import {
 } from '@ant-design/icons';
 import { Avatar, Badge, Card, Col, Empty, Flex, List, Progress, Row, Statistic, Tag, Typography } from 'antd';
 import type { ReactNode } from 'react';
-import type { AdminUser, GatewayHealth, McpServer } from '../../types';
+import type { AdminUser, AuthHealth, GatewayHealth, McpServer, SystemSettings } from '../../types';
+import { routableInstances } from '../servers/upstream-allowlist';
 import { formatTime, initials } from '../../utils/format';
 
 interface OverviewPageProps {
   users: AdminUser[];
   servers: McpServer[];
   health: GatewayHealth | null;
+  authHealth: AuthHealth | null;
+  settings: SystemSettings | null;
 }
 
-export function OverviewPage({ users, servers, health }: OverviewPageProps) {
+export function OverviewPage({ users, servers, health, authHealth, settings }: OverviewPageProps) {
   const { t, language } = useI18n();
   const activeUsers = users.filter((user) => !user.disabled).length;
-  const routableServers = servers.filter((server) => server.enabled).length;
-  const enabledInstances = servers.reduce(
-    (total, server) => total + server.instances.filter((instance) => instance.enabled).length,
-    0,
-  );
+  const routableServers = servers.filter((server) => routableInstances(server, settings).length > 0).length;
+  const enabledInstances = servers.reduce((total, server) => total + routableInstances(server, settings).length, 0);
   const recentUsers = [...users].sort((a, b) => b.created_at - a.created_at).slice(0, 5);
 
   return (
@@ -56,10 +56,10 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
         />
         <MetricCard
           title={t('overview.stateStores')}
-          value={health?.redis ? t('status.healthy') : t('status.degraded')}
+          value={health?.redis && authHealth?.postgres ? t('status.healthy') : t('status.degraded')}
           icon={<DatabaseOutlined />}
           detail="PostgreSQL + Redis"
-          tone={health?.redis ? 'green' : 'red'}
+          tone={health?.redis && authHealth?.postgres ? 'green' : 'red'}
         />
       </Row>
 
@@ -87,7 +87,15 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
                 {servers.length ? (
                   servers.map((server) => (
                     <div className="route-node" key={server.name}>
-                      <Badge status={server.enabled ? 'success' : 'default'} />
+                      <Badge
+                        status={
+                          !server.enabled
+                            ? 'default'
+                            : routableInstances(server, settings).length
+                              ? 'success'
+                              : 'warning'
+                        }
+                      />
                       <span>
                         <strong>/mcp/{server.name}</strong>
                         <small>
@@ -97,8 +105,23 @@ export function OverviewPage({ users, servers, health }: OverviewPageProps) {
                           })}
                         </small>
                       </span>
-                      <Tag color={server.enabled ? 'success' : 'default'} bordered={false}>
-                        {server.enabled ? t('status.routable') : t('status.paused')}
+                      <Tag
+                        color={
+                          !server.enabled
+                            ? 'default'
+                            : routableInstances(server, settings).length
+                              ? 'success'
+                              : 'warning'
+                        }
+                        bordered={false}
+                      >
+                        {t(
+                          !server.enabled
+                            ? 'status.paused'
+                            : routableInstances(server, settings).length
+                              ? 'status.routable'
+                              : 'overview.routeUnavailable',
+                        )}
                       </Tag>
                     </div>
                   ))

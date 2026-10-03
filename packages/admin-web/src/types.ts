@@ -39,12 +39,21 @@ export interface McpServer {
   oauth_resource: string | null;
   oauth_issuer: string | null;
   oauth_client_auth_method: 'none' | 'client_secret_basic' | 'client_secret_post';
+  oauth_client_secret_configured?: boolean;
   user_count: number;
   created_at: number;
   instances: McpInstance[];
 }
 
 export interface SystemUpdateStatus {
+  container_ready?: boolean;
+  latest_version: string;
+  update_available: boolean | null;
+  releases: Array<{ tag: string; version: string; digest: string }>;
+  release_check_error: boolean;
+  releases_supported: boolean;
+  checked_at: number | null;
+  target_image: string;
   enabled: boolean;
   socket_available: boolean;
   version: string;
@@ -152,6 +161,7 @@ export interface SystemSettings {
   public_url: string | null;
   upstream_allowlist_enabled: boolean;
   upstream_hosts: string[];
+  public_url_requires_https?: boolean;
   registration_enabled?: boolean;
   monitoring_enabled?: boolean;
   monitoring_logs_enabled?: boolean;
@@ -160,7 +170,10 @@ export interface SystemSettings {
   monitoring_error_rate?: number;
   monitoring_slow_ms?: number;
 }
-export type SystemSettingsInput = Omit<SystemSettings, 'managed' | 'configured' | 'public_url'> & {
+export type SystemSettingsInput = Omit<
+  SystemSettings,
+  'managed' | 'configured' | 'public_url' | 'public_url_requires_https'
+> & {
   public_url: string;
 };
 

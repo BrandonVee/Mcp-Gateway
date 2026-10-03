@@ -102,3 +102,18 @@ test('self-update uses the deployment flag and defaults to the standard socket',
   assert.equal(dockerSocket({}), '/var/run/docker.sock');
   assert.equal(dockerSocket({ MCP_DOCKER_SOCKET: '/tmp/docker.sock' }), '/tmp/docker.sock');
 });
+
+test('digest and replaced-container references retain the correct update repository', () => {
+  assert.equal(
+    updateTargetImage({ Config: { Image: 'localhost:5000/app@sha256:abc' } }, {}),
+    'localhost:5000/app:latest',
+  );
+  assert.equal(
+    updateTargetImage(
+      { Config: { Image: 'sha256:abc', Labels: { 'com.mcp.update.image': 'example.com/team/app:v1' } } },
+      {},
+    ),
+    'example.com/team/app:latest',
+  );
+  assert.equal(updateTargetImage({ Config: { Image: 'sha256:abc' } }, {}), 'brandonvee/mcp-gateway:latest');
+});

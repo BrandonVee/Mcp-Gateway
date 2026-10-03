@@ -24,17 +24,31 @@ export function upstreamAllowlistEnabled(env: NodeJS.ProcessEnv = process.env): 
   return env.NODE_ENV === 'production' || allowedUpstreamHosts(env).size > 0;
 }
 
-export function normalizeUpstreamEndpoint(value: string, env: NodeJS.ProcessEnv = process.env): string | null {
+export type UpstreamEndpointValidation =
+  | { url: string; error?: never }
+  | { url?: never; error: 'invalid_upstream_endpoint' | 'upstream_host_not_allowed'; host?: string };
+
+export function validateUpstreamEndpoint(
+  value: unknown,
+  env: NodeJS.ProcessEnv = process.env,
+): UpstreamEndpointValidation {
   try {
+    if (typeof value !== 'string') return { error: 'invalid_upstream_endpoint' };
     const url = new URL(value);
     if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password || url.hash)
-      return null;
-    if (upstreamAllowlistEnabled(env) && !allowedUpstreamHosts(env).has(url.hostname.toLowerCase())) return null;
+      return { error: 'invalid_upstream_endpoint' };
+    const host = url.hostname.toLowerCase();
+    if (upstreamAllowlistEnabled(env) && !allowedUpstreamHosts(env).has(host))
+      return { error: 'upstream_host_not_allowed', host };
     if (url.pathname === '/' || !url.pathname) url.pathname = '/mcp';
-    return url.toString().replace(/\/$/, '');
+    return { url: url.toString().replace(/\/$/, '') };
   } catch {
-    return null;
+    return { error: 'invalid_upstream_endpoint' };
   }
+}
+
+export function normalizeUpstreamEndpoint(value: string, env: NodeJS.ProcessEnv = process.env): string | null {
+  return validateUpstreamEndpoint(value, env).url ?? null;
 }
 
 export interface PlatformConfig {
@@ -265,6 +279,11 @@ const upstreamHost = z
   .max(253)
   .regex(/^[a-z0-9][a-z0-9.-]*$/i)
   .refine((host) => !host.includes('..'));
+
+export function normalizeUpstreamHost(value: unknown): string | null {
+  const parsed = upstreamHost.safeParse(typeof value === 'string' ? value.trim().toLowerCase() : value);
+  return parsed.success ? parsed.data : null;
+}
 const publicOrigin = (production: boolean) =>
   z.string().refine((value) => {
     try {

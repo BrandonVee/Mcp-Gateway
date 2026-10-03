@@ -178,7 +178,7 @@ export function UsageMonitoring({ gateway }: { gateway: GatewayHealth | null }) 
   }, [filtersKey, dimension, tab, revision]);
 
   const loadMore = async () => {
-    if (!cursor || loadingMore) return;
+    if (!cursor || loadingMore || loading) return;
     const snapshot = current.current;
     paged.current = true;
     setHistorical(true);

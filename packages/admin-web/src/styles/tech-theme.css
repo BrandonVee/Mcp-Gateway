@@ -586,14 +586,9 @@ body {
   box-shadow: 0 2px 0 #050910;
 }
 
-.updated-tag,
 .secure-tag {
   background: rgba(13, 24, 39, 0.9) !important;
   border-color: #21334b !important;
-}
-
-.updated-tag {
-  color: #7f91aa;
 }
 
 .secure-tag {
@@ -1090,8 +1085,7 @@ body {
   }
 
   .command-trigger span,
-  .command-trigger kbd,
-  .updated-tag {
+  .command-trigger kbd {
     display: none;
   }
 }
@@ -1157,7 +1151,6 @@ body {
 .menu-count,
 .system-state small,
 .secure-tag,
-.updated-tag,
 .route-origin small,
 .route-node .ant-tag,
 .scope-tag,

@@ -1,6 +1,7 @@
 import { useI18n } from '../../i18n';
 import { InfoCircleOutlined, LockOutlined, UserAddOutlined } from '@ant-design/icons';
 import { Alert, Button, Checkbox, Form, Input, Modal, Radio, Select } from 'antd';
+import { submitDialog } from '../../utils/operations';
 import type { AdminUser, CreateUserInput, DialogState, McpServer } from '../../types';
 
 interface UserDialogsProps {
@@ -19,11 +20,11 @@ export function UserDialogs(props: UserDialogsProps) {
   }
 
   if (props.state.type === 'assign-user') {
-    return <AssignUserDialog {...props} user={props.state.user} />;
+    return <AssignUserDialog key={props.state.user.id} {...props} user={props.state.user} />;
   }
 
   if (props.state.type === 'reset-password') {
-    return <ResetPasswordDialog {...props} user={props.state.user} />;
+    return <ResetPasswordDialog key={props.state.user.id} {...props} user={props.state.user} />;
   }
 
   return null;
@@ -53,30 +54,37 @@ function CreateUserDialog({
       okText={t('userDialog.createUser')}
       cancelText={t('common.cancel')}
       confirmLoading={busy}
+      closable={!busy}
+      keyboard={!busy}
+      maskClosable={!busy}
+      cancelButtonProps={{ disabled: busy }}
+      okButtonProps={{ disabled: busy }}
       onCancel={onClose}
       onOk={() =>
-        form.validateFields().then((values) =>
+        submitDialog(form, (values) =>
           onCreate({
-            username: values.username,
+            username: values.username.trim(),
             password: values.password,
             role: values.role,
-            servers: values.all_servers ? ['*'] : (values.servers ?? []),
+            servers: values.role === 'admin' ? [] : values.all_servers ? ['*'] : (values.servers ?? []),
           }),
         )
       }
     >
       <Form<CreateUserInput & { all_servers?: boolean }>
         form={form}
+        disabled={busy}
         layout="vertical"
         requiredMark={false}
         initialValues={{ role: 'user', servers: [], all_servers: false }}
       >
         <Form.Item
           name="username"
+          normalize={(value: string) => value.trim()}
           label={t('connections.username')}
           rules={[
             { required: true, message: t('connections.enterUsername') },
-            { min: 2, message: t('userDialog.usernameMustLeast2Characters') },
+            { pattern: /^[a-zA-Z0-9._-]{2,64}$/, message: t('auth.signup.usernameRule') },
           ]}
         >
           <Input placeholder={t('userDialog.exampleDataAgent')} autoFocus />
@@ -86,10 +94,14 @@ function CreateUserDialog({
           label={t('userDialog.initialPassword')}
           rules={[
             { required: true, message: t('userDialog.enterInitialPassword') },
-            { min: 12, message: t('userDialog.passwordMustLeast12Characters') },
+            { min: 12, max: 256, message: t('auth.signup.passwordRule') },
           ]}
         >
-          <Input.Password prefix={<LockOutlined />} placeholder={t('userDialog.least12Characters')} />
+          <Input.Password
+            autoComplete="new-password"
+            prefix={<LockOutlined />}
+            placeholder={t('userDialog.least12Characters')}
+          />
         </Form.Item>
         <Form.Item name="role" label={t('common.role')}>
           <Radio.Group optionType="button" buttonStyle="solid">
@@ -108,7 +120,7 @@ function CreateUserDialog({
                   <Button
                     type="link"
                     size="small"
-                    disabled={servers.length === 0}
+                    disabled={busy || servers.length === 0}
                     onClick={() =>
                       form.setFieldValue(
                         'servers',
@@ -121,7 +133,7 @@ function CreateUserDialog({
                   <Button
                     type="link"
                     size="small"
-                    disabled={servers.length === 0}
+                    disabled={busy || servers.length === 0}
                     onClick={() => form.setFieldValue('servers', [])}
                   >
                     {t('userDialog.clearServerSelection')}
@@ -172,10 +184,13 @@ function AssignUserDialog({
       okText={t('userDialog.saveAccessScope')}
       cancelText={t('common.cancel')}
       confirmLoading={busy}
+      closable={!busy}
+      keyboard={!busy}
+      maskClosable={!busy}
+      cancelButtonProps={{ disabled: busy }}
+      okButtonProps={{ disabled: busy }}
       onCancel={onClose}
-      onOk={() =>
-        form.validateFields().then((values) => onAssign(user, values.all_servers ? ['*'] : (values.servers ?? [])))
-      }
+      onOk={() => submitDialog(form, (values) => onAssign(user, values.all_servers ? ['*'] : (values.servers ?? [])))}
     >
       <Alert
         type="info"
@@ -185,6 +200,7 @@ function AssignUserDialog({
       />
       <Form
         form={form}
+        disabled={busy}
         layout="vertical"
         initialValues={{
           servers: user.servers.filter((name) => name !== '*'),
@@ -200,12 +216,10 @@ function AssignUserDialog({
               mode="multiple"
               allowClear
               placeholder={t('userDialog.selectServers')}
-              options={servers
-                .filter((server) => server.enabled)
-                .map((server) => ({
-                  label: server.display_name,
-                  value: server.name,
-                }))}
+              options={servers.map((server) => ({
+                label: server.enabled ? server.display_name : `${server.display_name} (${t('servers.paused')})`,
+                value: server.name,
+              }))}
             />
           </Form.Item>
         )}
@@ -238,19 +252,30 @@ function ResetPasswordDialog({
       okText={t('userDialog.resetPassword')}
       cancelText={t('common.cancel')}
       confirmLoading={busy}
+      closable={!busy}
+      keyboard={!busy}
+      maskClosable={!busy}
+      cancelButtonProps={{ disabled: busy }}
+      okButtonProps={{ disabled: busy }}
       onCancel={onClose}
-      onOk={() => form.validateFields().then((values) => onPassword(user, values.password))}
+      onOk={() => submitDialog(form, (values) => onPassword(user, values.password))}
     >
-      <Form form={form} layout="vertical" requiredMark={false}>
+      <Alert type="warning" showIcon className="dialog-alert" message={t('userDialog.passwordResetHelp')} />
+      <Form form={form} disabled={busy} layout="vertical" requiredMark={false}>
         <Form.Item
           name="password"
           label={t('userDialog.newPassword')}
           rules={[
             { required: true, message: t('userDialog.enterNewPassword') },
-            { min: 12, message: t('userDialog.passwordMustLeast12Characters') },
+            { min: 12, max: 256, message: t('auth.signup.passwordRule') },
           ]}
         >
-          <Input.Password prefix={<LockOutlined />} placeholder={t('userDialog.least12Characters')} autoFocus />
+          <Input.Password
+            autoComplete="new-password"
+            prefix={<LockOutlined />}
+            placeholder={t('userDialog.least12Characters')}
+            autoFocus
+          />
         </Form.Item>
       </Form>
     </Modal>

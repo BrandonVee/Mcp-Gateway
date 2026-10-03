@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { PageToolbar } from '../../components/PageToolbar';
 import type { AdminConnection, AdminUser, McpServer } from '../../types';
 
-type ConnectionStatus = 'connected' | 'pending' | 'expired' | 'disabled' | 'stale';
+type ConnectionStatus = 'connected' | 'pending' | 'expired' | 'disabled' | 'stale' | 'paused';
 
 interface ConnectionRow {
   key: string;
@@ -20,6 +20,7 @@ interface ConnectionsAdminPageProps {
   users: AdminUser[];
   servers: McpServer[];
   connections: AdminConnection[];
+  busy: boolean;
   onRevoke: (user: AdminUser, server: McpServer) => void;
 }
 
@@ -29,6 +30,7 @@ const statusMeta: Record<ConnectionStatus, { label: MessageKey; color: string }>
   expired: { label: 'status.expired', color: 'error' },
   disabled: { label: 'connectionsAdmin.userDisabled', color: 'default' },
   stale: { label: 'connectionsAdmin.reconnectRequired', color: 'processing' },
+  paused: { label: 'connectionsAdmin.serverPaused', color: 'default' },
 };
 
 function formatDate(value: number | null | undefined, language: Language) {
@@ -36,7 +38,7 @@ function formatDate(value: number | null | undefined, language: Language) {
   return new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(value);
 }
 
-export function ConnectionsAdminPage({ users, servers, connections, onRevoke }: ConnectionsAdminPageProps) {
+export function ConnectionsAdminPage({ users, servers, connections, busy, onRevoke }: ConnectionsAdminPageProps) {
   const { t, language } = useI18n();
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = useState<'all' | ConnectionStatus>('all');
@@ -52,6 +54,7 @@ export function ConnectionsAdminPage({ users, servers, connections, onRevoke }: 
         if ((!hasAccess || server.auth_mode === 'none') && !credential) continue;
         let status: ConnectionStatus;
         if (user.disabled) status = 'disabled';
+        else if (!server.enabled) status = 'paused';
         else if (!hasAccess || server.auth_mode === 'none' || (credential && credential.mode !== server.auth_mode))
           status = 'stale';
         else if (!credential) status = 'pending';
@@ -137,7 +140,13 @@ export function ConnectionsAdminPage({ users, servers, connections, onRevoke }: 
       align: 'right',
       render: (_, row) =>
         row.credential ? (
-          <Button type="link" danger icon={<DisconnectOutlined />} onClick={() => onRevoke(row.user, row.server)}>
+          <Button
+            disabled={busy}
+            type="link"
+            danger
+            icon={<DisconnectOutlined />}
+            onClick={() => onRevoke(row.user, row.server)}
+          >
             {t('app.revokeConnection')}
           </Button>
         ) : (
@@ -210,7 +219,24 @@ export function ConnectionsAdminPage({ users, servers, connections, onRevoke }: 
           dataSource={filtered}
           pagination={{ pageSize: 10, hideOnSinglePage: true }}
           scroll={{ x: 860 }}
-          locale={{ emptyText: t('connectionsAdmin.noUserConnectionsRequireAdditional') }}
+          locale={{
+            emptyText: rows.length ? (
+              <span>
+                {t('connectionsAdmin.noMatchingConnections')}{' '}
+                <Button
+                  type="link"
+                  onClick={() => {
+                    setKeyword('');
+                    setFilter('all');
+                  }}
+                >
+                  {t('servers.clearFilters')}
+                </Button>
+              </span>
+            ) : (
+              t('connectionsAdmin.noUserConnectionsRequireAdditional')
+            ),
+          }}
         />
         <div className="table-summary">
           <Flex gap={8} align="center">

@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import {
   App,
+  Alert,
   Badge,
   Button,
   Card,
@@ -31,11 +32,16 @@ import {
 import { useMemo, useState } from 'react';
 import { ServiceDescription } from '../../components/ServiceDescription';
 import { PageToolbar } from '../../components/PageToolbar';
-import type { AdminUser, McpInstance, McpServer } from '../../types';
+import type { AdminUser, McpInstance, McpServer, SystemSettings } from '../../types';
+import { untrustedUpstreamHost } from './upstream-allowlist';
 
 interface ServersPageProps {
   servers: McpServer[];
   users: AdminUser[];
+  busy: boolean;
+  settings: SystemSettings | null;
+  onAddUpstreamHost: (host: string) => Promise<void>;
+  onOpenSettings: () => void;
   onCreate: () => void;
   onEdit: (server: McpServer) => void;
   onEditInstance: (server: McpServer, instance: McpInstance) => void;
@@ -70,8 +76,12 @@ export function ServersPage(props: ServersPageProps) {
   }, [keyword, props.servers, status]);
 
   const copyUrl = async (url: string) => {
-    await navigator.clipboard.writeText(url);
-    message.success(t('servers.endpointUrlCopied'));
+    try {
+      await navigator.clipboard.writeText(url);
+      message.success(t('servers.endpointUrlCopied'));
+    } catch {
+      message.error(t('servers.copyFailed'));
+    }
   };
 
   return (
@@ -81,7 +91,7 @@ export function ServersPage(props: ServersPageProps) {
         title="servers.oneRegistryInternalExternalServers"
         description="servers.registerStreamableHttpEndpointsGateway"
         primaryAction={
-          <Button type="primary" icon={<PlusOutlined />} onClick={props.onCreate}>
+          <Button disabled={props.busy} type="primary" icon={<PlusOutlined />} onClick={props.onCreate}>
             {t('servers.registerServer')}
           </Button>
         }
@@ -123,6 +133,7 @@ export function ServersPage(props: ServersPageProps) {
                     <code title={`/mcp/${server.name}`}>/mcp/{server.name}</code>
                   </span>
                   <Switch
+                    disabled={props.busy}
                     checked={server.enabled}
                     checkedChildren={t('status.routable')}
                     unCheckedChildren={t('status.paused')}
@@ -131,6 +142,21 @@ export function ServersPage(props: ServersPageProps) {
                 </header>
 
                 <ServiceDescription description={server.description} />
+                {server.enabled &&
+                  !server.instances.some(
+                    (instance) => instance.enabled && !untrustedUpstreamHost(instance.url, props.settings),
+                  ) && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      className="dialog-alert"
+                      message={t(
+                        server.instances.some((instance) => instance.enabled)
+                          ? 'servers.allInstancesBlocked'
+                          : 'servers.noEnabledInstances',
+                      )}
+                    />
+                  )}
                 <div className="server-policy">
                   <div>
                     <small>{t('users.userSign')}</small>
@@ -142,7 +168,11 @@ export function ServersPage(props: ServersPageProps) {
                           : t('servers.platformSignOauth')}
                     </strong>
                   </div>
-                  <Button icon={<SafetyCertificateOutlined />} onClick={() => props.onConfigureAuth(server)}>
+                  <Button
+                    disabled={props.busy}
+                    icon={<SafetyCertificateOutlined />}
+                    onClick={() => props.onConfigureAuth(server)}
+                  >
                     {t('servers.configureAuth')}
                   </Button>
                   <div>
@@ -150,62 +180,105 @@ export function ServersPage(props: ServersPageProps) {
                     <strong>{t('servers.countUsers', { count: server.user_count })}</strong>
                     {server.signup_access && <Tag color="blue">{t('servers.signupAccess')}</Tag>}
                   </div>
-                  <Button icon={<TeamOutlined />} onClick={() => props.onConfigureUsers(server)}>
+                  <Button disabled={props.busy} icon={<TeamOutlined />} onClick={() => props.onConfigureUsers(server)}>
                     {t('servers.assignAccess')}
                   </Button>
                 </div>
 
                 <div className="instance-list">
                   {server.instances.length ? (
-                    server.instances.map((instance) => (
-                      <div className="instance-row" key={instance.id}>
-                        <div className="instance-copy">
-                          <Flex align="center" gap={8}>
-                            <Badge status={instance.enabled ? 'success' : 'default'} />
-                            <strong title={instance.id}>{instance.id}</strong>
-                            <Tag bordered={false}>{instance.enabled ? t('servers.online') : t('servers.disabled')}</Tag>
-                          </Flex>
-                          <Typography.Text>{instance.url}</Typography.Text>
+                    server.instances.map((instance) => {
+                      const blockedHost = untrustedUpstreamHost(instance.url, props.settings);
+                      return (
+                        <div className="instance-row" key={instance.id}>
+                          <div className="instance-copy">
+                            <Flex align="center" gap={8}>
+                              <Badge status={!instance.enabled ? 'default' : blockedHost ? 'warning' : 'success'} />
+                              <strong title={instance.id}>{instance.id}</strong>
+                              <Tag bordered={false} color={blockedHost && instance.enabled ? 'warning' : undefined}>
+                                {t(
+                                  !instance.enabled
+                                    ? 'servers.disabled'
+                                    : blockedHost
+                                      ? 'servers.allowlistBlocked'
+                                      : 'servers.instanceEnabled',
+                                )}
+                              </Tag>
+                            </Flex>
+                            <Typography.Text>{instance.url}</Typography.Text>
+                            {blockedHost && (
+                              <div>
+                                <Typography.Text type="warning">
+                                  {t('servers.hostNotTrusted', { host: blockedHost })}
+                                </Typography.Text>
+                                {props.settings?.managed && props.settings.configured ? (
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    disabled={props.busy}
+                                    onClick={() =>
+                                      void props
+                                        .onAddUpstreamHost(blockedHost)
+                                        .catch((error) =>
+                                          message.error(
+                                            error instanceof Error ? error.message : t('common.operationFailed'),
+                                          ),
+                                        )
+                                    }
+                                  >
+                                    {t('serverDialog.addUpstreamHost')}
+                                  </Button>
+                                ) : (
+                                  <Button type="link" size="small" disabled={props.busy} onClick={props.onOpenSettings}>
+                                    {t('settings.title')}
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <Space size={2} wrap>
+                            <Tooltip title={t('servers.editInstance')}>
+                              <Button
+                                type="text"
+                                disabled={props.busy}
+                                aria-label={t('servers.editInstance')}
+                                icon={<EditOutlined />}
+                                onClick={() => props.onEditInstance(server, instance)}
+                              />
+                            </Tooltip>
+                            <Tooltip title={t('servers.copyUrl')}>
+                              <Button type="text" icon={<CopyOutlined />} onClick={() => copyUrl(instance.url)} />
+                            </Tooltip>
+                            <Tooltip title={t('servers.openNewTab')}>
+                              <Button
+                                type="text"
+                                icon={<ExportOutlined />}
+                                onClick={() => window.open(instance.url, '_blank', 'noopener,noreferrer')}
+                              />
+                            </Tooltip>
+                            <Tooltip
+                              title={instance.enabled ? t('servers.disableInstance') : t('servers.enableInstance')}
+                            >
+                              <Button
+                                type="text"
+                                disabled={props.busy}
+                                icon={<PoweroffOutlined />}
+                                onClick={() => props.onToggleInstance(server, instance)}
+                              />
+                            </Tooltip>
+                            <Tooltip title={t('servers.deleteInstance')}>
+                              <Button
+                                type="text"
+                                danger
+                                disabled={props.busy}
+                                icon={<DeleteOutlined />}
+                                onClick={() => props.onDeleteInstance(server, instance)}
+                              />
+                            </Tooltip>
+                          </Space>
                         </div>
-                        <Space size={2} wrap>
-                          <Tooltip title={t('servers.editInstance')}>
-                            <Button
-                              type="text"
-                              aria-label={t('servers.editInstance')}
-                              icon={<EditOutlined />}
-                              onClick={() => props.onEditInstance(server, instance)}
-                            />
-                          </Tooltip>
-                          <Tooltip title={t('servers.copyUrl')}>
-                            <Button type="text" icon={<CopyOutlined />} onClick={() => copyUrl(instance.url)} />
-                          </Tooltip>
-                          <Tooltip title={t('servers.openNewTab')}>
-                            <Button
-                              type="text"
-                              icon={<ExportOutlined />}
-                              onClick={() => window.open(instance.url, '_blank', 'noopener,noreferrer')}
-                            />
-                          </Tooltip>
-                          <Tooltip
-                            title={instance.enabled ? t('servers.disableInstance') : t('servers.enableInstance')}
-                          >
-                            <Button
-                              type="text"
-                              icon={<PoweroffOutlined />}
-                              onClick={() => props.onToggleInstance(server, instance)}
-                            />
-                          </Tooltip>
-                          <Tooltip title={t('servers.deleteInstance')}>
-                            <Button
-                              type="text"
-                              danger
-                              icon={<DeleteOutlined />}
-                              onClick={() => props.onDeleteInstance(server, instance)}
-                            />
-                          </Tooltip>
-                        </Space>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('servers.noUpstreamInstances')} />
                   )}
@@ -219,13 +292,29 @@ export function ServersPage(props: ServersPageProps) {
                     })}
                   </span>
                   <Space size={4} wrap>
-                    <Button type="link" icon={<EditOutlined />} onClick={() => props.onEdit(server)}>
+                    <Button
+                      disabled={props.busy}
+                      type="link"
+                      icon={<EditOutlined />}
+                      onClick={() => props.onEdit(server)}
+                    >
                       {t('servers.editInfo')}
                     </Button>
-                    <Button type="link" icon={<PlusOutlined />} onClick={() => props.onAddInstance(server)}>
+                    <Button
+                      disabled={props.busy}
+                      type="link"
+                      icon={<PlusOutlined />}
+                      onClick={() => props.onAddInstance(server)}
+                    >
                       {t('servers.addInstance')}
                     </Button>
-                    <Button type="link" danger icon={<DeleteOutlined />} onClick={() => props.onDelete(server)}>
+                    <Button
+                      disabled={props.busy}
+                      type="link"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => props.onDelete(server)}
+                    >
                       {t('common.delete')}
                     </Button>
                   </Space>
@@ -250,7 +339,7 @@ export function ServersPage(props: ServersPageProps) {
                 {t('servers.clearFilters')}
               </Button>
             ) : (
-              <Button type="primary" icon={<DeploymentUnitOutlined />} onClick={props.onCreate}>
+              <Button disabled={props.busy} type="primary" icon={<DeploymentUnitOutlined />} onClick={props.onCreate}>
                 {t('servers.registerFirstServer')}
               </Button>
             )}

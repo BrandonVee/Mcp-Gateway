@@ -17,6 +17,9 @@ import { useI18n } from '../../i18n';
 import { ServiceDescription } from '../../components/ServiceDescription';
 import { LanguageSwitcher } from '../../components/LanguageSwitcher';
 import { mcpConfig, mcpServerUrl } from './mcp-config';
+import { mutateAndRefresh } from '../../utils/operations';
+import { validApiKey } from '../../utils/validation';
+import { oauthResultKey } from './oauth-result';
 import './connections.css';
 
 export function ConnectionsPage({
@@ -69,20 +72,31 @@ export function ConnectionsPage({
     const result = new URLSearchParams(window.location.search).get('result');
     if (result) {
       if (result === 'connected') message.success(t('connections.oauthConnectionEstablished'));
-      else message.error(t('connections.oauthConnectionNotCompletedResult', { result }));
-      window.history.replaceState(null, '', window.location.pathname);
+      else message.error(t(oauthResultKey(result)));
+      const query = new URLSearchParams(window.location.search);
+      query.delete('result');
+      query.delete('server');
+      window.history.replaceState(
+        null,
+        '',
+        window.location.pathname + (query.size ? `?${query}` : '') + window.location.hash,
+      );
     }
   }, []);
 
   const saveKey = async () => {
-    if (!selected || !key) return;
+    if (!selected || busy) return;
+    if (!validApiKey(key)) {
+      message.error(t('api.invalidApiKey'));
+      return;
+    }
     setBusy(true);
     try {
-      await api.saveApiKey(selected.name, key);
-      await load();
+      const result = await mutateAndRefresh(() => api.saveApiKey(selected.name, key), load);
       setKey('');
       setSelected(null);
       message.success(t('connections.apiKeySaved'));
+      if (result.refreshError) message.warning(t('common.savedRefreshFailed'));
     } catch (error) {
       checkSession(error);
       message.error(error instanceof Error ? error.message : t('connections.saveFailed'));
@@ -92,6 +106,7 @@ export function ConnectionsPage({
   };
 
   const connectOAuth = async (server: ConnectionServer) => {
+    if (busy) return;
     setBusy(true);
     try {
       const { authorization_url } = await api.startOAuth(server.name);
@@ -111,14 +126,17 @@ export function ConnectionsPage({
       okButtonProps: { danger: true },
       cancelText: t('common.cancel'),
       onOk: async () => {
+        setBusy(true);
         try {
-          await api.removeCredential(server.name);
-          await load();
+          const result = await mutateAndRefresh(() => api.removeCredential(server.name), load);
           message.success(t('connections.connectionDisconnected'));
+          if (result.refreshError) message.warning(t('common.savedRefreshFailed'));
         } catch (error) {
           checkSession(error);
           message.error(error instanceof Error ? error.message : t('common.operationFailed'));
           throw error;
+        } finally {
+          setBusy(false);
         }
       },
     });
@@ -198,7 +216,13 @@ export function ConnectionsPage({
             <div className="connections-intro-actions">
               <Button
                 icon={<ReloadOutlined />}
-                onClick={() => load().catch(() => message.error(t('common.refreshFailed')))}
+                loading={busy}
+                onClick={() => {
+                  setBusy(true);
+                  void load()
+                    .catch(() => message.error(t('common.refreshFailed')))
+                    .finally(() => setBusy(false));
+                }}
               >
                 {t('connections.refreshStatus')}
               </Button>
@@ -268,7 +292,15 @@ export function ConnectionsPage({
                       {t('connections.copyMcpConfig')}
                     </Button>
                     {server.auth_mode === 'api_key' && (
-                      <Button type="primary" icon={<KeyOutlined />} onClick={() => setSelected(server)}>
+                      <Button
+                        disabled={busy}
+                        type="primary"
+                        icon={<KeyOutlined />}
+                        onClick={() => {
+                          setKey('');
+                          setSelected(server);
+                        }}
+                      >
                         {t(
                           server.connection_status === 'connected'
                             ? 'connections.updateKey'
@@ -291,7 +323,13 @@ export function ConnectionsPage({
                       </Button>
                     )}
                     {server.connection_status !== 'not_required' && server.connection_status !== 'not_connected' && (
-                      <Button danger type="text" icon={<DisconnectOutlined />} onClick={() => disconnect(server)}>
+                      <Button
+                        disabled={busy}
+                        danger
+                        type="text"
+                        icon={<DisconnectOutlined />}
+                        onClick={() => disconnect(server)}
+                      >
                         {t('connections.disconnectAction')}
                       </Button>
                     )}
@@ -313,7 +351,11 @@ export function ConnectionsPage({
         title={t('connections.configureApiKeyServer', { server: selected?.display_name ?? '' })}
         open={!!selected}
         okText={t('connections.saveKey')}
-        okButtonProps={{ disabled: !key, loading: busy }}
+        okButtonProps={{ disabled: !validApiKey(key) || busy, loading: busy }}
+        cancelButtonProps={{ disabled: busy }}
+        closable={!busy}
+        keyboard={!busy}
+        maskClosable={!busy}
         onOk={saveKey}
         onCancel={() => {
           setSelected(null);
@@ -326,8 +368,11 @@ export function ConnectionsPage({
           autoComplete="off"
           placeholder={t('connections.pasteApiKey')}
           value={key}
+          disabled={busy}
+          maxLength={4096}
           onChange={(event) => setKey(event.target.value)}
         />
+        {key && !validApiKey(key) && <Typography.Text type="danger">{t('api.invalidApiKey')}</Typography.Text>}
       </Modal>
     </main>
   );

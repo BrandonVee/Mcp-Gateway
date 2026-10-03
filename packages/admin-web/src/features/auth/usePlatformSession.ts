@@ -24,7 +24,7 @@ export function usePlatformSession() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [session?.user_id]);
 
   const refresh = useCallback(async () => {
     const request = ++generation.current;
@@ -62,7 +62,8 @@ export function usePlatformSession() {
     setChecking(false);
     setSession(current);
     // Both roles share the same default login and home address.
-    window.history.replaceState(null, '', `/${window.location.search}`);
+    const destination = window.location.pathname === '/connections' ? '/connections' : '/';
+    window.history.replaceState(null, '', `${destination}${window.location.search}`);
   };
 
   const logout = async () => {

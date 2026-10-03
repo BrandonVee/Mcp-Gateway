@@ -20,9 +20,59 @@ import { getCurrentLanguage, getTranslation, type Language, type MessageKey } fr
 
 /** Present stable, localized UI errors instead of leaking English backend strings. */
 export function apiErrorMessage(status: number, body: unknown, language: Language): string {
-  const payload = body && typeof body === 'object' ? (body as { error?: unknown }) : {};
+  const payload =
+    body && typeof body === 'object' ? (body as { error?: unknown; host?: unknown; server?: unknown }) : {};
   const code = typeof payload.error === 'string' ? payload.error : undefined;
+  if (code === 'upstream_host_not_allowed' && typeof payload.host === 'string')
+    return getTranslation('serverDialog.upstreamHostBlocked', language, { host: payload.host });
+  if (code === 'unknown_server' && typeof payload.server === 'string')
+    return getTranslation('api.unknownServer', language, { server: payload.server });
+  if (code?.startsWith('unknown server: ') || code?.startsWith('unknown or disabled server: '))
+    return getTranslation('api.unknownServer', language, { server: code.slice(code.indexOf(': ') + 2) });
   const known: Record<string, MessageKey> = {
+    invalid_user_payload: 'api.invalidUserPayload',
+    invalid_instance_payload: 'api.invalidInstancePayload',
+    instance_already_exists: 'api.instanceExists',
+    'username must be 2-64 chars [a-zA-Z0-9._-]': 'auth.signup.usernameRule',
+    'password must be at least 12 characters': 'auth.signup.passwordRule',
+    'password must be 12-256 characters': 'auth.signup.passwordRule',
+    'name must be 1-64 chars [a-zA-Z0-9._-]': 'serverDialog.serverIdFormat',
+    'description must be a string of at most 2000 characters': 'serverDialog.descriptionMax',
+    'display_name must be a non-empty string': 'serverDialog.enterDisplayName',
+    'display_name must be a string': 'serverDialog.enterDisplayName',
+    'auth_mode must be none, api_key or oauth': 'api.invalidAuthMode',
+    'api_key_header must be authorization or an x-* header': 'api.invalidKeyHeader',
+    'invalid api_key_prefix': 'api.invalidKeyPrefix',
+    'valid OAuth authorize and token URLs are required': 'api.invalidOAuthUrl',
+    'oauth_client_id is required': 'api.oauthClientIdRequired',
+    'invalid oauth_client_secret': 'api.invalidOAuthSecret',
+    'invalid oauth_client_auth_method': 'api.invalidOAuthMethod',
+    'oauth_client_secret is required': 'api.oauthSecretRequired',
+    'oauth_client_secret requires a client authentication method': 'api.oauthSecretMethod',
+    'invalid oauth_scopes': 'api.invalidOAuthScopes',
+    'invalid oauth_resource': 'api.invalidOAuthResource',
+    'invalid oauth_issuer': 'api.invalidOAuthIssuer',
+    invalid_api_key: 'api.invalidApiKey',
+    server_does_not_use_api_key: 'api.serverAuthChanged',
+    oauth_not_configured: 'api.oauthNotConfigured',
+    server_changed_or_denied: 'api.serverChanged',
+    server_not_found_or_denied: 'api.serverDenied',
+    'user not found': 'api.userMissing',
+    'server not found': 'api.serverMissing',
+    'server instance not found': 'api.instanceMissing',
+    'connection not found': 'api.connectionMissing',
+    'admins already have access to every server': 'api.adminAccess',
+    'wildcard must be the only server grant': 'api.invalidGrants',
+    'servers must be an array of server names': 'api.invalidGrants',
+    'user_ids must refer to ordinary users without wildcard access': 'api.grantsChanged',
+    system_settings_unavailable: 'api.settingsUnavailable',
+    upstream_host_not_allowed: 'serverDialog.upstreamBlocked',
+    invalid_upstream_endpoint: 'serverDialog.enterValidHttpHttpsUrl',
+    gateway_self_referential_endpoint: 'serverDialog.gatewayEndpointBlocked',
+    invalid_upstream_host: 'serverDialog.invalidUpstreamHost',
+    upstream_host_limit_reached: 'serverDialog.upstreamHostLimit',
+    system_settings_managed_by_environment: 'settings.environmentManaged',
+    system_settings_required: 'settings.setupRequired',
     invalid_admin_credentials: 'api.invalidCredentials',
     invalid_credentials: 'api.invalidCredentials',
     invalid_origin: 'api.invalidOrigin',
@@ -40,6 +90,8 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     system_update_disabled: 'api.updateDisabled',
     docker_unavailable: 'api.updateUnavailable',
     system_update_failed: 'api.updateFailed',
+    system_update_in_progress: 'api.updateInProgress',
+    invalid_update_version: 'api.invalidUpdateVersion',
   };
   const statusKey: Record<number, MessageKey> = {
     400: 'api.invalidRequest',
@@ -53,7 +105,7 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     503: 'api.serviceUnavailable',
     504: 'api.serviceUnavailable',
   };
-  const key = code && known[code] ? known[code] : statusKey[status];
+  const key = code && Object.hasOwn(known, code) ? known[code] : statusKey[status];
   return key ? getTranslation(key, language) : getTranslation('common.requestFailed', language, { status });
 }
 
@@ -104,16 +156,22 @@ export function apiForSession(session?: PlatformSession) {
   const request = <T>(url: string, init?: RequestInit) => sendRequest<T>(url, init, identity);
   return {
     systemSettings: () => request<SystemSettings>('/api/admin/system-settings'),
+    addUpstreamHost: (host: string) =>
+      request<SystemSettings>('/api/admin/system-settings/upstream-hosts', {
+        method: 'POST',
+        body: JSON.stringify({ host }),
+      }),
     saveSystemSettings: (body: SystemSettingsInput) =>
       request<SystemSettings>('/api/admin/system-settings', {
         method: 'PUT',
         body: JSON.stringify(body),
       }),
-    systemUpdate: () => request<SystemUpdateStatus>('/api/admin/system-update'),
-    startSystemUpdate: () =>
+    systemUpdate: (check = false) =>
+      request<SystemUpdateStatus>(`/api/admin/system-update${check ? '?check=true' : ''}`),
+    startSystemUpdate: (tag: string) =>
       request<{ status: string; container_id: string; updater_id: string }>('/api/admin/system-update', {
         method: 'POST',
-        body: '{}',
+        body: JSON.stringify({ tag }),
       }),
     usageSummary: (filters: UsageFilters, dimension: string) =>
       request<UsageSummary>(
