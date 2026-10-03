@@ -166,7 +166,7 @@ function CreateServerDialog({ busy, onClose, onCreate }: Pick<ServerDialogsProps
           label={t('serverDialog.mcpEndpointUrl')}
           rules={[
             { required: true, message: t('serverDialog.enterEndpointUrl') },
-            { type: 'url', message: t('serverDialog.enterValidHttpHttpsUrl') },
+            endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl')),
           ]}
         >
           <Input prefix={<LinkOutlined />} placeholder="https://mcp.example.com/mcp" />
@@ -175,6 +175,27 @@ function CreateServerDialog({ busy, onClose, onCreate }: Pick<ServerDialogsProps
       </Form>
     </Modal>
   );
+}
+
+/**
+ * antd's built-in `url` rule requires a dotted hostname, so it rejects container
+ * and internal names like http://fx-app-1:8765/mcp. Match the backend instead:
+ * any absolute http(s) URL with a host is accepted.
+ */
+export function endpointUrlRule(message: string) {
+  return {
+    validator: (_rule: unknown, value: unknown) => {
+      try {
+        const url = new URL(String(value ?? '').trim());
+        // Same shape the backend accepts: absolute http(s), no embedded credentials.
+        if ((url.protocol === 'http:' || url.protocol === 'https:') && url.hostname && !url.username && !url.password)
+          return Promise.resolve();
+      } catch {
+        /* Reported as an invalid URL below. */
+      }
+      return Promise.reject(new Error(message));
+    },
+  };
 }
 
 function DescriptionField() {
@@ -294,7 +315,7 @@ function EditInstanceDialog({
           extra={t('serverDialog.endpointChangeHelp')}
           rules={[
             { required: true, message: t('serverDialog.enterEndpointUrl') },
-            { type: 'url', message: t('serverDialog.enterValidHttpHttpsUrl') },
+            endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl')),
           ]}
         >
           <Input prefix={<LinkOutlined />} autoFocus />
@@ -359,14 +380,14 @@ function AuthFormFields() {
               <Form.Item
                 name="oauth_authorize_url"
                 label={t('serverDialog.authorizationEndpoint')}
-                rules={[{ required: true }, { type: 'url' }]}
+                rules={[{ required: true }, endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl'))]}
               >
                 <Input placeholder="https://provider.example/authorize" />
               </Form.Item>
               <Form.Item
                 name="oauth_token_url"
                 label={t('serverDialog.tokenEndpoint')}
-                rules={[{ required: true }, { type: 'url' }]}
+                rules={[{ required: true }, endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl'))]}
               >
                 <Input placeholder="https://provider.example/token" />
               </Form.Item>
@@ -672,7 +693,7 @@ function AddInstanceDialog({
           label={t('serverDialog.endpointUrl')}
           rules={[
             { required: true, message: t('serverDialog.enterEndpointUrl') },
-            { type: 'url', message: t('serverDialog.enterValidHttpHttpsUrl') },
+            endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl')),
           ]}
         >
           <Input prefix={<LinkOutlined />} placeholder="https://host.example/mcp" />
