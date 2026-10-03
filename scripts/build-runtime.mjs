@@ -1,6 +1,9 @@
 import { build } from 'esbuild';
 import { resolve } from 'node:path';
 
+// @mcp/shared is inlined into each bundle while every other package stays
+// external, so a runtime dependency added to packages/shared must also be
+// declared by auth-server and gateway: the images only install their own.
 const shared = resolve('packages/shared/src/index.ts');
 const common = {
   bundle: true,
