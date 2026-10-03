@@ -32,7 +32,9 @@ jobs:
     name: Build and publish the image
     if: github.repository == 'BrandonVee/Mcp-Gateway'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The arm64 image is built through QEMU, where the builder's pnpm install of
+    # the whole workspace takes far longer than on the native amd64 build.
+    timeout-minutes: 120
     permissions:
       contents: write
     outputs:
