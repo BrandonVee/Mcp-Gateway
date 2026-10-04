@@ -8,6 +8,7 @@ import {
   LinkOutlined,
   KeyOutlined,
   MonitorOutlined,
+  ShareAltOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ReloadOutlined,
@@ -50,6 +51,11 @@ const titles: Record<View, { eyebrow: MessageKey; title: MessageKey; description
     eyebrow: 'nav.monitoring.eyebrow',
     title: 'nav.monitoring.title',
     description: 'nav.monitoring.description',
+  },
+  topology: {
+    eyebrow: 'nav.topology.eyebrow',
+    title: 'nav.topology.title',
+    description: 'nav.topology.description',
   },
 };
 
@@ -96,6 +102,7 @@ export function AppShell({
       extra: <span className="menu-count">{serverCount}</span>,
     },
     { key: 'credentials', icon: <KeyOutlined />, label: t('nav.connections.title') },
+    { key: 'topology', icon: <ShareAltOutlined />, label: t('nav.topology.label') },
     { key: 'monitoring', icon: <MonitorOutlined />, label: t('nav.monitoring.title') },
     { key: 'settings', icon: <SettingOutlined />, label: t('settings.title') },
   ];

@@ -8,6 +8,7 @@ import {
   validCallEvent,
   latencyHistogram,
   runtimeSettings,
+  type CallEvent,
 } from '@mcp/shared';
 import { db } from './db.js';
 import { mcpCallEvents, mcpCallMetrics, mcpEventReceipts } from './schema.js';
@@ -27,6 +28,23 @@ let initialized = false;
 let claimCursor = '0-0';
 
 /**
+ * Rolling per-minute flow counters feeding the admin topology edges. Runs
+ * after the receipt dedup insert succeeded, so stream replays never double
+ * count. Best-effort: a Redis hiccup must not fail event persistence.
+ */
+async function countTopologyFlow(event: CallEvent): Promise<void> {
+  const bucket = Math.floor(event.started_at / 60000) * 60000;
+  const field = [event.server, event.instance, event.username, event.client_id].join('\x1f');
+  const flowKey = `gw:topo:flow:${bucket}`;
+  const pipe = redis.pipeline().hincrby(flowKey, field, 1).expire(flowKey, 600);
+  if (event.outcome === 'failed') {
+    const failKey = `gw:topo:fail:${bucket}`;
+    pipe.hincrby(failKey, field, 1).expire(failKey, 600);
+  }
+  await pipe.exec();
+}
+
+/**
  * Persist one call event. The receipt row is the deduplication point: the Redis
  * stream may deliver a message twice, and the insert below is a no-op the second
  * time. Metrics are aggregated per minute so the dashboard never scans events.
@@ -34,6 +52,7 @@ let claimCursor = '0-0';
 export async function storeCallEvent(input: unknown) {
   const event = validCallEvent(input);
   if (!event) return false;
+  let fresh = false;
   await db.transaction(async (tx) => {
     const inserted = await tx
       .insert(mcpEventReceipts)
@@ -41,6 +60,7 @@ export async function storeCallEvent(input: unknown) {
       .onConflictDoNothing()
       .returning({ id: mcpEventReceipts.id });
     if (!inserted.length) return;
+    fresh = true;
     if (event.detail)
       await tx.insert(mcpCallEvents).values({
         id: event.id,
@@ -96,6 +116,10 @@ export async function storeCallEvent(input: unknown) {
         },
       });
   });
+  if (fresh)
+    await countTopologyFlow(event).catch(() =>
+      console.error('[monitoring] topology flow counter failed'),
+    );
   return true;
 }
 

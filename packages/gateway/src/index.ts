@@ -10,6 +10,7 @@ import { registerDevelopmentOAuthRoutes } from './routes/oauth.js';
 import { redisHealthy } from './lb.js';
 import { isAllowedMcpOrigin, mcpCorsHeaders } from './routes/origin.js';
 import { probeRegisteredUpstreams, upstreamHealth } from './upstream-health.js';
+import { publishHealthSnapshot } from './health-report.js';
 import { registerUpstreamTestRoute } from './routes/upstream-test.js';
 
 const app = Fastify({
@@ -133,6 +134,11 @@ const start = async (): Promise<void> => {
         await probeRegisteredUpstreams([...serverConfigs.values()].flatMap((server) => server.instances));
       } catch (err) {
         app.log.warn({ err }, 'upstream transport probe failed');
+      }
+      try {
+        await publishHealthSnapshot();
+      } catch (err) {
+        app.log.warn({ err }, 'upstream health report failed');
       } finally {
         probing = false;
       }

@@ -108,7 +108,7 @@ export interface AdminConnection {
   updated_at: number;
 }
 
-export type View = 'overview' | 'users' | 'servers' | 'credentials' | 'monitoring' | 'settings';
+export type View = 'overview' | 'users' | 'servers' | 'credentials' | 'topology' | 'monitoring' | 'settings';
 
 export type DialogState =
   | { type: null }
@@ -229,4 +229,51 @@ export interface UsageCall {
   error: string;
   instance: string;
   attempts: number;
+}
+
+export type TopologyHealthState = 'up' | 'degraded' | 'down' | 'unknown';
+
+export interface TopologyInstance {
+  id: string;
+  url: string;
+  enabled: boolean;
+  health: {
+    state: TopologyHealthState;
+    replicas_total: number;
+    replicas_down: number;
+    last_probe_age_ms: number | null;
+  };
+}
+
+export interface TopologyServer {
+  name: string;
+  display_name: string;
+  enabled: boolean;
+  instances: TopologyInstance[];
+}
+
+export interface TopologySessionEdge {
+  server: string;
+  instance: string;
+  owner: string;
+  count: number;
+}
+
+export interface TopologyFlowEdge {
+  server: string;
+  instance: string;
+  username: string;
+  client_id: string;
+  calls: number;
+  failed: number;
+}
+
+export interface TopologySnapshot {
+  generated_at: number;
+  window_seconds: number;
+  monitoring_enabled: boolean;
+  servers: TopologyServer[];
+  sessions: TopologySessionEdge[];
+  flows: TopologyFlowEdge[];
+  degraded: { health: boolean; sessions: boolean; flows: boolean };
 }

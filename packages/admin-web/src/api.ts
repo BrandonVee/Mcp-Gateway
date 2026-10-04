@@ -15,6 +15,7 @@ import type {
   McpServer,
   ServerAuthInput,
   SystemUpdateStatus,
+  TopologySnapshot,
   UpstreamTestResult,
 } from './types';
 import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from './i18n';
@@ -200,6 +201,7 @@ export function apiForSession(session?: PlatformSession) {
               .map(([key, value]) => [key, String(value)]),
           ),
       ),
+    topologySnapshot: (window = 5) => request<TopologySnapshot>(`/api/admin/topology/snapshot?window=${window}`),
     session: () => request<{ authenticated: boolean }>('/api/admin/session'),
     login: (username: string, password: string) =>
       request<{ authenticated: boolean; username: string }>('/api/admin/session', {

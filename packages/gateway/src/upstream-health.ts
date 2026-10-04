@@ -46,6 +46,17 @@ export class UpstreamHealthTracker {
   unavailableCount(urls: Iterable<string>, now = Date.now()): number {
     return [...new Set(urls)].filter((url) => !this.isAvailable(url, now)).length;
   }
+
+  /** Read-only copy of cooldown state, for publishing to Redis (topology view). */
+  snapshot(): Record<string, { transport_until: number; http_until: number }> {
+    const state: Record<string, { transport_until: number; http_until: number }> = {};
+    for (const [url, entry] of this.instances)
+      state[url] = {
+        transport_until: entry.transportUnavailableUntil,
+        http_until: entry.httpUnavailableUntil,
+      };
+    return state;
+  }
 }
 
 export const upstreamHealth = new UpstreamHealthTracker();

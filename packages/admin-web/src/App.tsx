@@ -55,6 +55,9 @@ const ConnectionsAdminPage = lazy(() =>
 const MonitoringPage = lazy(() =>
   import('./features/monitoring/MonitoringPage').then((module) => ({ default: module.MonitoringPage })),
 );
+const TopologyPage = lazy(() =>
+  import('./features/topology/TopologyPage').then((module) => ({ default: module.TopologyPage })),
+);
 
 export function App() {
   return (
@@ -398,6 +401,8 @@ function ControlPlane({
               }
             />
           )}
+
+          {view === 'topology' && <TopologyPage />}
 
           {view === 'monitoring' && <MonitoringPage />}
 

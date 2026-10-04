@@ -42,6 +42,7 @@ import { addUpstreamHost, currentSystemSettings, saveSystemSettings } from './sy
 import { validateMcpEndpoint } from './upstream-endpoint.js';
 import { systemOptionDefaults, registrationEnabled } from '@mcp/shared';
 import { registerMonitoringRoutes } from './monitoring-api.js';
+import { registerTopologyRoutes } from './topology-api.js';
 import { revokeUserConnection } from './connection-lifecycle.js';
 import { requestUpstreamTest } from './upstream-test.js';
 
@@ -342,6 +343,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
   });
 
   registerMonitoringRoutes(router);
+  registerTopologyRoutes(router);
 
   router.get('/admin/session', async (c) => {
     const authenticated = Boolean(await getAdminActor(c, deps));

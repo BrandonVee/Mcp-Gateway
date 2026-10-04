@@ -1,0 +1,66 @@
+.topology-panel {
+  min-width: 0;
+  padding: 20px 24px 24px;
+  border: 1px solid rgba(140, 160, 190, 0.18);
+  border-radius: 14px;
+  background: rgba(127, 147, 175, 0.05);
+}
+.topology-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.topology-window-select {
+  min-width: 200px;
+}
+.topology-panel .ant-alert {
+  margin-bottom: 12px;
+}
+.topology-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #91a4bd;
+}
+.topology-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.topology-legend i {
+  display: inline-block;
+  width: 24px;
+  border-top: 2px dashed #4d7fd6;
+}
+.topology-legend i.topology-legend-session {
+  border-top: 2px solid #3fb27f;
+}
+.topology-legend small {
+  flex-basis: 100%;
+}
+.topology-canvas {
+  width: 100%;
+  height: 560px;
+}
+.topology-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+.topology-empty-help {
+  margin: 8px 0 0;
+  color: #91a4bd;
+  font-size: 13px;
+}
+.topology-detail-subheading {
+  margin: 20px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
