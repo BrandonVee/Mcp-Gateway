@@ -367,7 +367,7 @@ export async function publishRelease({
     commitLogNotes({ repository, tag, sha }) ??
     (await api('releases/generate-notes', 'POST', { tag_name: tag, target_commitish: sha })).body;
   const body =
-    `${notes.body}\n\n### Docker image\n\n` +
+    `${notes}\n\n### Docker image\n\n` +
     `\`brandonvee/mcp-gateway:${tag}\` (linux/amd64, linux/arm64)\n\n` +
     `Digest: \`${digest}\`\n\n` +
     `\`MCP_VERSION=${tag} ./scripts/deploy.sh --yes\`\n`;

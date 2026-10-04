@@ -451,6 +451,7 @@ test('bot release records the tested commit, annotated tag and published image d
   assert.equal(release.target_commitish, options.sha);
   assert.equal(release.draft, false);
   assert.equal(release.make_latest, 'true');
+  assert.match(release.body, /Changes since last version\./);
   assert.match(release.body, new RegExp(options.digest));
   assert.match(release.body, /mcp-gateway:v0\.1\.0/);
 });
