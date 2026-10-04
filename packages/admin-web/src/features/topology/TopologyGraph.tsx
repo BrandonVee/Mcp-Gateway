@@ -97,7 +97,13 @@ function buildGraph(
       leftEdges.set(key, edge);
     }
     const key = `${flow.server}\x1f${flow.instance}`;
-    const edge = rightEdges.get(key) ?? { server: flow.server, instance: flow.instance, calls: 0, failed: 0, sessions: 0 };
+    const edge = rightEdges.get(key) ?? {
+      server: flow.server,
+      instance: flow.instance,
+      calls: 0,
+      failed: 0,
+      sessions: 0,
+    };
     edge.calls += flow.calls;
     edge.failed += flow.failed;
     rightEdges.set(key, edge);
@@ -107,7 +113,13 @@ function buildGraph(
     for (const session of snapshot.sessions) {
       bump(participantVolume, session.owner, session.count);
       const lkey = `${session.owner}\x1f${session.server}`;
-      const left = leftEdges.get(lkey) ?? { left: session.owner, server: session.server, calls: 0, failed: 0, sessions: 0 };
+      const left = leftEdges.get(lkey) ?? {
+        left: session.owner,
+        server: session.server,
+        calls: 0,
+        failed: 0,
+        sessions: 0,
+      };
       left.sessions += session.count;
       leftEdges.set(lkey, left);
       const rkey = `${session.server}\x1f${session.instance}`;
@@ -129,7 +141,10 @@ function buildGraph(
   const kept = new Set((overflow.length ? ranked.slice(0, TOP_PARTICIPANTS) : ranked).map(([name]) => name));
   const otherLabel = t('topology.other', { count: overflow.length });
   if (overflow.length) {
-    participantVolume.set(otherLabel, overflow.reduce((sum, [, volume]) => sum + volume, 0));
+    participantVolume.set(
+      otherLabel,
+      overflow.reduce((sum, [, volume]) => sum + volume, 0),
+    );
     for (const edge of leftEdges.values()) {
       if (kept.has(edge.left) || edge.left === otherLabel) continue;
       const key = `${otherLabel}\x1f${edge.server}`;
@@ -152,12 +167,7 @@ function buildGraph(
   }
 
   const maxEdgeCalls = Math.max(1, ...[...leftEdges.values(), ...rightEdges.values()].map((edge) => edge.calls));
-  const maxVolume = Math.max(
-    1,
-    ...participantVolume.values(),
-    ...serverVolume.values(),
-    ...instanceVolume.values(),
-  );
+  const maxVolume = Math.max(1, ...participantVolume.values(), ...serverVolume.values(), ...instanceVolume.values());
   const scale = (volume: number) => Math.sqrt(volume / maxVolume);
 
   const nodes: GraphNode[] = [];
@@ -171,13 +181,7 @@ function buildGraph(
     const rate = edge.failed / edge.calls;
     return rate > 0.2 ? '#e5484d' : edge.failed > 0 ? '#f0a020' : '#4d7fd6';
   };
-  const appendEdgePair = (
-    source: string,
-    target: string,
-    edge: EdgeBucket,
-    sourceName: string,
-    targetName: string,
-  ) => {
+  const appendEdgePair = (source: string, target: string, edge: EdgeBucket, sourceName: string, targetName: string) => {
     if (edge.calls > 0)
       links.push({
         source,
@@ -334,8 +338,7 @@ export function TopologyGraph({
     chart.current = instance;
     instance.on('click', (params) => {
       const data = (params as { dataType?: string; data?: { meta?: GraphMeta } }).data;
-      if ((params as { dataType?: string }).dataType === 'node' && data?.meta)
-        selectRef.current(data.meta.selection);
+      if ((params as { dataType?: string }).dataType === 'node' && data?.meta) selectRef.current(data.meta.selection);
     });
     const observer = new ResizeObserver(() => instance.resize());
     observer.observe(element);

@@ -116,10 +116,7 @@ export async function storeCallEvent(input: unknown) {
         },
       });
   });
-  if (fresh)
-    await countTopologyFlow(event).catch(() =>
-      console.error('[monitoring] topology flow counter failed'),
-    );
+  if (fresh) await countTopologyFlow(event).catch(() => console.error('[monitoring] topology flow counter failed'));
   return true;
 }
 

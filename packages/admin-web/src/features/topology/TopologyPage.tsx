@@ -83,9 +83,7 @@ export function TopologyPage() {
               {flows.reduce((sum, row) => sum + row.failed, 0)}
             </Descriptions.Item>
             <Descriptions.Item label={t('topology.detail.sessions')}>
-              {data.sessions
-                .filter((row) => row.server === server.name)
-                .reduce((sum, row) => sum + row.count, 0)}
+              {data.sessions.filter((row) => row.server === server.name).reduce((sum, row) => sum + row.count, 0)}
             </Descriptions.Item>
           </Descriptions>
           <h4 className="topology-detail-subheading">{t('topology.detail.topRoutes')}</h4>
@@ -170,9 +168,7 @@ export function TopologyPage() {
           </Descriptions.Item>
           {dimension === 'user' && (
             <Descriptions.Item label={t('topology.detail.sessions')}>
-              {data.sessions
-                .filter((row) => row.owner === participant)
-                .reduce((sum, row) => sum + row.count, 0)}
+              {data.sessions.filter((row) => row.owner === participant).reduce((sum, row) => sum + row.count, 0)}
             </Descriptions.Item>
           )}
         </Descriptions>

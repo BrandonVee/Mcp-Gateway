@@ -394,7 +394,8 @@ export const messages = {
   'topology.byClient': 'By client',
   'topology.legendFlow': 'Call flow',
   'topology.legendSession': 'Session binding',
-  'topology.legendNote': 'Solid edges are live session bindings, dashed edges are windowed call flow; thicker means more traffic, redder means more failures',
+  'topology.legendNote':
+    'Solid edges are live session bindings, dashed edges are windowed call flow; thicker means more traffic, redder means more failures',
   'topology.clientSessionsNote': 'Session binding edges are hidden in the client dimension',
   'topology.degradedHealth': 'Gateway health heartbeats are missing; instance states may be inaccurate',
   'topology.degradedSessions': 'Session binding data is temporarily unavailable',

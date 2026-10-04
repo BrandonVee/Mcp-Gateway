@@ -13,8 +13,7 @@ redis.on('error', () => {
 });
 
 /** Matches the anonymized instance id in gateway call events. */
-export const instanceId = (url: string): string =>
-  createHash('sha256').update(url).digest('hex').slice(0, 12);
+export const instanceId = (url: string): string => createHash('sha256').update(url).digest('hex').slice(0, 12);
 
 export type InstanceHealthState = 'up' | 'degraded' | 'down' | 'unknown';
 
@@ -84,7 +83,9 @@ async function collectHealth(now: number): Promise<Map<string, { total: number; 
 }
 
 /** Sticky-session edges aggregated from live Redis bindings. */
-async function collectSessions(): Promise<Map<string, { server: string; instance: string; owner: string; count: number }>> {
+async function collectSessions(): Promise<
+  Map<string, { server: string; instance: string; owner: string; count: number }>
+> {
   const keys = await scanKeys('gw:bind:*');
   const edges = new Map<string, { server: string; instance: string; owner: string; count: number }>();
   if (!keys.length) return edges;
