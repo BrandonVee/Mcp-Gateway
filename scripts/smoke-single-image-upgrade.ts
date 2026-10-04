@@ -25,6 +25,8 @@ async function main() {
   const users = sql('SELECT count(*) FROM users;'),
     signing = sql("SELECT md5(value) FROM meta WHERE key='signing_pem';");
   assert.ok(pg && redis, 'data containers must exist before the upgrade');
+  const expectedName = `/${before.COMPOSE_PROJECT_NAME}-server`;
+  assert.equal(docker(['inspect', '--format', '{{.Name}}', id('mcp-server')]), expectedName);
   assert.ok(Number(users) > 0 && signing, 'existing users and signing key must be present');
   sql('CREATE TABLE upgrade_rehearsal(value integer); INSERT INTO upgrade_rehearsal VALUES(987);');
   const image = docker(['inspect', '--format', '{{.Config.Image}}', id('mcp-server')]);
@@ -115,6 +117,7 @@ async function main() {
       .split('\n')
       .sort();
     assert.deepEqual(services, ['mcp-server', 'postgres', 'redis']);
+    assert.equal(docker(['inspect', '--format', '{{.Name}}', id('mcp-server')]), expectedName);
     assert.equal((await fetch(`http://127.0.0.1:${before.MCP_HTTP_PORT}/healthz`)).status, 200);
     sql('DROP TABLE upgrade_rehearsal;');
     console.log(

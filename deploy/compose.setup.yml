@@ -1,6 +1,7 @@
 # First-run browser setup; connect to existing PostgreSQL and Redis.
 services:
   mcp-server:
+    container_name: ${COMPOSE_PROJECT_NAME:-mcp-gateway}-server
     image: brandonvee/mcp-gateway:${MCP_VERSION:-latest}
     restart: unless-stopped
     stop_grace_period: 15s

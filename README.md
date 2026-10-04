@@ -159,6 +159,7 @@ services:
       timeout: 3s
       retries: 30
   mcp-server:
+    container_name: ${COMPOSE_PROJECT_NAME:-mcp-gateway}-server
     image: brandonvee/mcp-gateway:${MCP_VERSION:-latest}
     restart: unless-stopped
     stop_grace_period: 15s
@@ -204,11 +205,11 @@ docker compose up -d --wait mcp-server
 
 ```bash
 docker volume create mcp-gateway-data
-docker run -d --name mcp-server --restart unless-stopped --stop-timeout 15 \
+docker run -d --name mcp-gateway-server --restart unless-stopped --stop-timeout 15 \
   --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
   -p 127.0.0.1:8080:8080 -v mcp-gateway-data:/app/data \
   brandonvee/mcp-gateway:latest
-docker logs mcp-server
+docker logs mcp-gateway-server
 ```
 
 也可以用仓库里的 `deploy/compose.setup.yml`（`docker compose -f deploy/compose.setup.yml up -d`），内容同上。

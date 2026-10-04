@@ -58,6 +58,8 @@ git pull --ff-only
 
 脚本沿用原项目名、端口、密码和密钥，先准备新应用镜像，再停止并移除该 Compose 项目中原 `auth`、`gateway`、`admin-web` 或旧版统一应用 `app` 容器，启动新的 `mcp-server` 服务。PostgreSQL/Redis 容器及数据卷保持原样。镜像构建或拉取失败时不会停止原应用。手动 Compose 部署的旧 `app` 迁移步骤见 [Docker Hub 使用说明](dockerhub.md#更新日志和备份)。恢复旧备份时，启动器会把原 `http://auth:9001` 内部链接转换为回环链接，只生成容器内临时配置，不改写归档。
 
+统一应用容器名称为 `<项目名>-server`，默认一键部署为 `mcp-gateway-server`；Compose 服务键仍是 `mcp-server`。旧版自动生成的 `mcp-gateway-mcp-server-1` 会在重新部署时迁移为新名称，数据库和 Redis 容器及数据卷保持原样。仅在后台更新镜像会保留原容器名；立即改名可执行 `docker rename mcp-gateway-mcp-server-1 mcp-gateway-server`。
+
 回退至旧五容器代码时，先用当前 Compose 停止并移除 `mcp-server` 容器，然后切换到原提交执行原 `deploy.sh`，让旧脚本重建内网链接；保留数据库卷和密钥。数据库迁移的回退须结合版本兼容性评估，需要恢复时先保存当前备份。
 
 ### 网页端一键更新（默认开启）

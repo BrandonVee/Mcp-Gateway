@@ -14,7 +14,7 @@
 ```bash
 docker volume create mcp-gateway-data
 docker run -d \
-  --name mcp-server \
+  --name mcp-gateway-server \
   --restart unless-stopped \
   --stop-timeout 15 \
   --read-only --tmpfs /tmp \
@@ -23,7 +23,7 @@ docker run -d \
   -v mcp-gateway-data:/app/data \
   brandonvee/mcp-gateway:latest
 
-docker logs mcp-server
+docker logs mcp-gateway-server
 ```
 
 1. 在日志中找到 `[setup] initialization key:` 后面的初始化密钥。
@@ -90,6 +90,7 @@ services:
       timeout: 3s
       retries: 30
   mcp-server:
+    container_name: ${COMPOSE_PROJECT_NAME:-mcp-gateway}-server
     image: brandonvee/mcp-gateway:${MCP_VERSION:-latest}
     restart: unless-stopped
     stop_grace_period: 15s
@@ -139,11 +140,17 @@ location / {
 }
 ```
 
-Compose 服务名为 `mcp-server`，实际容器名由项目名自动生成，例如 `mcp-gateway-mcp-server-1`；使用 `docker compose logs mcp-server` 查看日志。上述单容器 `docker run` 命令的容器名固定为 `mcp-server`。
+应用容器按 `<项目名>-server` 命名，一键部署和上述 `mcp-gateway` 目录部署的名称为 `mcp-gateway-server`；自定义项目名时使用对应前缀，避免多个部署重名。Compose 服务名保留 `mcp-server`，使用 `docker compose logs mcp-server` 查看日志；上述 `docker run` 命令的容器名为 `mcp-gateway-server`。
 
-调用频次统计与登录限流依赖真实客户端 IP。设置 `AUTH_TRUSTED_PROXY_IPS` 为可信反向代理实际地址或其 Docker 网段，再重建应用；勿信任所有地址 `0.0.0.0/0`。外部代理需正确覆盖转发头。若由宿主机 Nginx 代理，可用 `docker inspect mcp-server` 查看容器所在网络，再用 `docker network inspect <网络名>` 确认宿主机网关地址。方式一在 `docker run` 加 `-e AUTH_TRUSTED_PROXY_IPS=<该网关IP>`，方式二在 `.env` 填写后执行 `docker compose up -d`。
+调用频次统计与登录限流依赖真实客户端 IP。设置 `AUTH_TRUSTED_PROXY_IPS` 为可信反向代理实际地址或其 Docker 网段，再重建应用；勿信任所有地址 `0.0.0.0/0`。外部代理需正确覆盖转发头。若由宿主机 Nginx 代理，可用 `docker inspect mcp-gateway-server` 查看容器所在网络，再用 `docker network inspect <网络名>` 确认宿主机网关地址。方式一在 `docker run` 加 `-e AUTH_TRUSTED_PROXY_IPS=<该网关IP>`，方式二在 `.env` 填写后执行 `docker compose up -d`。
 
 ## 更新、日志和备份
+
+旧版统一应用容器可能名为 `mcp-gateway-mcp-server-1`。更新 Compose 配置后重新部署，Compose 会重建为 `mcp-gateway-server`；一键部署执行 `./scripts/deploy.sh --yes`，沿用现有配置。后台镜像更新会保留当前容器名称，不会仅因镜像升级而改名。希望立即改名且不中断服务时，可执行：
+
+```bash
+docker rename mcp-gateway-mcp-server-1 mcp-gateway-server
+```
 
 旧版 Compose 服务名为 `app`。源码的一键部署脚本会在新镜像准备成功后移除当前项目中的旧 `app`，保留数据库、Redis 和数据卷。手动 Compose 部署应先用原 Compose 文件停止并移除旧 `app` 容器，再用新文件启动 `mcp-server`；沿用原项目名和所有数据卷，不要删除 `/app/data` 配置。只改服务名不会改镜像仓库或数据卷名。
 

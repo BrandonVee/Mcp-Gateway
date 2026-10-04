@@ -8,7 +8,7 @@ import { test } from 'node:test';
 
 // A fake Engine records the call order. Replacing a container is destructive, so
 // the sequence itself is the behaviour worth pinning down without real Docker.
-function fakeEngine(healthPort, failure = '') {
+function fakeEngine(healthPort, failure = '', name = 'mcp-server-1') {
   const calls = [];
   const server = createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost');
@@ -31,7 +31,7 @@ function fakeEngine(healthPort, failure = '') {
         200,
         JSON.stringify({
           Id: 'old-container',
-          Name: '/mcp-server-1',
+          Name: `/${name}`,
           Config: { Env: ['NODE_ENV=production'], Labels: { 'com.docker.compose.service': 'mcp-server' } },
           HostConfig: { PortBindings: { '8080/tcp': [{ HostPort: String(healthPort) }] } },
           NetworkSettings: { Networks: { control: { Aliases: ['mcp-server'] } } },
@@ -57,7 +57,7 @@ function fakeEngine(healthPort, failure = '') {
       calls.push('start');
       return reply(failure === 'start' ? 500 : 204);
     }
-    if (request.method === 'DELETE' && url.pathname === '/v1.44/containers/mcp-server-1-rollback') {
+    if (request.method === 'DELETE' && url.pathname === `/v1.44/containers/${name}-rollback`) {
       calls.push('clear-stale-rollback');
       return reply(204);
     }
@@ -79,45 +79,47 @@ function fakeEngine(healthPort, failure = '') {
   return { server, calls };
 }
 
-test('the updater pulls, replaces the container and only then removes the old one', async () => {
-  const socketPath = join(tmpdir(), `mcp-fake-docker-${process.pid}.sock`);
-  const logPath = join(tmpdir(), `mcp-fake-update-${process.pid}.log`);
-  rmSync(socketPath, { force: true });
-  const health = createServer((_request, response) => response.writeHead(204).end());
-  await new Promise((resolve) => health.listen(0, '127.0.0.1', resolve));
-  const healthPort = health.address().port;
-  const engine = fakeEngine(healthPort);
-  await new Promise((resolve) => engine.server.listen(socketPath, resolve));
+for (const name of ['mcp-server-1', 'mcp-gateway-server']) {
+  test(`the updater preserves ${name} and only removes the old container after replacement`, async () => {
+    const socketPath = join(tmpdir(), `mcp-fake-docker-${process.pid}.sock`);
+    const logPath = join(tmpdir(), `mcp-fake-update-${process.pid}.log`);
+    rmSync(socketPath, { force: true });
+    const health = createServer((_request, response) => response.writeHead(204).end());
+    await new Promise((resolve) => health.listen(0, '127.0.0.1', resolve));
+    const healthPort = health.address().port;
+    const engine = fakeEngine(healthPort, '', name);
+    await new Promise((resolve) => engine.server.listen(socketPath, resolve));
 
-  const child = spawn('node', ['scripts/update-container.mjs'], {
-    env: {
-      ...process.env,
-      MCP_DOCKER_SOCKET: socketPath,
-      MCP_UPDATE_OLD_ID: 'old-container',
-      MCP_UPDATE_IMAGE: 'brandonvee/mcp-gateway:latest',
-      MCP_UPDATE_LOG: logPath,
-    },
-    stdio: 'ignore',
+    const child = spawn('node', ['scripts/update-container.mjs'], {
+      env: {
+        ...process.env,
+        MCP_DOCKER_SOCKET: socketPath,
+        MCP_UPDATE_OLD_ID: 'old-container',
+        MCP_UPDATE_IMAGE: 'brandonvee/mcp-gateway:latest',
+        MCP_UPDATE_LOG: logPath,
+      },
+      stdio: 'ignore',
+    });
+    const exitCode = await new Promise((resolve) => child.on('exit', resolve));
+    const recorded = [...engine.calls];
+    health.close();
+    engine.server.close();
+    rmSync(socketPath, { force: true });
+    rmSync(logPath, { force: true });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(recorded, [
+      'pull',
+      'inspect',
+      'clear-stale-rollback',
+      `rename:${name}-rollback`,
+      'stop',
+      `create:${name}`,
+      'start',
+      'remove-old',
+    ]);
   });
-  const exitCode = await new Promise((resolve) => child.on('exit', resolve));
-  const recorded = [...engine.calls];
-  health.close();
-  engine.server.close();
-  rmSync(socketPath, { force: true });
-  rmSync(logPath, { force: true });
-
-  assert.equal(exitCode, 0);
-  assert.deepEqual(recorded, [
-    'pull',
-    'inspect',
-    'clear-stale-rollback',
-    'rename:mcp-server-1-rollback',
-    'stop',
-    'create:mcp-server-1',
-    'start',
-    'remove-old',
-  ]);
-});
+}
 
 for (const failure of ['create', 'start', 'digest']) {
   test(`the updater handles ${failure} without losing the previous container`, async () => {
