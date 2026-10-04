@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import {
   commitVersion,
   existingReleaseCandidate,
+  formatCommitNotes,
   nextReleaseTag,
   planRelease,
   prepareRelease,
@@ -559,5 +560,33 @@ test('completed releases expose an immutable digest for workflows to skip rebuil
       },
     }),
     /no recorded image digest/,
+  );
+});
+
+test('formatCommitNotes groups conventional commits and skips release commits', () => {
+  const notes = formatCommitNotes(
+    [
+      'feat(admin): add live routing topology\x004e33883abc',
+      'fix(gateway): retry failed probe\x001234567def',
+      'chore(release): v0.7.2 [skip ci]\x00aaaaaaa0000',
+      'docs: tweak readme\x00bbbbbbb1111',
+    ].join('\n'),
+    { repository: 'owner/repo', tag: 'v0.8.0', previousTag: 'v0.7.2' },
+  );
+  assert.ok(notes.includes('### Features\n\n* feat(admin): add live routing topology (`4e33883`)'));
+  assert.ok(notes.includes('### Bug Fixes\n\n* fix(gateway): retry failed probe (`1234567`)'));
+  assert.ok(notes.includes('### Other Changes\n\n* docs: tweak readme (`bbbbbbb`)'));
+  assert.ok(!notes.includes('chore(release)'));
+  assert.ok(notes.endsWith('**Full Changelog**: https://github.com/owner/repo/compare/v0.7.2...v0.8.0'));
+});
+
+test('formatCommitNotes returns null when nothing noteworthy changed', () => {
+  assert.equal(
+    formatCommitNotes('chore(release): v0.7.2 [skip ci]\x00aaaaaaa', {
+      repository: 'owner/repo',
+      tag: 'v0.8.0',
+      previousTag: 'v0.7.2',
+    }),
+    null,
   );
 });

@@ -36,6 +36,56 @@ export function nextReleaseTag(tags, headTags, commits) {
   return `v${major}.${minor}.${patch}`;
 }
 
+const noteGroups = [
+  ['### Features', /^feat(?:\([^\n)]*\))?!?:/],
+  ['### Bug Fixes', /^(?:fix|perf)(?:\([^\n)]*\))?!?:/],
+  ['### Other Changes', null],
+];
+
+/**
+ * Build "What's Changed" markdown from `git log --pretty=format:%s%x00%h`
+ * output. Direct pushes to main never become pull requests, so the GitHub
+ * generate-notes API has nothing to list; the commit log is the source of
+ * truth here. Release version commits are excluded. Returns null when no
+ * noteworthy commit exists.
+ */
+export function formatCommitNotes(logText, { repository, tag, previousTag }) {
+  const buckets = new Map(noteGroups.map(([title]) => [title, []]));
+  for (const line of logText.split('\n')) {
+    const [subject, hash] = line.split('\x00');
+    if (!subject || versionSubject.test(subject)) continue;
+    const [title] = noteGroups.find(([, pattern]) => pattern === null || pattern.test(subject));
+    buckets.get(title).push(`* ${subject}${hash ? ` (\`${hash.slice(0, 7)}\`)` : ''}`);
+  }
+  const sections = [...buckets]
+    .filter(([, items]) => items.length)
+    .map(([title, items]) => `${title}\n\n${items.join('\n')}`);
+  if (!sections.length) return null;
+  const link = previousTag
+    ? `\n\n**Full Changelog**: https://github.com/${repository}/compare/${previousTag}...${tag}`
+    : '';
+  return sections.join('\n\n') + link;
+}
+
+/** Commit-log release notes; null when history is unavailable (shallow tests). */
+function commitLogNotes({ repository, tag, sha, cwd = process.cwd() }) {
+  try {
+    const git = (args) =>
+      execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const previousTag = git(['tag', '--merged', sha, '--sort=-v:refname', '--list', 'v*'])
+      .split('\n')
+      .filter((candidate) => versionPattern.test(candidate) && candidate !== tag)[0];
+    const log = git(
+      previousTag
+        ? ['log', '--no-merges', '--pretty=format:%s%x00%h', `${previousTag}..${sha}`]
+        : ['log', '--no-merges', '-50', '--pretty=format:%s%x00%h', sha],
+    );
+    return formatCommitNotes(log, { repository, tag, previousTag });
+  } catch {
+    return null;
+  }
+}
+
 export function prepareRelease(cwd = process.cwd()) {
   const git = (args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
   const tags = git(['tag', '--list', 'v*'])
@@ -313,7 +363,9 @@ export async function publishRelease({
     });
     await api('git/refs', 'POST', { ref: `refs/tags/${tag}`, sha: annotated.sha });
   }
-  const notes = await api('releases/generate-notes', 'POST', { tag_name: tag, target_commitish: sha });
+  const notes =
+    commitLogNotes({ repository, tag, sha }) ??
+    (await api('releases/generate-notes', 'POST', { tag_name: tag, target_commitish: sha })).body;
   const body =
     `${notes.body}\n\n### Docker image\n\n` +
     `\`brandonvee/mcp-gateway:${tag}\` (linux/amd64, linux/arm64)\n\n` +
