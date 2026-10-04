@@ -14,9 +14,9 @@ import {
   SafetyCertificateOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Badge, Button, Flex, Layout, Menu, Space, Tag, Typography } from 'antd';
+import { Button, Flex, Layout, Menu, Space, Tag, Typography } from 'antd';
 import { useState } from 'react';
-import type { GatewayHealth, View } from '../types';
+import type { View } from '../types';
 import { CommandPalette } from './CommandPalette';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeSwitcher } from './ThemeSwitcher';
@@ -61,7 +61,6 @@ interface AppShellProps {
   serverCount: number;
   refreshing: boolean;
   loggingOut: boolean;
-  health: GatewayHealth | null;
   onNavigate: (view: View) => void;
   onRefresh: () => void;
   onLogout: () => void;
@@ -74,7 +73,6 @@ export function AppShell({
   serverCount,
   refreshing,
   loggingOut,
-  health,
   onNavigate,
   onRefresh,
   onLogout,
@@ -140,17 +138,6 @@ export function AppShell({
           <Button type="text" block href="/connections" icon={<LinkOutlined />} className="connections-nav-button">
             {!collapsed && t('nav.personalConnections')}
           </Button>
-          {!collapsed && (
-            <div className="system-state">
-              <Badge status={!health ? 'default' : health.ok ? 'success' : 'error'} />
-              <span>
-                <strong>
-                  {t(!health ? 'nav.gatewayUnknown' : health.ok ? 'nav.gatewayHealthy' : 'nav.gatewayUnhealthy')}
-                </strong>
-                <small>{t('app.controlPlaneOnline')}</small>
-              </span>
-            </div>
-          )}
           <Button
             type="text"
             block

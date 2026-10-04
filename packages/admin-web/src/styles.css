@@ -178,35 +178,6 @@ code,
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.system-state {
-  margin: 0 8px 12px;
-  padding: 11px 10px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #d6dfec;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
-}
-
-.system-state span,
-.system-state strong,
-.system-state small {
-  display: block;
-}
-
-.system-state strong {
-  font-size: 11px;
-}
-
-.system-state small {
-  margin-top: 3px;
-  color: #71839f;
-  font: 500 8px var(--mono);
-  letter-spacing: 0.07em;
-}
-
 .logout-button {
   height: 40px;
   color: #8fa0ba !important;

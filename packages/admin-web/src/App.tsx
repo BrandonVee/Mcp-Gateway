@@ -215,7 +215,6 @@ function ControlPlane({
       serverCount={controlPlane.servers.length}
       refreshing={controlPlane.busy}
       loggingOut={controlPlane.loggingOut}
-      health={controlPlane.health}
       onNavigate={navigate}
       onRefresh={refresh}
       onLogout={async () => {

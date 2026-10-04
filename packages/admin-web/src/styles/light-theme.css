@@ -123,14 +123,6 @@
   color: var(--blue);
   background: #d2e4fb;
 }
-:root[data-theme='light'] .system-state {
-  background: #eff8f4;
-  border-color: #c4e4d7;
-  color: var(--green);
-}
-:root[data-theme='light'] .system-state strong {
-  color: var(--green);
-}
 :root[data-theme='light'] .logout-button {
   color: var(--muted) !important;
 }
@@ -215,7 +207,6 @@
 /* Secondary copy retains readable contrast on white and tinted panels. */
 :root[data-theme='light'] .brand-copy small,
 :root[data-theme='light'] .sider-section-label,
-:root[data-theme='light'] .system-state small,
 :root[data-theme='light'] .metric-card .ant-statistic-title,
 :root[data-theme='light'] .metric-detail,
 :root[data-theme='light'] .card-title-copy small,

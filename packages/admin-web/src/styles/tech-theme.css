@@ -448,15 +448,6 @@ body {
   border-top-color: #142139;
 }
 
-.system-state {
-  background: linear-gradient(135deg, rgba(32, 217, 154, 0.07), rgba(47, 140, 255, 0.025));
-  border-color: rgba(32, 217, 154, 0.16);
-}
-
-.system-state strong {
-  color: #cce9e0;
-}
-
 .connections-nav-button {
   margin-bottom: 12px;
   color: #9fcef2 !important;
@@ -1125,7 +1116,6 @@ body {
 
 .brand-copy small,
 .sider-section-label,
-.system-state small,
 .card-title-copy small,
 .infra-heading small,
 .server-heading small,
@@ -1150,7 +1140,6 @@ body {
 }
 
 .menu-count,
-.system-state small,
 .secure-tag,
 .route-origin small,
 .route-node .ant-tag,
@@ -1165,7 +1154,6 @@ body {
   font-size: 12px;
 }
 
-.system-state strong,
 .metric-card .ant-statistic-title,
 .metric-detail,
 .page-heading .ant-typography-secondary,
