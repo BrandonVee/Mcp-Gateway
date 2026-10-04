@@ -24,6 +24,11 @@ jobs:
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
+      - name: Check Chinese UI font coverage
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ui-font-check"
+          "$RUNNER_TEMP/ui-font-check/bin/pip" install --disable-pip-version-check --quiet 'fonttools[woff]==4.66.1'
+          "$RUNNER_TEMP/ui-font-check/bin/python" scripts/ui-font.py
       - run: pnpm typecheck
       - run: pnpm test:unit
       - run: pnpm build:admin
