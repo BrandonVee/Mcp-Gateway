@@ -15,6 +15,7 @@ import type {
   McpServer,
   ServerAuthInput,
   SystemUpdateStatus,
+  UpstreamTestResult,
 } from './types';
 import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from './i18n';
 
@@ -227,6 +228,12 @@ export function apiForSession(session?: PlatformSession) {
     revokeConnection: (userId: number, serverName: string) =>
       request(`/api/admin/connections/${userId}/${encodeURIComponent(serverName)}`, { method: 'DELETE' }),
     servers: () => request<{ servers: McpServer[] }>('/api/admin/servers'),
+    testUpstream: (url: string, signal?: AbortSignal) =>
+      request<UpstreamTestResult>('/api/admin/servers/test-connection', {
+        method: 'POST',
+        body: JSON.stringify({ url }),
+        signal,
+      }),
     createServer: (body: CreateServerInput) =>
       request<McpServer>('/api/admin/servers', {
         method: 'POST',

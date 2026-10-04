@@ -43,6 +43,7 @@ import { validateMcpEndpoint } from './upstream-endpoint.js';
 import { systemOptionDefaults, registrationEnabled } from '@mcp/shared';
 import { registerMonitoringRoutes } from './monitoring-api.js';
 import { revokeUserConnection } from './connection-lifecycle.js';
+import { requestUpstreamTest } from './upstream-test.js';
 
 export interface AdminDeps {
   keys: SigningKeys;
@@ -874,6 +875,16 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     return c.json({
       servers: serverDtos,
     });
+  });
+
+  router.post('/admin/servers/test-connection', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    const body = await c.req.json().catch(() => null);
+    const endpoint = validateMcpEndpoint(body?.url);
+    if (endpoint.error) return c.json(endpoint, 400);
+    const result = await requestUpstreamTest(endpoint.url);
+    if ('error' in result) return c.json(result, 400);
+    return c.json(result);
   });
 
   router.post('/admin/servers', async (c) => {

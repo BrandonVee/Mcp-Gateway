@@ -26,6 +26,10 @@ http://localhost:8000/mcp/external-search
 ```
 
 外部地址支持 HTTP/HTTPS 和自定义路径；如果只填写主机根地址，系统会自动补全 `/mcp`。
+注册服务、添加实例或修改实例地址时，可点击 **测试 MCP 连接**。测试由实际 Gateway 发起 MCP 初始化；上游声明支持工具时，还会读取一页工具列表。支持 JSON 和 SSE 响应，测试使用匿名连接，不执行业务工具。需要上游认证时会明确提示，后续须在个人连接中心配置凭据并通过客户端验证。
+测试结果区分 DNS 解析失败、连接拒绝、超时、TLS、HTTP 状态、错误路径与 MCP 协议异常；地址改变后会清除旧结果。测试沿用上游白名单，需先加入可信主机；成功测试会清除该地址的临时不可用状态。MCP 测试最长 8 秒，单个响应限制为 1 MiB，网关最多同时执行 4 个测试；会话在测试完成后关闭。
+Docker 部署中的 `127.0.0.1` / `localhost` 指网关容器自身。容器名称需要可解析的 Docker 网络；跨网络接入可使用网关能访问的宿主机地址与映射端口，宿主机只绑定回环地址的端口不能这样访问。
+统一应用镜像和本地开发自动通过回环地址连接 Gateway。Auth / Gateway 分离部署时，在 Auth 配置 `GATEWAY_INTERNAL_URL=http://gateway:8000`（按实际内部地址调整）；仓库的分离部署 Compose 已配置该值。浏览器只访问管理员接口，内部测试入口仍由内部 Token 保护，不经公网 Nginx 暴露。
 上游白名单可在后台“系统设置”中启用或关闭，默认开启；旧配置也按开启处理。开启时 Auth Server 注册与 Gateway 同步路由均会校验可信上游主机，名单为空时拒绝所有上游；关闭时仍校验 URL 的合法性，注册时仍拒绝网关自引用。保存后 Auth Server 立即生效，Gateway 在下一次路由同步时生效（默认 15 秒）。配置文件模式通过 `MCP_UPSTREAM_ALLOWLIST_ENABLED`（默认 `true`）控制开关，通过 `MCP_UPSTREAM_ALLOWED_HOSTS` 指定主机名单（逗号分隔）。Gateway 还会拒绝不在 `MCP_ALLOWED_ORIGINS` 中的浏览器 MCP Origin，并用 `UPSTREAM_MAX_ACTIVE_REQUESTS`（默认 100，每进程）限制同时上游请求数；部署配置和网络隔离要求见 [生产部署与上线检查](production.md)。
 
 ## 外部服务的用户级认证

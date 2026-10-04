@@ -420,6 +420,7 @@ function ControlPlane({
             users={controlPlane.users}
             settings={controlPlane.settings}
             onAddUpstreamHost={addUpstreamHost}
+            onTestUpstream={controlPlane.api.testUpstream}
             busy={controlPlane.busy}
             onClose={() => setDialog({ type: null })}
             onCreate={(data) => execute(() => controlPlane.api.createServer(data), t('app.mcpServerRegistered'))}

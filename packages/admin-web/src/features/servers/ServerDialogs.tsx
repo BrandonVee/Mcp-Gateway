@@ -19,14 +19,17 @@ import type {
   McpInstance,
   ServerAuthInput,
   SystemSettings,
+  UpstreamTestResult,
 } from '../../types';
 import { submitDialog } from '../../utils/operations';
 import { isEndpointUrl, isOAuthUrl, validationRule } from '../../utils/validation';
 import { untrustedUpstreamHost } from './upstream-allowlist';
+import { UpstreamConnectionTest } from './UpstreamConnectionTest';
 
 interface UpstreamAllowlistProps {
   settings: SystemSettings | null;
   onAddUpstreamHost: (host: string) => Promise<void>;
+  onTestUpstream: (url: string, signal?: AbortSignal) => Promise<UpstreamTestResult>;
 }
 
 interface ServerDialogsProps extends UpstreamAllowlistProps {
@@ -196,6 +199,7 @@ function CreateServerDialog({
           <Input prefix={<LinkOutlined />} placeholder="https://mcp.example.com/mcp" />
         </Form.Item>
         <UpstreamAllowlistHint {...allowlist} busy={busy} />
+        <UpstreamConnectionTest {...allowlist} busy={busy} />
         <AuthFormFields />
       </Form>
     </Modal>
@@ -392,6 +396,7 @@ function EditInstanceDialog({
           <Input prefix={<LinkOutlined />} autoFocus />
         </Form.Item>
         <UpstreamAllowlistHint {...allowlist} busy={busy} />
+        <UpstreamConnectionTest {...allowlist} busy={busy} />
       </Form>
     </Modal>
   );
@@ -854,6 +859,7 @@ function AddInstanceDialog({
           <Input prefix={<LinkOutlined />} placeholder="https://host.example/mcp" />
         </Form.Item>
         <UpstreamAllowlistHint {...allowlist} busy={busy} />
+        <UpstreamConnectionTest {...allowlist} busy={busy} />
       </Form>
     </Modal>
   );

@@ -118,6 +118,9 @@ importers:
       '@mcp/shared':
         specifier: workspace:*
         version: link:../shared
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.30.0
+        version: 1.30.0(zod@3.25.76)
       fastify:
         specifier: ^5.2.1
         version: 5.12.5

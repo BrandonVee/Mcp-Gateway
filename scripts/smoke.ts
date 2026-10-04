@@ -540,6 +540,32 @@ async function main(): Promise<void> {
     users: { id: number; username: string; servers: string[] }[];
   };
   const aliceId = allUsers.users.find((u) => u.username === aliceName)!.id;
+  const testConnection = async (url: string, token?: string) =>
+    fetch(`${AUTH}/admin/servers/test-connection`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ url }),
+    });
+  check('anonymous users cannot test upstreams', (await testConnection(`${REPORTS_UPSTREAM_URL}/mcp`)).status === 403);
+  check(
+    'ordinary users cannot test upstreams',
+    (await testConnection(`${REPORTS_UPSTREAM_URL}/mcp`, aliceToken)).status === 403,
+  );
+  const probeResponse = await testConnection(`${REPORTS_UPSTREAM_URL}/mcp`, adminToken);
+  const probeBody = await probeResponse.json();
+  check(
+    'admin tests MCP handshake and tool discovery through the gateway',
+    probeResponse.status === 200 && probeBody.ok && probeBody.tools_count > 0,
+    JSON.stringify(probeBody),
+  );
+  const protectedProbe = await testConnection(`${REPORTS_UPSTREAM_URL}/mcp-protected`, adminToken).then((response) =>
+    response.json(),
+  );
+  check('upstream test reports authentication requirements', protectedProbe.reason === 'auth_required');
+  const refusedProbe = await testConnection('http://127.0.0.1:39999/mcp', adminToken).then((response) =>
+    response.json(),
+  );
+  check('upstream test reports unreachable container loopback ports', refusedProbe.reason === 'connection_refused');
   const externalServerName = `external-${randomBytes(3).toString('hex')}`;
   const externalCreate = await fetch(`${AUTH}/admin/servers`, {
     method: 'POST',

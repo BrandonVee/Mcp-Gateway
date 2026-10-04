@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { registerMonitoring, collectionStatus } from './monitoring.js';
 import { activeUpstreamRequests } from './routes/capacity.js';
-import { databaseSettingsEnabled, systemConfigured } from '@mcp/shared';
+import { databaseSettingsEnabled, systemConfigured, validateUpstreamEndpoint } from '@mcp/shared';
 import { env, refreshServerConfigs, registryStatus, serverConfigs, startRegistryRefresh } from './config.js';
 import { authHook, hasServerAccess } from './auth.js';
 import { registerMcpRoutes } from './routes/mcp.js';
@@ -10,6 +10,7 @@ import { registerDevelopmentOAuthRoutes } from './routes/oauth.js';
 import { redisHealthy } from './lb.js';
 import { isAllowedMcpOrigin, mcpCorsHeaders } from './routes/origin.js';
 import { probeRegisteredUpstreams, upstreamHealth } from './upstream-health.js';
+import { registerUpstreamTestRoute } from './routes/upstream-test.js';
 
 const app = Fastify({
   bodyLimit: 1024 * 1024,
@@ -30,6 +31,23 @@ app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body,
 app.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
 
 app.get('/live', async () => ({ ok: true, service: 'mcp-gateway' }));
+
+registerUpstreamTestRoute(app, {
+  token: env.internalApiToken,
+  refreshPolicy: refreshServerConfigs,
+  validate: (value) => {
+    const endpoint = validateUpstreamEndpoint(value);
+    if (endpoint.error) return endpoint;
+    const url = new URL(endpoint.url);
+    const selfHost = ['localhost', '127.0.0.1', '[::1]', 'gateway'].includes(url.hostname);
+    if (
+      (selfHost && Number(url.port || (url.protocol === 'https:' ? 443 : 80)) === env.port) ||
+      (url.origin === new URL(env.resourceBaseUrl).origin && /^\/mcp(?:\/|$)/.test(url.pathname))
+    )
+      return { error: 'gateway_self_referential_endpoint' };
+    return endpoint;
+  },
+});
 
 app.get('/health', async (_req, reply) => {
   const redis = await redisHealthy();

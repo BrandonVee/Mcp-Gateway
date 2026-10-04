@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+export { upstreamTestResultSchema, unavailableUpstreamTest, type UpstreamTestResult } from './upstream-test.js';
 
 /** A backend MCP server: one logical name mapped to N instance URLs. */
 export interface McpServerConfig {

@@ -1,0 +1,29 @@
+.upstream-connection-test {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.upstream-test-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.upstream-test-actions .ant-btn {
+  flex-shrink: 0;
+}
+
+.upstream-test-actions .ant-typography {
+  flex: 1 1 200px;
+  font-size: 12px;
+}
+
+.upstream-test-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}

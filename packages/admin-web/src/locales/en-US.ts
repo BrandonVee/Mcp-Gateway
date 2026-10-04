@@ -1,5 +1,44 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
+  'mcpTest.action': 'Test MCP connection',
+  'mcpTest.help': 'Test MCP initialization and tool discovery from the gateway using an anonymous connection.',
+  'mcpTest.success': 'MCP connection test passed',
+  'mcpTest.failed': 'MCP connection test failed',
+  'mcpTest.dns':
+    'The upstream hostname cannot be resolved. Check the hostname and gateway DNS. Container names need a network that resolves them; a reachable host address is another option.',
+  'mcpTest.connectionRefused':
+    'The upstream refused the connection. Check that it is running on the expected port and listening on an address reachable by the gateway.',
+  'mcpTest.timeout': 'The connection or MCP response timed out. Check the network, firewall, and upstream service.',
+  'mcpTest.tls': 'TLS certificate verification failed. Check certificate validity, hostname, and certificate chain.',
+  'mcpTest.network':
+    'The upstream network connection failed. Check routing, firewall rules, and container port mappings.',
+  'mcpTest.http': 'The upstream returned HTTP {status}. Check the service, reverse proxy, and MCP endpoint.',
+  'mcpTest.notFound': 'The upstream returned HTTP 404. Enter the full MCP path; fx uses /mcp/fx by default.',
+  'mcpTest.methodNotAllowed':
+    'The upstream does not accept MCP POST requests. Check that this is a Streamable HTTP MCP endpoint.',
+  'mcpTest.authRequired':
+    'The upstream requires authentication or denies anonymous access. Check its requirements, configure authentication, then add credentials in your connections and verify with a client.',
+  'mcpTest.accessDenied':
+    'The upstream returned HTTP 403. Check upstream access policies, allowed Host / Origin values, and credential requirements.',
+  'mcpTest.redirect':
+    'The MCP endpoint redirects requests. Enter the final address that directly accepts MCP requests.',
+  'mcpTest.invalidMcp':
+    'The endpoint is reachable but did not return a valid MCP initialization result. Check the full path and Streamable HTTP support.',
+  'mcpTest.toolsFailed':
+    'MCP initialization succeeded, but tool discovery failed. Check upstream tools/list support and permissions.',
+  'mcpTest.responseTooLarge':
+    'The response exceeded the 1 MiB test limit. Check its contents or verify further using an MCP client.',
+  'mcpTest.gatewayUnavailable':
+    'The gateway cannot run the test right now. Check gateway health; split deployments need GATEWAY_INTERNAL_URL.',
+  'mcpTest.busy': 'Connection tests are busy. Please try again shortly.',
+  'mcpTest.loopbackTitle': 'This address points to the gateway environment itself',
+  'mcpTest.loopbackHelp':
+    'In Docker, 127.0.0.1 / localhost refers to the gateway container. To reach a service on the host, use a reachable host address and its published port.',
+  'mcpTest.server': 'Upstream server: {name} · {version}',
+  'mcpTest.tools': 'Discovered {count} tools',
+  'mcpTest.duration': 'Duration: {duration} ms',
+  'mcpTest.scope':
+    'Protocol connection verified. Verify actual tool execution and user permissions with a client. This test uses an anonymous connection.',
   'theme.select': 'Change appearance',
   'theme.light': 'Light mode',
   'theme.dark': 'Dark mode',

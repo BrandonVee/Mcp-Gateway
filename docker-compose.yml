@@ -50,6 +50,7 @@ services:
     command: pnpm --filter @mcp/auth-server dev
     environment:
       CONFIG_FILE: '/app/config/docker.json'
+      GATEWAY_INTERNAL_URL: 'http://gateway:8000'
       ADMIN_WEB_URL: 'http://localhost:5173'
       CREDENTIAL_ENCRYPT_KEY: '${CREDENTIAL_ENCRYPT_KEY:-9f52ebfcbdfb3f52cfcf214b6196952c486efe7ec2c1d7f7a2144d72428c01fc}'
       CREDENTIAL_BROKER_TOKEN: '${CREDENTIAL_BROKER_TOKEN:-ef23e6d931a69ad96a57d9ba38a39c810d6adb8a61f4e38990a9b14e0bc6a36d}'
