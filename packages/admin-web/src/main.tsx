@@ -4,6 +4,7 @@ import 'antd/dist/reset.css';
 import { App } from './App';
 import './styles.css';
 import './styles/tech-theme.css';
+import './styles/light-theme.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

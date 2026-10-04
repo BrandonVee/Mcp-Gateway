@@ -9,7 +9,7 @@ import {
   SyncOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Avatar, Badge, Card, Col, Empty, Flex, List, Progress, Row, Statistic, Tag, Typography } from 'antd';
+import { Avatar, Badge, Card, Col, Empty, Flex, List, Progress, Row, Statistic, Tag, Typography, theme } from 'antd';
 import type { ReactNode } from 'react';
 import type { AdminUser, AuthHealth, GatewayHealth, McpServer, SystemSettings } from '../../types';
 import { routableInstances } from '../servers/upstream-allowlist';
@@ -25,6 +25,7 @@ interface OverviewPageProps {
 
 export function OverviewPage({ users, servers, health, authHealth, settings }: OverviewPageProps) {
   const { t, language } = useI18n();
+  const { token } = theme.useToken();
   const activeUsers = users.filter((user) => !user.disabled).length;
   const routableServers = servers.filter((server) => routableInstances(server, settings).length > 0).length;
   const enabledInstances = servers.reduce((total, server) => total + routableInstances(server, settings).length, 0);
@@ -193,8 +194,8 @@ export function OverviewPage({ users, servers, health, authHealth, settings }: O
             className="health-progress"
             percent={health?.ok ? 100 : 68}
             showInfo={false}
-            strokeColor="#13a06f"
-            trailColor="#e5eaf1"
+            strokeColor={token.colorSuccess}
+            trailColor={token.colorFillSecondary}
           />
         </Flex>
       </Card>

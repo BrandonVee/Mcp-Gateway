@@ -16,6 +16,7 @@ import { DataLoadError } from '../../components/DataLoadState';
 import { useI18n } from '../../i18n';
 import { ServiceDescription } from '../../components/ServiceDescription';
 import { LanguageSwitcher } from '../../components/LanguageSwitcher';
+import { ThemeSwitcher } from '../../components/ThemeSwitcher';
 import { mcpConfig, mcpServerUrl } from './mcp-config';
 import { mutateAndRefresh } from '../../utils/operations';
 import { validApiKey } from '../../utils/validation';
@@ -164,7 +165,10 @@ export function ConnectionsPage({
           <span className="connections-eyebrow">{t('connections.personalAccessEyebrow')}</span>
           <strong>{t('connections.title')}</strong>
         </div>
-        <LanguageSwitcher />
+        <div className="connections-preferences">
+          <ThemeSwitcher />
+          <LanguageSwitcher />
+        </div>
         <div className="connections-user">
           <span>{username}</span>
           {isAdmin && (

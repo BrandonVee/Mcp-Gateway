@@ -595,7 +595,8 @@ body {
   color: #54dcb2 !important;
 }
 
-.command-modal .ant-modal-content {
+.command-modal .ant-modal-content,
+.command-modal .ant-modal-container {
   padding: 0;
   overflow: hidden;
   background: radial-gradient(circle at 50% -20%, rgba(47, 140, 255, 0.15), transparent 45%), rgba(9, 15, 26, 0.98);

@@ -1,0 +1,710 @@
+/* Shared preference controls remain available at every viewport width. */
+.theme-trigger.ant-btn {
+  width: 36px;
+  height: 34px;
+  flex-shrink: 0;
+}
+.command-search kbd,
+.command-trigger kbd,
+.command-footer kbd {
+  white-space: nowrap;
+}
+.login-preferences,
+.connections-preferences {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.login-preferences {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 2;
+}
+.connections-preferences {
+  margin-left: auto;
+}
+@media (max-width: 820px) {
+  .app-header > .ant-space {
+    display: flex;
+  }
+  .app-header .header-operations {
+    display: none;
+  }
+  .app-header {
+    gap: 8px;
+  }
+  .app-header > .ant-flex,
+  .app-header .page-heading {
+    min-width: 0;
+  }
+}
+@media (max-width: 480px) {
+  .app-header .language-switcher {
+    display: none;
+  }
+  .login-preferences {
+    top: 16px;
+    right: 16px;
+  }
+}
+
+/* Ant Design owns control/popup states; these tokens cover custom business surfaces.
+   The root selector also outranks feature CSS loaded later by lazy routes. */
+:root[data-theme='light'] {
+  color: #182b43;
+  background: #f3f6fb;
+  color-scheme: light;
+  --ink: #182b43;
+  --muted: #53657b;
+  --line: #d5dfeb;
+  --canvas: #f3f6fb;
+  --surface: #ffffff;
+  --surface-soft: #f1f5fa;
+  --navy: #e5effc;
+  --navy-soft: #edf4fd;
+  --blue: #1769c2;
+  --cyan: #087f94;
+  --green: #15805d;
+  --amber: #ad650b;
+  --red: #c93d52;
+  --shadow: 0 10px 30px rgba(35, 57, 88, 0.07);
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+:root[data-theme='light'] body,
+:root[data-theme='light'] .app-layout,
+:root[data-theme='light'] .site-layout,
+:root[data-theme='light'] .login-page,
+:root[data-theme='light'] .connections-page,
+:root[data-theme='light'] .connections-loading {
+  background: var(--canvas);
+  color: var(--ink);
+}
+:root[data-theme='light'] .app-content {
+  background: var(--canvas);
+}
+:root[data-theme='light'] .app-content::before {
+  display: none;
+}
+:root[data-theme='light'] .app-sider {
+  background: var(--surface) !important;
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+:root[data-theme='light'] .app-sider::after {
+  opacity: 0.3;
+}
+:root[data-theme='light'] .app-header {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: var(--line);
+  box-shadow: 0 3px 16px rgba(35, 57, 88, 0.04);
+}
+:root[data-theme='light'] .app-header::after {
+  box-shadow: none;
+  background: linear-gradient(90deg, transparent, var(--blue));
+}
+:root[data-theme='light'] .brand,
+:root[data-theme='light'] .sider-footer,
+:root[data-theme='light'] .connections-header,
+:root[data-theme='light'] .story-steps {
+  border-color: var(--line);
+}
+:root[data-theme='light'] .brand-copy {
+  color: var(--ink);
+}
+:root[data-theme='light'] .menu-count {
+  background: var(--surface-soft);
+  color: var(--muted);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .ant-menu-item-selected .menu-count {
+  color: var(--blue);
+  background: #d2e4fb;
+}
+:root[data-theme='light'] .system-state {
+  background: #eff8f4;
+  border-color: #c4e4d7;
+  color: var(--green);
+}
+:root[data-theme='light'] .system-state strong {
+  color: var(--green);
+}
+:root[data-theme='light'] .logout-button {
+  color: var(--muted) !important;
+}
+:root[data-theme='light'] .logout-button:hover {
+  color: var(--ink) !important;
+  background: var(--surface-soft) !important;
+}
+:root[data-theme='light'] .collapse-button,
+:root[data-theme='light'] .language-trigger.ant-btn {
+  color: var(--muted) !important;
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+}
+:root[data-theme='light'] .collapse-button:hover,
+:root[data-theme='light'] .language-trigger.ant-btn:hover,
+:root[data-theme='light'] .language-trigger.ant-btn:focus-visible {
+  color: var(--blue) !important;
+  border-color: var(--blue) !important;
+  background: #edf4fd !important;
+}
+:root[data-theme='light'] .language-menu .ant-dropdown-menu {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: 0 12px 32px rgba(35, 57, 88, 0.14);
+}
+:root[data-theme='light'] .language-menu .ant-dropdown-menu-item {
+  color: var(--ink);
+}
+:root[data-theme='light'] .language-menu .ant-dropdown-menu-item-selected,
+:root[data-theme='light'] .language-menu .ant-dropdown-menu-item:hover {
+  color: var(--blue);
+  background: #e5effc;
+}
+:root[data-theme='light'] .secure-tag {
+  color: var(--green) !important;
+  background: #edf8f3 !important;
+  border-color: #c4e4d7 !important;
+}
+
+/* Titles and essential values. */
+:root[data-theme='light'] .page-heading h2.ant-typography,
+:root[data-theme='light'] .section-intro h3.ant-typography,
+:root[data-theme='light'] .page-toolbar-heading h3.ant-typography,
+:root[data-theme='light'] .metric-card .ant-statistic-content,
+:root[data-theme='light'] .card-title-copy strong,
+:root[data-theme='light'] .route-origin strong,
+:root[data-theme='light'] .route-node strong,
+:root[data-theme='light'] .identity-copy strong,
+:root[data-theme='light'] .infra-heading strong,
+:root[data-theme='light'] .infra-status strong,
+:root[data-theme='light'] .server-heading strong,
+:root[data-theme='light'] .server-policy strong,
+:root[data-theme='light'] .modal-title strong,
+:root[data-theme='light'] .login-card-heading h2.ant-typography,
+:root[data-theme='light'] .connection-admin-summary strong,
+:root[data-theme='light'] .monitor-section-heading h3,
+:root[data-theme='light'] .monitor-status-cell strong,
+:root[data-theme='light'] .monitor-log-row strong,
+:root[data-theme='light'] .settings-module-heading h3,
+:root[data-theme='light'] .settings-toggle-row label,
+:root[data-theme='light'] .settings-subsection-heading > span,
+:root[data-theme='light'] .settings-update-note strong,
+:root[data-theme='light'] .settings-save-status strong,
+:root[data-theme='light'] .usage-collection-strip strong,
+:root[data-theme='light'] .usage-collection-status,
+:root[data-theme='light'] .usage-metric > strong,
+:root[data-theme='light'] .usage-secondary-metrics strong,
+:root[data-theme='light'] .usage-card-heading h4,
+:root[data-theme='light'] .usage-alert-rules h4,
+:root[data-theme='light'] .usage-alert-card h4,
+:root[data-theme='light'] .usage-chart-empty strong,
+:root[data-theme='light'] .usage-empty-copy strong,
+:root[data-theme='light'] .usage-alert-empty h4,
+:root[data-theme='light'] .usage-detail-summary strong,
+:root[data-theme='light'] .access-user-name strong,
+:root[data-theme='light'] .command-list > button,
+:root[data-theme='light'] .service-description p {
+  color: var(--ink);
+  text-shadow: none;
+}
+
+/* Secondary copy retains readable contrast on white and tinted panels. */
+:root[data-theme='light'] .brand-copy small,
+:root[data-theme='light'] .sider-section-label,
+:root[data-theme='light'] .system-state small,
+:root[data-theme='light'] .metric-card .ant-statistic-title,
+:root[data-theme='light'] .metric-detail,
+:root[data-theme='light'] .card-title-copy small,
+:root[data-theme='light'] .route-origin small,
+:root[data-theme='light'] .route-node small,
+:root[data-theme='light'] .identity-card .ant-list-item-meta-description,
+:root[data-theme='light'] .identity-copy small,
+:root[data-theme='light'] .server-card-footer,
+:root[data-theme='light'] .infra-heading small,
+:root[data-theme='light'] .infra-status small,
+:root[data-theme='light'] .server-heading code,
+:root[data-theme='light'] .server-heading small,
+:root[data-theme='light'] .server-policy small,
+:root[data-theme='light'] .instance-copy > .ant-typography,
+:root[data-theme='light'] .modal-title small,
+:root[data-theme='light'] .login-brand small,
+:root[data-theme='light'] .story-content .ant-typography:not(h1),
+:root[data-theme='light'] .story-steps small,
+:root[data-theme='light'] .story-status,
+:root[data-theme='light'] .login-hint,
+:root[data-theme='light'] .table-summary,
+:root[data-theme='light'] .command-caption,
+:root[data-theme='light'] .command-copy small,
+:root[data-theme='light'] .command-arrow,
+:root[data-theme='light'] .command-footer,
+:root[data-theme='light'] .connection-admin-summary span,
+:root[data-theme='light'] .connections-user,
+:root[data-theme='light'] .connections-eyebrow,
+:root[data-theme='light'] .connection-index,
+:root[data-theme='light'] .connection-bottom > span,
+:root[data-theme='light'] .connection-details dt,
+:root[data-theme='light'] .monitor-checked,
+:root[data-theme='light'] .monitor-status-top span,
+:root[data-theme='light'] .monitor-status-cell small,
+:root[data-theme='light'] .monitor-log-head,
+:root[data-theme='light'] .monitor-log-row time,
+:root[data-theme='light'] .monitor-log-row code,
+:root[data-theme='light'] .settings-module-heading p,
+:root[data-theme='light'] .settings-module-number,
+:root[data-theme='light'] .settings-page .ant-form-item-extra,
+:root[data-theme='light'] .settings-page .ant-input-number-suffix,
+:root[data-theme='light'] .settings-toggle-row p,
+:root[data-theme='light'] .settings-inline-note p,
+:root[data-theme='light'] .settings-subsection-heading > small,
+:root[data-theme='light'] .settings-update-note p,
+:root[data-theme='light'] .settings-update-action p,
+:root[data-theme='light'] .settings-save-status p,
+:root[data-theme='light'] .usage-description,
+:root[data-theme='light'] .usage-refresh-status,
+:root[data-theme='light'] .usage-filters .ant-form-item-label > label,
+:root[data-theme='light'] .usage-collection-strip,
+:root[data-theme='light'] .usage-metric-heading,
+:root[data-theme='light'] .usage-metric > small,
+:root[data-theme='light'] .usage-secondary-metrics span,
+:root[data-theme='light'] .usage-card-heading p,
+:root[data-theme='light'] .usage-alert-rules p,
+:root[data-theme='light'] .usage-chart-legend span,
+:root[data-theme='light'] .usage-chart-empty p,
+:root[data-theme='light'] .usage-empty-copy p,
+:root[data-theme='light'] .usage-info-note,
+:root[data-theme='light'] .usage-row-count,
+:root[data-theme='light'] .usage-alert-card code,
+:root[data-theme='light'] .usage-alert-values span,
+:root[data-theme='light'] .usage-alert-empty p,
+:root[data-theme='light'] .usage-detail-summary > span:last-child,
+:root[data-theme='light'] .access-summary span,
+:root[data-theme='light'] .access-summary p,
+:root[data-theme='light'] .access-list-heading,
+:root[data-theme='light'] .access-user-name small,
+:root[data-theme='light'] .access-user-state,
+:root[data-theme='light'] .service-description-empty p,
+:root[data-theme='light'] .server-route-preview > span {
+  color: var(--muted);
+}
+:root[data-theme='light'] .connections-login p,
+:root[data-theme='light'] .connections-intro p,
+:root[data-theme='light'] .connections-note {
+  color: var(--muted) !important;
+}
+:root[data-theme='light'] .page-eyebrow,
+:root[data-theme='light'] .section-eyebrow {
+  color: var(--blue) !important;
+  text-shadow: none;
+}
+
+/* Business cards, form sections and lists. */
+:root[data-theme='light'] .metric-card,
+:root[data-theme='light'] .dashboard-card,
+:root[data-theme='light'] .infrastructure-card,
+:root[data-theme='light'] .data-card,
+:root[data-theme='light'] .server-card,
+:root[data-theme='light'] .empty-card,
+:root[data-theme='light'] .page-toolbar,
+:root[data-theme='light'] .data-load-error,
+:root[data-theme='light'] .login-card,
+:root[data-theme='light'] .connection-card {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+  box-shadow: var(--shadow);
+}
+:root[data-theme='light'] .settings-module,
+:root[data-theme='light'] .monitor-overview,
+:root[data-theme='light'] .monitor-audit-panel,
+:root[data-theme='light'] .connection-admin-summary > div,
+:root[data-theme='light'] .usage-content-card {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+:root[data-theme='light'] .server-card:hover,
+:root[data-theme='light'] .connection-card:hover {
+  border-color: #8eb6e5 !important;
+  box-shadow: 0 12px 36px rgba(35, 57, 88, 0.12);
+}
+:root[data-theme='light'] .page-toolbar-filters,
+:root[data-theme='light'] .table-summary,
+:root[data-theme='light'] .server-card-footer,
+:root[data-theme='light'] .server-policy,
+:root[data-theme='light'] .monitor-log-head,
+:root[data-theme='light'] .settings-inline-note,
+:root[data-theme='light'] .settings-hosts-field.is-inactive textarea,
+:root[data-theme='light'] .settings-update-note,
+:root[data-theme='light'] .usage-panel .usage-filters,
+:root[data-theme='light'] .usage-secondary-metrics,
+:root[data-theme='light'] .usage-info-note,
+:root[data-theme='light'] .usage-alert-rules,
+:root[data-theme='light'] .usage-detail-summary,
+:root[data-theme='light'] .access-user-row.is-fixed,
+:root[data-theme='light'] .access-summary p {
+  background: var(--surface-soft);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .dashboard-card > .ant-card-head,
+:root[data-theme='light'] .server-card-header,
+:root[data-theme='light'] .instance-row,
+:root[data-theme='light'] .infra-heading,
+:root[data-theme='light'] .identity-card .ant-list-item,
+:root[data-theme='light'] .connection-bottom,
+:root[data-theme='light'] .settings-module-heading,
+:root[data-theme='light'] .settings-toggle-row,
+:root[data-theme='light'] .monitor-log-row,
+:root[data-theme='light'] .usage-card-heading,
+:root[data-theme='light'] .usage-table-footer,
+:root[data-theme='light'] .usage-secondary-metrics > div,
+:root[data-theme='light'] .access-user-list,
+:root[data-theme='light'] .access-user-row,
+:root[data-theme='light'] .access-user-list .ant-checkbox-wrapper.access-user-row {
+  border-color: var(--line);
+}
+:root[data-theme='light'] .settings-page .ant-form-item-label > label {
+  color: var(--ink);
+}
+:root[data-theme='light'] .settings-module {
+  --settings-accent: var(--blue);
+}
+:root[data-theme='light'] .settings-module-purple {
+  --settings-accent: #7352ba;
+}
+:root[data-theme='light'] .settings-module-cyan {
+  --settings-accent: var(--cyan);
+}
+:root[data-theme='light'] .settings-module-green {
+  --settings-accent: var(--green);
+}
+:root[data-theme='light'] .settings-module-amber {
+  --settings-accent: var(--amber);
+}
+:root[data-theme='light'] .settings-module-slate {
+  --settings-accent: var(--muted);
+}
+:root[data-theme='light'] .settings-save-bar {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: var(--line);
+  box-shadow: var(--shadow);
+}
+:root[data-theme='light'] .settings-rule-note,
+:root[data-theme='light'] .usage-alert-card {
+  background: #fff8ed;
+  border-color: #ebd4af;
+}
+:root[data-theme='light'] .settings-rule-note strong,
+:root[data-theme='light'] .settings-rule-note p,
+:root[data-theme='light'] .settings-rule-icon,
+:root[data-theme='light'] .usage-alert-values strong {
+  color: #80500f;
+}
+:root[data-theme='light'] .usage-alert-values {
+  border-color: #ebd4af;
+}
+:root[data-theme='light'] .usage-alert-rules > .ant-tag {
+  color: var(--blue);
+}
+:root[data-theme='light'] .usage-alert-card .usage-rule-icon {
+  color: var(--amber);
+  background: #fff0d5;
+}
+:root[data-theme='light'] .usage-alert-values > div:last-child strong {
+  color: var(--ink);
+}
+:root[data-theme='light'] .settings-save-bar.has-changes {
+  border-color: #c58a32;
+}
+:root[data-theme='light'] .settings-save-status-icon,
+:root[data-theme='light'] .usage-alert-empty-icon {
+  color: var(--green);
+  background: #e7f5ef;
+  border-color: #b9dfce;
+}
+:root[data-theme='light'] .has-changes .settings-save-status-icon {
+  background: #fff3dc;
+  border-color: #dfbd80;
+  color: var(--amber);
+}
+:root[data-theme='light'] .usage-alert-empty {
+  background: #f2faf6;
+  border-color: #c4e4d7;
+}
+:root[data-theme='light'] .usage-alert-empty-icon.is-paused {
+  color: var(--blue);
+  background: #e5effc;
+  border-color: #bfd4ee;
+}
+:root[data-theme='light'] .signup-access-setting {
+  background: var(--surface-soft);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .signup-access-setting strong {
+  color: var(--ink);
+}
+:root[data-theme='light'] .signup-access-setting p {
+  color: var(--muted);
+}
+
+/* Tables, charts and operational status keep consistent hover/selection contrast. */
+:root[data-theme='light'] .data-card .ant-table-thead > tr > th,
+:root[data-theme='light'] .usage-panel .usage-table .ant-table-thead > tr > th {
+  background: var(--surface-soft);
+  color: var(--muted);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .data-card .ant-table-tbody > tr > td,
+:root[data-theme='light'] .usage-panel .usage-table .ant-table-tbody > tr > td {
+  color: var(--ink);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .usage-panel .usage-table .ant-table-tbody > tr.ant-table-row:hover > td,
+:root[data-theme='light'] .usage-panel .usage-table .ant-table-tbody > tr > .ant-table-cell-row-hover {
+  background: #edf4fd;
+}
+:root[data-theme='light'] .usage-panel .usage-table code,
+:root[data-theme='light'] .usage-panel .usage-table time {
+  color: var(--muted);
+}
+:root[data-theme='light'] .monitor-status-grid {
+  background: var(--line);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .monitor-status-cell {
+  background: var(--surface);
+}
+:root[data-theme='light'] .monitor-status-cell.is-good {
+  border-top-color: var(--green);
+}
+:root[data-theme='light'] .monitor-status-cell.is-bad {
+  border-top-color: var(--red);
+}
+:root[data-theme='light'] .usage-tabs > .ant-tabs-nav::before,
+:root[data-theme='light'] .usage-tabs > .ant-tabs-nav .ant-tabs-nav-list {
+  border-color: var(--line);
+}
+:root[data-theme='light'] .usage-tabs > .ant-tabs-nav .ant-tabs-nav-list {
+  background: var(--surface-soft);
+}
+:root[data-theme='light'] .usage-tabs > .ant-tabs-nav .ant-tabs-tab-active {
+  background: #e5effc;
+  box-shadow: inset 0 0 0 1px #bfd4ee;
+}
+:root[data-theme='light'] .usage-tabs > .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--blue);
+}
+:root[data-theme='light'] .usage-alert-count {
+  color: #80500f;
+  background: #ffeac2;
+}
+:root[data-theme='light'] .usage-metric {
+  --metric-color: var(--blue);
+  background: var(--surface-soft);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .usage-metric-green {
+  --metric-color: var(--green);
+}
+:root[data-theme='light'] .usage-metric-amber {
+  --metric-color: var(--amber);
+}
+:root[data-theme='light'] .usage-metric-purple {
+  --metric-color: #7352ba;
+}
+:root[data-theme='light'] .usage-chart rect,
+:root[data-theme='light'] .usage-chart-legend i {
+  fill: var(--blue);
+  background: var(--blue);
+}
+:root[data-theme='light'] .usage-chart rect.usage-chart-failed,
+:root[data-theme='light'] .usage-chart-legend i.is-failed {
+  fill: var(--red);
+  background: var(--red);
+}
+:root[data-theme='light'] .usage-chart line {
+  stroke: var(--line);
+}
+:root[data-theme='light'] .usage-chart text {
+  fill: var(--muted);
+}
+
+/* Route previews, permission dialogs and command-palette portals. */
+:root[data-theme='light'] .route-origin,
+:root[data-theme='light'] .route-node,
+:root[data-theme='light'] .permission-grid .ant-checkbox-wrapper {
+  color: var(--ink);
+  background: var(--surface-soft);
+  border-color: var(--line);
+  box-shadow: none;
+}
+:root[data-theme='light'] .route-origin::after {
+  border-color: var(--line);
+}
+:root[data-theme='light'] .route-line,
+:root[data-theme='light'] .route-nodes::before,
+:root[data-theme='light'] .route-node::before {
+  background: #b9cbe0;
+}
+:root[data-theme='light'] .route-node:hover,
+:root[data-theme='light'] .permission-grid .ant-checkbox-wrapper:hover,
+:root[data-theme='light'] .access-user-list .ant-checkbox-wrapper.access-user-row:hover {
+  background: #edf4fd;
+  border-color: #8eb6e5;
+}
+:root[data-theme='light'] .server-number,
+:root[data-theme='light'] .card-title-icon,
+:root[data-theme='light'] .modal-title > span:first-child,
+:root[data-theme='light'] .secure-icon,
+:root[data-theme='light'] .connections-mark,
+:root[data-theme='light'] .usage-chart-empty > .anticon,
+:root[data-theme='light'] .usage-rule-icon,
+:root[data-theme='light'] .access-user-avatar,
+:root[data-theme='light'] .command-icon {
+  color: var(--blue);
+  background: #e5effc;
+  border-color: #bfd4ee;
+  box-shadow: none;
+}
+:root[data-theme='light'] .access-summary {
+  background: var(--line);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .access-summary > div {
+  background: var(--surface-soft);
+}
+:root[data-theme='light'] .access-summary strong {
+  color: var(--blue);
+}
+:root[data-theme='light'] .access-user-lock {
+  color: var(--muted);
+}
+:root[data-theme='light'] .access-user-state.is-granted {
+  color: var(--green);
+}
+:root[data-theme='light'] .access-user-state.is-inherited {
+  color: var(--blue);
+}
+:root[data-theme='light'] .wildcard-grant {
+  background: #edf4fd;
+  border-color: #bfd4ee;
+}
+:root[data-theme='light'] .wildcard-grant .ant-checkbox-wrapper {
+  color: var(--ink);
+}
+:root[data-theme='light'] .scope-tag {
+  color: var(--blue) !important;
+  background: #e5effc !important;
+}
+:root[data-theme='light'] .command-trigger {
+  color: var(--muted);
+  background: var(--surface);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .command-trigger:hover {
+  color: var(--blue);
+  background: #edf4fd;
+  border-color: #8eb6e5;
+}
+:root[data-theme='light'] .command-trigger kbd,
+:root[data-theme='light'] .command-search kbd,
+:root[data-theme='light'] .command-footer kbd {
+  color: var(--muted);
+  background: var(--surface-soft);
+  border-color: var(--line);
+  box-shadow: 0 2px 0 #d5dfeb;
+}
+:root[data-theme='light'] .command-modal .ant-modal-content,
+:root[data-theme='light'] .command-modal .ant-modal-container {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: 0 24px 70px rgba(35, 57, 88, 0.2);
+}
+:root[data-theme='light'] .command-search,
+:root[data-theme='light'] .command-footer {
+  border-color: var(--line);
+}
+:root[data-theme='light'] .command-search > .anticon {
+  color: var(--blue);
+  filter: none;
+}
+:root[data-theme='light'] .command-footer {
+  background: var(--surface-soft);
+}
+:root[data-theme='light'] .command-footer i {
+  background: var(--line);
+}
+:root[data-theme='light'] .command-list > button:hover,
+:root[data-theme='light'] .command-list > button:focus-visible {
+  background: #edf4fd;
+  border-color: #8eb6e5;
+}
+
+/* Login, personal connections and long service descriptions. */
+:root[data-theme='light'] .login-story {
+  color: var(--ink);
+  background: linear-gradient(145deg, #e5effc, #f3f6fb);
+}
+:root[data-theme='light'] .login-brand,
+:root[data-theme='light'] .story-content h1.ant-typography,
+:root[data-theme='light'] .story-steps strong {
+  color: var(--ink);
+}
+:root[data-theme='light'] .story-content h1 em {
+  color: var(--blue);
+  background: none;
+  filter: none;
+}
+:root[data-theme='light'] .story-index,
+:root[data-theme='light'] .story-steps > div > span {
+  color: var(--blue);
+}
+:root[data-theme='light'] .login-brand-mark {
+  color: #ffffff;
+}
+:root[data-theme='light'] .login-form-area {
+  background: radial-gradient(circle at 78% 14%, #e5effc, transparent 50%), var(--canvas);
+}
+:root[data-theme='light'] .boot-screen {
+  color: var(--ink);
+  background: radial-gradient(circle at center, #ffffff, var(--canvas));
+}
+:root[data-theme='light'] .connection-card code,
+:root[data-theme='light'] .server-route-preview code {
+  color: var(--blue);
+}
+:root[data-theme='light'] .connection-details code,
+:root[data-theme='light'] .server-route-preview code {
+  background: var(--surface-soft);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .service-description {
+  background: #eff7fb;
+  border-color: #c9deea;
+  border-left-color: var(--cyan);
+}
+:root[data-theme='light'] .service-description-heading,
+:root[data-theme='light'] .service-description .ant-btn {
+  color: #146d91;
+}
+:root[data-theme='light'] .service-description-empty {
+  background: var(--surface-soft);
+  border-color: var(--line);
+}
+:root[data-theme='light'] .service-description-empty p {
+  color: var(--muted);
+}
+:root[data-theme='light'] .connections-nav-button,
+:root[data-theme='light'] .connections-admin-link.ant-btn {
+  color: var(--blue) !important;
+  background: #edf4fd !important;
+  border-color: #bfd4ee !important;
+}
+:root[data-theme='light'] .connections-nav-button:hover,
+:root[data-theme='light'] .connections-admin-link.ant-btn:hover {
+  color: #104d92 !important;
+  background: #dceafa !important;
+  border-color: #8eb6e5 !important;
+}

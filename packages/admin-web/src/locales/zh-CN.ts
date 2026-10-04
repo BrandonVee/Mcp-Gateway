@@ -1,5 +1,9 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
+  'theme.select': '切换外观',
+  'theme.light': '亮色模式',
+  'theme.dark': '深色模式',
+  'theme.system': '跟随系统',
   'settings.updateSaveFirst': '请先保存或还原设置，再执行系统更新。',
   'overview.routeUnavailable': '暂无可路由实例',
   'servers.instanceEnabled': '已启用',

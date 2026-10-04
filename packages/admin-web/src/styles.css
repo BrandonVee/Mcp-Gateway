@@ -1437,15 +1437,15 @@ code,
   margin-right: 5px;
 }
 
-/* Chrome autofill paints a light background; keep it on the dark control surface. */
+/* Keep browser autofill consistent with the selected theme. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
 input:-webkit-autofill:active {
-  -webkit-text-fill-color: #edf5ff;
-  caret-color: #edf5ff;
-  -webkit-box-shadow: 0 0 0 1000px #0a111e inset;
-  box-shadow: 0 0 0 1000px #0a111e inset;
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  -webkit-box-shadow: 0 0 0 1000px var(--surface) inset;
+  box-shadow: 0 0 0 1000px var(--surface) inset;
   transition: background-color 9999s ease-in-out 0s;
 }
 

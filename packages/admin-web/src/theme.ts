@@ -1,6 +1,7 @@
 import { theme, type ThemeConfig } from 'antd';
+import type { ColorMode } from './color-mode';
 
-export const appTheme: ThemeConfig = {
+const darkTheme: ThemeConfig = {
   algorithm: theme.darkAlgorithm,
   token: {
     colorPrimary: '#2f8cff',
@@ -73,3 +74,52 @@ export const appTheme: ThemeConfig = {
     },
   },
 };
+
+const lightTheme: ThemeConfig = {
+  algorithm: theme.defaultAlgorithm,
+  token: {
+    ...darkTheme.token,
+    colorPrimary: '#1769c2',
+    colorInfo: '#087f94',
+    colorSuccess: '#15805d',
+    colorWarning: '#ad650b',
+    colorError: '#c93d52',
+    colorText: '#182b43',
+    colorTextSecondary: '#53657b',
+    colorTextTertiary: '#62748a',
+    colorTextPlaceholder: '#64748b',
+    colorBgBase: '#f3f6fb',
+    colorBgContainer: '#ffffff',
+    colorBgElevated: '#ffffff',
+    colorBorder: '#cbd6e4',
+    colorBorderSecondary: '#dde5ef',
+    boxShadowSecondary: '0 16px 48px rgba(35, 57, 88, 0.14)',
+  },
+  components: {
+    Button: { fontWeight: 600, primaryShadow: '0 4px 12px rgba(23, 105, 194, 0.18)' },
+    Card: { headerBg: 'transparent', headerFontSize: 16 },
+    Menu: {
+      itemBg: 'transparent',
+      itemColor: '#53657b',
+      itemHoverBg: '#edf4fd',
+      itemHoverColor: '#182b43',
+      itemSelectedBg: '#e5effc',
+      itemSelectedColor: '#1769c2',
+      itemBorderRadius: 8,
+    },
+    Modal: { contentBg: '#ffffff', headerBg: 'transparent' },
+    Segmented: { itemSelectedBg: '#ffffff', trackBg: '#edf2f8' },
+    Table: {
+      colorBgContainer: 'transparent',
+      headerBg: '#f1f5fa',
+      headerColor: '#53657b',
+      rowHoverBg: '#edf4fd',
+      borderColor: '#dde5ef',
+    },
+    Tag: { defaultBg: '#edf2f8', defaultColor: '#53657b' },
+  },
+};
+
+export function getAppTheme(mode: ColorMode): ThemeConfig {
+  return mode === 'dark' ? darkTheme : lightTheme;
+}

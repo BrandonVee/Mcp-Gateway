@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { api } from '../../api';
 import { useI18n } from '../../i18n';
 import { LanguageSwitcher } from '../../components/LanguageSwitcher';
+import { ThemeSwitcher } from '../../components/ThemeSwitcher';
 import type { PlatformSession } from '../../types';
 
 interface LoginForm {
@@ -111,7 +112,10 @@ export function LoginPage({
       </section>
 
       <section className="login-form-area">
-        <LanguageSwitcher compact />
+        <div className="login-preferences">
+          <ThemeSwitcher />
+          <LanguageSwitcher compact />
+        </div>
         <Card className="login-card" bordered={false}>
           <Space direction="vertical" size={4} className="login-card-heading">
             <div className="secure-icon">

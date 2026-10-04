@@ -6,7 +6,8 @@ import { AppShell } from './components/AppShell';
 import { BootScreen } from './components/BootScreen';
 import { DataLoadError, PageSkeleton } from './components/DataLoadState';
 import { useControlPlane } from './hooks/useControlPlane';
-import { appTheme } from './theme';
+import { getAppTheme } from './theme';
+import { ThemeProvider, useColorMode } from './color-mode';
 import type { DialogState, PlatformSession, SystemSettings, View } from './types';
 import { I18nProvider, useI18n } from './i18n';
 import { waitForSystemUpdate } from './features/settings/update-task';
@@ -58,15 +59,18 @@ const MonitoringPage = lazy(() =>
 export function App() {
   return (
     <I18nProvider>
-      <LocalizedApp />
+      <ThemeProvider>
+        <LocalizedApp />
+      </ThemeProvider>
     </I18nProvider>
   );
 }
 
 function LocalizedApp() {
   const { language } = useI18n();
+  const { mode } = useColorMode();
   return (
-    <ConfigProvider locale={language === 'zh-CN' ? zhCN : enUS} theme={appTheme}>
+    <ConfigProvider locale={language === 'zh-CN' ? zhCN : enUS} theme={getAppTheme(mode)}>
       <AntApp>
         <Suspense fallback={<BootScreen />}>
           <SessionRouter />

@@ -19,6 +19,8 @@ import { useState } from 'react';
 import type { GatewayHealth, View } from '../types';
 import { CommandPalette } from './CommandPalette';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { ThemeSwitcher } from './ThemeSwitcher';
+import { useColorMode } from '../color-mode';
 import { useI18n, type MessageKey } from '../i18n';
 
 const { Header, Sider, Content } = Layout;
@@ -79,6 +81,7 @@ export function AppShell({
 }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const { t } = useI18n();
+  const { mode } = useColorMode();
   const current = titles[currentView];
 
   const menuItems = [
@@ -108,7 +111,7 @@ export function AppShell({
         collapsedWidth={80}
         collapsed={collapsed}
         trigger={null}
-        theme="dark"
+        theme={mode}
         breakpoint="lg"
         onBreakpoint={(broken) => setCollapsed(broken)}
       >
@@ -126,7 +129,7 @@ export function AppShell({
 
         {!collapsed && <div className="sider-section-label">{t('nav.workspace')}</div>}
         <Menu
-          theme="dark"
+          theme={mode}
           mode="inline"
           selectedKeys={[currentView]}
           items={menuItems}
@@ -181,15 +184,20 @@ export function AppShell({
             </div>
           </Flex>
 
-          <Space size={10}>
-            <LanguageSwitcher />
-            <CommandPalette onNavigate={onNavigate} />
-            <Tag icon={<SafetyCertificateOutlined />} color="success" className="secure-tag">
-              {t('app.secure')}
-            </Tag>
-            <Button icon={<ReloadOutlined spin={refreshing} />} loading={refreshing} onClick={onRefresh}>
-              {t('common.refresh')}
-            </Button>
+          <Space size={10} className="header-actions">
+            <Space size={10} className="header-preferences">
+              <ThemeSwitcher />
+              <LanguageSwitcher />
+            </Space>
+            <Space size={10} className="header-operations">
+              <CommandPalette onNavigate={onNavigate} />
+              <Tag icon={<SafetyCertificateOutlined />} color="success" className="secure-tag">
+                {t('app.secure')}
+              </Tag>
+              <Button icon={<ReloadOutlined spin={refreshing} />} loading={refreshing} onClick={onRefresh}>
+                {t('common.refresh')}
+              </Button>
+            </Space>
           </Space>
         </Header>
 

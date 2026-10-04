@@ -1,5 +1,9 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
+  'theme.select': 'Change appearance',
+  'theme.light': 'Light mode',
+  'theme.dark': 'Dark mode',
+  'theme.system': 'System default',
   'settings.updateSaveFirst': 'Save or restore your settings before updating the system.',
   'overview.routeUnavailable': 'No routable instances',
   'servers.instanceEnabled': 'Enabled',
