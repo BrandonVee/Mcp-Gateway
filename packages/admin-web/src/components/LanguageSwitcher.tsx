@@ -19,7 +19,7 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
           onClick: ({ key }) => setLanguage(key as Language),
         }}
       >
-        <Button className="language-trigger" aria-label={t('locale.selectLanguage')}>
+        <Button className="preference-trigger language-trigger" aria-label={t('locale.selectLanguage')}>
           <GlobalOutlined aria-hidden="true" />
           <span>{language === 'zh-CN' ? '中文' : 'English'}</span>
           <DownOutlined className="language-chevron" aria-hidden="true" />

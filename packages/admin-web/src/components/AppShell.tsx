@@ -11,10 +11,9 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ReloadOutlined,
-  SafetyCertificateOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Button, Flex, Layout, Menu, Space, Tag, Typography } from 'antd';
+import { Button, Flex, Layout, Menu, Space, Typography } from 'antd';
 import { useState } from 'react';
 import type { View } from '../types';
 import { CommandPalette } from './CommandPalette';
@@ -172,15 +171,12 @@ export function AppShell({
           </Flex>
 
           <Space size={10} className="header-actions">
-            <Space size={10} className="header-preferences">
+            <div className="header-preferences">
               <ThemeSwitcher />
               <LanguageSwitcher />
-            </Space>
+            </div>
             <Space size={10} className="header-operations">
               <CommandPalette onNavigate={onNavigate} />
-              <Tag icon={<SafetyCertificateOutlined />} color="success" className="secure-tag">
-                {t('app.secure')}
-              </Tag>
               <Button icon={<ReloadOutlined spin={refreshing} />} loading={refreshing} onClick={onRefresh}>
                 {t('common.refresh')}
               </Button>

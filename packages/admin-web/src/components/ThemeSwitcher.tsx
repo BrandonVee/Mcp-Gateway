@@ -21,7 +21,7 @@ export function ThemeSwitcher() {
       }}
     >
       <Button
-        className="theme-trigger"
+        className="preference-trigger theme-trigger"
         icon={mode === 'light' ? <SunOutlined /> : <MoonOutlined />}
         aria-label={t('theme.select')}
         title={t('theme.select')}

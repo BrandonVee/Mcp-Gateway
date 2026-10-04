@@ -248,20 +248,27 @@ body {
   align-items: center;
   white-space: nowrap;
 }
-.language-trigger.ant-btn {
+.preference-trigger.ant-btn.ant-btn-default {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 34px;
+  justify-content: center;
+  height: 40px;
+  min-height: 40px;
   padding: 0 11px;
   color: #c4d9f2;
   background: #0c1625;
   border: 1px solid #29405e;
   border-radius: 9px;
   box-shadow: none;
+  font-size: 14px;
+  line-height: 1;
 }
-.language-trigger.ant-btn:hover,
-.language-trigger.ant-btn:focus-visible {
+.preference-trigger.ant-btn.ant-btn-default .anticon:not(.language-chevron) {
+  font-size: 16px;
+}
+.preference-trigger.ant-btn.ant-btn-default:hover,
+.preference-trigger.ant-btn.ant-btn-default:focus-visible {
   color: #edf8ff;
   background: #14233a;
   border-color: #55baff;
@@ -575,15 +582,6 @@ body {
   font: 500 9px var(--mono);
   text-align: center;
   box-shadow: 0 2px 0 #050910;
-}
-
-.secure-tag {
-  background: rgba(13, 24, 39, 0.9) !important;
-  border-color: #21334b !important;
-}
-
-.secure-tag {
-  color: #54dcb2 !important;
 }
 
 .command-modal .ant-modal-content,
@@ -1140,7 +1138,6 @@ body {
 }
 
 .menu-count,
-.secure-tag,
 .route-origin small,
 .route-node .ant-tag,
 .scope-tag,

@@ -237,12 +237,6 @@ code,
   font-size: 12px;
 }
 
-.secure-tag {
-  margin: 0;
-  font: 600 9px var(--mono);
-  letter-spacing: 0.08em;
-}
-
 .app-content {
   padding: 24px 30px 36px;
 }
@@ -1460,8 +1454,7 @@ input:-webkit-autofill:active {
 }
 
 @media (max-width: 1100px) {
-  .page-heading .ant-typography-secondary,
-  .secure-tag {
+  .page-heading .ant-typography-secondary {
     display: none;
   }
 

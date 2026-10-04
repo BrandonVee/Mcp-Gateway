@@ -1,7 +1,8 @@
 /* Shared preference controls remain available at every viewport width. */
-.theme-trigger.ant-btn {
-  width: 36px;
-  height: 34px;
+.theme-trigger.preference-trigger.ant-btn {
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
   flex-shrink: 0;
 }
 .command-search kbd,
@@ -9,6 +10,7 @@
 .command-footer kbd {
   white-space: nowrap;
 }
+.header-preferences,
 .login-preferences,
 .connections-preferences {
   display: flex;
@@ -37,6 +39,13 @@
   .app-header > .ant-flex,
   .app-header .page-heading {
     min-width: 0;
+  }
+  .app-header .page-heading h2.ant-typography {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 @media (max-width: 480px) {
@@ -131,14 +140,14 @@
   background: var(--surface-soft) !important;
 }
 :root[data-theme='light'] .collapse-button,
-:root[data-theme='light'] .language-trigger.ant-btn {
+:root[data-theme='light'] .preference-trigger.ant-btn.ant-btn-default {
   color: var(--muted) !important;
   background: var(--surface) !important;
   border-color: var(--line) !important;
 }
 :root[data-theme='light'] .collapse-button:hover,
-:root[data-theme='light'] .language-trigger.ant-btn:hover,
-:root[data-theme='light'] .language-trigger.ant-btn:focus-visible {
+:root[data-theme='light'] .preference-trigger.ant-btn.ant-btn-default:hover,
+:root[data-theme='light'] .preference-trigger.ant-btn.ant-btn-default:focus-visible {
   color: var(--blue) !important;
   border-color: var(--blue) !important;
   background: #edf4fd !important;
@@ -155,11 +164,6 @@
 :root[data-theme='light'] .language-menu .ant-dropdown-menu-item:hover {
   color: var(--blue);
   background: #e5effc;
-}
-:root[data-theme='light'] .secure-tag {
-  color: var(--green) !important;
-  background: #edf8f3 !important;
-  border-color: #c4e4d7 !important;
 }
 
 /* Titles and essential values. */

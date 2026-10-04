@@ -627,7 +627,6 @@ export const messages = {
   'locale.selectLanguage': '选择语言',
   'app.documentTitle': 'MCP Gateway',
   'app.controlPlane': '控制平面',
-  'app.secure': '安全连接',
   'app.boot.initializingDetail': '正在初始化控制平面',
   'nav.overview.eyebrow': '控制平面 / 总览',
   'nav.users.eyebrow': '控制平面 / 访问管理',

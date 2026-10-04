@@ -665,7 +665,6 @@ export const messages = {
   'locale.selectLanguage': 'Select language',
   'app.documentTitle': 'MCP Gateway',
   'app.controlPlane': 'Control plane',
-  'app.secure': 'Secure',
   'app.boot.initializingDetail': 'Initializing control plane',
   'nav.overview.eyebrow': 'Control plane / Overview',
   'nav.users.eyebrow': 'Control plane / Access',
