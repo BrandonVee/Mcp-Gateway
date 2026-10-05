@@ -131,6 +131,7 @@ async function main() {
       const html = await page.text();
       const body = hiddenFields(html);
       body.set('username', username);
+      body.set('email', `${username}@example.test`);
       body.set('password', password);
       body.set('confirm_password', confirmation);
       // None of these caller-supplied privilege fields may affect registration.
@@ -251,39 +252,73 @@ async function main() {
     assert.equal(status.status, 200);
     assert.equal(status.headers.get('cache-control'), 'no-store');
     assert.equal((await status.json()).registration_enabled, true);
-    assert.equal((await signupJson({ username: 'bad name', password, confirm_password: password })).status, 400);
+    assert.equal(
+      (await signupJson({ username: 'bad name', email: 'bad@example.test', password, confirm_password: password }))
+        .status,
+      400,
+    );
     const weak = await signupJson({
       username: consoleName,
+      email: `${consoleName}@example.test`,
       password: password.slice(0, 11),
       confirm_password: password.slice(0, 11),
     });
     assert.equal(weak.status, 400);
     assert.equal((await weak.json()).error, 'invalid_password');
+    const missingEmail = await signupJson({ username: consoleName, password, confirm_password: password });
+    assert.equal(missingEmail.status, 400);
+    assert.equal((await missingEmail.json()).error, 'invalid_email');
     assert.equal(
-      (await signupJson({ username: consoleName, password, confirm_password: 'wrong-confirmation' })).status,
+      (
+        await signupJson({
+          username: consoleName,
+          email: `${consoleName}@example.test`,
+          password,
+          confirm_password: 'wrong-confirmation',
+        })
+      ).status,
       400,
     );
     assert.equal(
       (
         await signupJson(
-          { username: consoleName, password, confirm_password: password },
+          { username: consoleName, email: `${consoleName}@example.test`, password, confirm_password: password },
           'https://attacker.example.test',
         )
       ).status,
       403,
     );
-    const created = await signupJson({ username: consoleName, password, confirm_password: password });
+    const created = await signupJson({
+      username: consoleName,
+      email: `${consoleName}@example.test`,
+      password,
+      confirm_password: password,
+    });
     assert.equal(created.status, 201, created.status === 201 ? undefined : await created.text());
     const createdBody = await created.json();
     assert.equal(createdBody.role, 'user');
     const consoleCookie = cookie(created, 'auth_session');
     assert.ok(consoleCookie);
     const me = await fetch(`${AUTH}/me/session`, { headers: { cookie: consoleCookie, origin: new URL(AUTH).origin } });
-    assert.equal((await me.json()).role, 'user', 'console registration signs the new account in');
-    assert.equal((await signupJson({ username: consoleName, password, confirm_password: password })).status, 409);
+    const meBody = await me.json();
+    assert.equal(meBody.role, 'user', 'console registration signs the new account in');
+    assert.equal(meBody.email, `${consoleName}@example.test`);
+    assert.equal(meBody.email_verified, false);
+    assert.equal(
+      (
+        await signupJson({
+          username: consoleName,
+          email: `${consoleName}@example.test`,
+          password,
+          confirm_password: password,
+        })
+      ).status,
+      409,
+    );
     // Caller-supplied privilege fields must not change the created account.
     const elevated = await signupJson({
       username: consoleName2,
+      email: `${consoleName2}@example.test`,
       password,
       confirm_password: password,
       role: 'admin',

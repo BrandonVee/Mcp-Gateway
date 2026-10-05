@@ -266,6 +266,9 @@ function ControlPlane({
               onDirtyChange={setSettingsDirty}
               onUpdate={startUpdate}
               onCheckUpdate={controlPlane.refreshUpdate}
+              onTestEmail={async (to) => {
+                await controlPlane.api.testEmail(to);
+              }}
             />
           )}
           {view === 'overview' && (
@@ -283,6 +286,7 @@ function ControlPlane({
               users={controlPlane.users}
               busy={controlPlane.busy}
               onCreate={() => setDialog({ type: 'create-user' })}
+              onEdit={(user) => setDialog({ type: 'edit-user', user })}
               onAssign={(user) => setDialog({ type: 'assign-user', user })}
               onPassword={(user) => setDialog({ type: 'reset-password', user })}
               onToggle={(user) => {
@@ -412,6 +416,7 @@ function ControlPlane({
             busy={controlPlane.busy}
             onClose={() => setDialog({ type: null })}
             onCreate={(data) => execute(() => controlPlane.api.createUser(data), t('app.userCreated'))}
+            onEdit={(user, data) => execute(() => controlPlane.api.updateUser(user.id, data), t('app.userUpdated'))}
             onAssign={(user, servers) =>
               execute(() => controlPlane.api.setUserServers(user.id, servers), t('app.accessGrantsUpdated'))
             }

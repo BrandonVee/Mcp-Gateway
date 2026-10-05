@@ -40,7 +40,8 @@ import { limitLoginAccount } from './rate-limit.js';
 import { trustedAdminBearerClient } from './admin-bearer.js';
 import { addUpstreamHost, currentSystemSettings, saveSystemSettings } from './system-settings.js';
 import { validateMcpEndpoint } from './upstream-endpoint.js';
-import { systemOptionDefaults, registrationEnabled } from '@mcp/shared';
+import { systemOptionDefaults, registrationEnabled, normalizeEmail } from '@mcp/shared';
+import { mailConfigured, sendMail } from './mailer.js';
 import { registerMonitoringRoutes } from './monitoring-api.js';
 import { registerTopologyRoutes } from './topology-api.js';
 import { revokeUserConnection } from './connection-lifecycle.js';
@@ -71,6 +72,7 @@ const userCreateSchema = z.object({
     .regex(/^[a-zA-Z0-9._-]{2,64}$/, 'invalid_username'),
   password: z.string().min(12, 'invalid_password').max(256, 'invalid_password'),
   role: z.enum(['admin', 'user']).default('user'),
+  email: z.string().trim().max(254, 'invalid_email').optional(),
   servers: z.array(z.string()).optional(),
 });
 const instanceId = z
@@ -402,33 +404,75 @@ export function createAdminRouter(deps: AdminDeps): Hono {
 
   router.get('/admin/system-settings', (c) => {
     c.header('Cache-Control', 'no-store');
+    const stored = databaseSettingsEnabled()
+      ? currentSystemSettings()
+      : {
+          public_url: deps.issuer,
+          upstream_allowlist_enabled: upstreamAllowlistEnabled(),
+          upstream_hosts: [...allowedUpstreamHosts()],
+        };
+    // The stored password is an encrypted envelope; browsers only learn whether one exists.
+    const { smtp_password: configuredPassword, ...visible } = {
+      ...systemOptionDefaults,
+      registration_enabled: registrationEnabled(),
+      ...stored,
+    };
     return c.json({
       managed: process.env.SYSTEM_CONFIG_MODE !== 'file',
       configured: systemConfigured(),
       public_url_requires_https: process.env.NODE_ENV === 'production',
-      ...systemOptionDefaults,
-      registration_enabled: registrationEnabled(),
-      ...(databaseSettingsEnabled()
-        ? currentSystemSettings()
-        : {
-            public_url: deps.issuer,
-            upstream_allowlist_enabled: upstreamAllowlistEnabled(),
-            upstream_hosts: [...allowedUpstreamHosts()],
-          }),
+      ...visible,
+      smtp_password: '',
+      smtp_password_configured: Boolean(configuredPassword),
     });
   });
   router.put('/admin/system-settings', async (c) => {
     if (process.env.SYSTEM_CONFIG_MODE === 'file')
       return c.json({ error: 'system_settings_managed_by_environment' }, 409);
-    const settings = normalizeSystemSettings(await c.req.json().catch(() => null));
+    const raw = await c.req.json().catch(() => null);
+    const settings = normalizeSystemSettings(raw);
     if (!settings) return c.json({ error: 'invalid_system_settings' }, 400);
+    // Password semantics: a non-empty value replaces the stored secret, an empty
+    // string clears it, and an absent field keeps the current envelope.
+    const plaintext =
+      raw && typeof raw === 'object' && typeof (raw as { smtp_password?: unknown }).smtp_password === 'string'
+        ? ((raw as { smtp_password: string }).smtp_password as string)
+        : undefined;
+    settings.smtp_password =
+      plaintext === undefined
+        ? (currentSystemSettings().smtp_password ?? '')
+        : plaintext
+          ? encryptCredential(plaintext)
+          : '';
     await saveSystemSettings(settings);
     return c.json({
       managed: true,
       configured: true,
       public_url_requires_https: process.env.NODE_ENV === 'production',
+      ...systemOptionDefaults,
       ...settings,
+      smtp_password: '',
+      smtp_password_configured: Boolean(settings.smtp_password),
     });
+  });
+
+  /** Sends a message through the saved relay so admins can verify SMTP before relying on it. */
+  router.post('/admin/system-settings/test-email', async (c) => {
+    if (!mailConfigured()) return c.json({ error: 'smtp_not_configured' }, 409);
+    const body = await c.req.json().catch(() => null);
+    const to = normalizeEmail((body as { to?: unknown } | null)?.to);
+    if (!to) return c.json({ error: 'invalid_email' }, 400);
+    try {
+      await sendMail(
+        to,
+        'MCP Gateway SMTP 测试 / SMTP test',
+        '这是一封测试邮件,说明发件邮箱配置已生效。\nThis test message confirms your sender configuration works.',
+      );
+      return c.json({ ok: true });
+    } catch (error) {
+      console.error('[smtp] test email failed', error instanceof Error ? error.name : 'UnknownError');
+      return c.json({ error: 'smtp_send_failed' }, 502);
+    }
   });
 
   router.post('/admin/system-settings/upstream-hosts', async (c) => {
@@ -540,6 +584,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
           id: u.id,
           username: u.username,
           role: u.role,
+          email: u.email,
+          email_verified: u.emailVerified,
           disabled: u.disabled,
           can_disable: !protectedAdmin,
           can_delete: !protectedAdmin,
@@ -562,7 +608,9 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         field === 'username' ? 'invalid_username' : field === 'password' ? 'invalid_password' : 'invalid_user_payload',
       );
     }
-    const { username, password, role: userRole, servers } = parsed.data;
+    const { username, password, role: userRole, email: rawEmail, servers } = parsed.data;
+    const email = rawEmail === undefined || rawEmail === '' ? null : normalizeEmail(rawEmail);
+    if (rawEmail !== undefined && rawEmail !== '' && !email) return jsonError(c, 'invalid_email');
     const requestedServers = userRole === 'admin' ? [] : [...new Set(servers ?? [])];
     if (requestedServers.includes('*') && requestedServers.length !== 1)
       return jsonError(c, 'wildcard must be the only server grant');
@@ -581,6 +629,10 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     if (existing) {
       return jsonError(c, 'username already exists', 409);
     }
+    if (email) {
+      const [emailOwner] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+      if (emailOwner) return jsonError(c, 'email already exists', 409);
+    }
     const now = Date.now();
     const created = await db.transaction(async (tx) => {
       const [created] = await tx
@@ -589,6 +641,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
           username,
           passwordHash: scryptHash(password),
           role: userRole,
+          email,
+          emailVerified: false,
           allServers: userRole !== 'admin' && requestedServers.includes('*'),
           disabled: false,
           createdAt: now,
@@ -606,7 +660,15 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     if (!created) return jsonError(c, 'username already exists', 409);
     const id = created.id;
     return c.json(
-      { id, username, role: userRole, disabled: false, servers: userRole === 'admin' ? ['*'] : requestedServers },
+      {
+        id,
+        username,
+        role: userRole,
+        email,
+        email_verified: false,
+        disabled: false,
+        servers: userRole === 'admin' ? ['*'] : requestedServers,
+      },
       201,
     );
   });
@@ -713,17 +775,33 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const id = Number(c.req.param('id'));
     if (!Number.isSafeInteger(id) || id <= 0) return jsonError(c, 'invalid user ID');
     const body = await c.req.json().catch(() => ({}));
-    const { password, role, disabled } = body as { password?: string; role?: string; disabled?: boolean };
+    const { password, role, disabled, username, email, email_verified } = body as {
+      password?: string;
+      role?: string;
+      disabled?: boolean;
+      username?: string;
+      email?: string | null;
+      email_verified?: boolean;
+    };
     if (password !== undefined && (typeof password !== 'string' || password.length < 12 || password.length > 256))
       return jsonError(c, 'password must be 12-256 characters');
     if (role !== undefined && role !== 'admin' && role !== 'user') return jsonError(c, 'role must be admin or user');
     if (disabled !== undefined && typeof disabled !== 'boolean') return jsonError(c, 'disabled must be a boolean');
+    if (username !== undefined && (typeof username !== 'string' || !/^[a-zA-Z0-9._-]{2,64}$/.test(username.trim())))
+      return jsonError(c, 'invalid_username');
+    // null or '' clears the address; anything else must be a valid email.
+    const nextEmail = email === undefined ? undefined : email === null || email === '' ? null : normalizeEmail(email);
+    if (email !== undefined && email !== null && email !== '' && nextEmail === null)
+      return jsonError(c, 'invalid_email');
+    if (email_verified !== undefined && typeof email_verified !== 'boolean')
+      return jsonError(c, 'email_verified must be a boolean');
     const passwordHash = password === undefined ? undefined : scryptHash(password);
     const result = await db.transaction(async (tx) => {
       // Serialize all administrator lifecycle changes with bootstrap across replicas.
       await tx.execute(sql`SELECT pg_advisory_xact_lock(762441, 2)`);
       const [row] = await tx.select().from(users).where(eq(users.id, id)).for('update').limit(1);
       if (!row) return 'missing';
+      const nextUsername = username === undefined ? row.username : username.trim();
       const nextRole = role ?? row.role;
       const nextDisabled = disabled ?? row.disabled;
       if (row.role === 'admin' && !row.disabled && (nextRole !== 'admin' || nextDisabled)) {
@@ -733,14 +811,32 @@ export function createAdminRouter(deps: AdminDeps): Hono {
           .where(and(eq(users.role, 'admin'), eq(users.disabled, false)));
         if (value <= 1) return 'last_admin';
       }
-      const revoke = passwordHash !== undefined || (disabled === true && !row.disabled) || nextRole !== row.role;
+      if (nextUsername !== row.username) {
+        const [taken] = await tx.select({ id: users.id }).from(users).where(eq(users.username, nextUsername)).limit(1);
+        if (taken) return 'username_taken';
+      }
+      const emailChanged = nextEmail !== undefined && nextEmail !== row.email;
+      if (emailChanged && nextEmail !== null) {
+        const [taken] = await tx.select({ id: users.id }).from(users).where(eq(users.email, nextEmail)).limit(1);
+        if (taken) return 'email_taken';
+      }
+      const revoke =
+        passwordHash !== undefined ||
+        (disabled === true && !row.disabled) ||
+        nextRole !== row.role ||
+        nextUsername !== row.username;
       await tx
         .update(users)
         .set({
+          username: nextUsername,
           role: nextRole as 'admin' | 'user',
           disabled: nextDisabled,
           updatedAt: Date.now(),
           ...(passwordHash === undefined ? {} : { passwordHash }),
+          // A changed address falls back to unverified unless the admin says otherwise.
+          ...(nextEmail === undefined ? {} : { email: nextEmail }),
+          ...(emailChanged ? { emailVerified: email_verified ?? false } : {}),
+          ...(!emailChanged && email_verified !== undefined ? { emailVerified: email_verified } : {}),
           ...(revoke ? { authVersion: sql`${users.authVersion} + 1` } : {}),
         })
         .where(eq(users.id, id));
@@ -749,6 +845,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     });
     if (result === 'missing') return jsonError(c, 'user not found', 404);
     if (result === 'last_admin') return jsonError(c, 'last_active_admin_required', 409);
+    if (result === 'username_taken') return jsonError(c, 'username already exists', 409);
+    if (result === 'email_taken') return jsonError(c, 'email already exists', 409);
     return c.json({ ok: true });
   });
 

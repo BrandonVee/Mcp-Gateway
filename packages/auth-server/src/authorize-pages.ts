@@ -6,9 +6,11 @@ export type AuthPageError =
   | 'missingCredentials'
   | 'invalidCredentials'
   | 'invalidUsername'
+  | 'invalidEmail'
   | 'invalidPassword'
   | 'passwordMismatch'
   | 'usernameTaken'
+  | 'emailTaken'
   | 'invalidForm'
   | 'tooManyAttempts'
   | 'serviceUnavailable'
@@ -39,11 +41,14 @@ const text = {
     stepConsent: '确认授权',
     stepReturn: '返回客户端',
     username: '用户名',
+    email: '邮箱',
     password: '密码',
     confirmPassword: '确认密码',
     usernameHelp: '2–64 个字符，可使用字母、数字、点、下划线和连字符。',
+    emailHelp: '用于接收账号通知与验证码。',
     passwordHelp: '12–256 个字符。',
     usernamePlaceholder: '输入用户名',
+    emailPlaceholder: '输入邮箱地址',
     passwordPlaceholder: '输入密码',
     newPasswordPlaceholder: '设置密码',
     confirmPasswordPlaceholder: '再次输入密码',
@@ -62,9 +67,11 @@ const text = {
     missingCredentials: '请输入用户名和密码。',
     invalidCredentials: '用户名或密码错误，或账号已停用。',
     invalidUsername: '用户名须为 2–64 个字母、数字、点、下划线或连字符。',
+    invalidEmail: '请输入有效的邮箱地址。',
     invalidPassword: '密码须为 12–256 个字符。',
     passwordMismatch: '两次输入的密码不一致。',
     usernameTaken: '该用户名已被使用，请更换用户名或返回登录。',
+    emailTaken: '该邮箱已被其他账号使用，请更换邮箱或返回登录。',
     invalidForm: '页面已过期，请重新提交表单。',
     tooManyAttempts: '操作过于频繁，请稍后再试。',
     serviceUnavailable: '暂时无法创建账号，请稍后再试。',
@@ -90,11 +97,14 @@ const text = {
     stepConsent: 'Authorize',
     stepReturn: 'Return to client',
     username: 'Username',
+    email: 'Email',
     password: 'Password',
     confirmPassword: 'Confirm password',
     usernameHelp: '2–64 letters, numbers, dots, underscores, or hyphens.',
+    emailHelp: 'Used for account notifications and verification codes.',
     passwordHelp: '12–256 characters.',
     usernamePlaceholder: 'Enter your username',
+    emailPlaceholder: 'Enter your email address',
     passwordPlaceholder: 'Enter your password',
     newPasswordPlaceholder: 'Choose a password',
     confirmPasswordPlaceholder: 'Repeat your password',
@@ -113,9 +123,11 @@ const text = {
     missingCredentials: 'Enter your username and password.',
     invalidCredentials: 'Invalid username or password, or account disabled.',
     invalidUsername: 'Use 2–64 letters, numbers, dots, underscores, or hyphens for your username.',
+    invalidEmail: 'Enter a valid email address.',
     invalidPassword: 'Use a password with 12–256 characters.',
     passwordMismatch: 'The passwords do not match.',
     usernameTaken: 'This username is already in use. Choose another or sign in.',
+    emailTaken: 'This email address is already used by another account. Choose another or sign in.',
     invalidForm: 'This page has expired. Please submit the form again.',
     tooManyAttempts: 'Too many attempts. Please try again later.',
     serviceUnavailable: 'Unable to create an account right now. Please try again later.',
@@ -262,6 +274,7 @@ export function signupPage(
   csrfToken: string,
   error?: AuthPageError,
   username = '',
+  email = '',
 ): string {
   const copy = text[language];
   return shell(
@@ -271,6 +284,7 @@ export function signupPage(
     `<h2 id="page-title">${copy.signupHeading}</h2><p class="description">${copy.signupDescription}</p>${requestDetails(q, details, language)}${errorNotice(error, language)}
 <form method="post" action="/authorize/signup">${hiddenFields(q, language)}${hidden('form_token', csrfToken)}
 <div class="field"><label for="username">${copy.username}</label><input id="username" name="username" autocomplete="username" placeholder="${copy.usernamePlaceholder}" value="${esc(username)}" minlength="2" maxlength="64" pattern="[a-zA-Z0-9._\\-]{2,64}" aria-describedby="username-help" required><small id="username-help">${copy.usernameHelp}</small></div>
+<div class="field"><label for="email">${copy.email}</label><input id="email" name="email" type="email" autocomplete="email" placeholder="${copy.emailPlaceholder}" value="${esc(email)}" maxlength="254" aria-describedby="email-help" required><small id="email-help">${copy.emailHelp}</small></div>
 <div class="field"><label for="password">${copy.password}</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="${copy.newPasswordPlaceholder}" minlength="12" maxlength="256" aria-describedby="password-help" required><small id="password-help">${copy.passwordHelp}</small></div>
 <div class="field"><label for="confirm-password">${copy.confirmPassword}</label><input id="confirm-password" name="confirm_password" type="password" autocomplete="new-password" placeholder="${copy.confirmPasswordPlaceholder}" minlength="12" maxlength="256" required></div>
 <button class="submit" type="submit">${copy.signupSubmit}${ARROW}</button></form>

@@ -67,4 +67,4 @@ export CREDENTIAL_BROKER_TOKEN="$(openssl rand -hex 32)"
 
 备份此密钥并与数据库备份一同管理；丢失或更换密钥会使已保存的 API Key、OAuth Token 和 Client Secret 不可解密。生产环境还应使用 HTTPS、限制内部凭据接口只能由 Gateway 访问，并为每个外部 OAuth 提供方核对回调、Scopes 和 Token 请求约定。
 
-用户连接相关接口：`POST/GET/DELETE /me/session`、`GET/POST /me/signup`、`GET /me/servers`、`PUT/DELETE /me/servers/:name/credential`、`POST /me/servers/:name/oauth`。这些接口使用浏览器的 HttpOnly 会话 Cookie；服务器会对带 `Origin` 的写请求检查来源。`GET /me/signup` 供登录页匿名读取注册开关，`POST /me/signup` 为自助注册并在成功后直接下发会话。
+用户连接相关接口：`POST/GET/DELETE /me/session`、`GET/POST /me/signup`、`POST /me/email/send-code`、`POST /me/email/verify`、`GET /me/servers`、`PUT/DELETE /me/servers/:name/credential`、`POST /me/servers/:name/oauth`。这些接口使用浏览器的 HttpOnly 会话 Cookie；服务器会对带 `Origin` 的写请求检查来源。`GET /me/signup` 供登录页匿名读取注册开关，`POST /me/signup` 为自助注册（需用户名、邮箱、密码）并在成功后直接下发会话；管理员在系统设置中配置 SMTP 发件邮箱后，注册会自动发送 6 位邮箱验证码，`/me/email/send-code` 与 `/me/email/verify` 用于补发与校验。

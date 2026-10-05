@@ -196,10 +196,24 @@ export async function createUserRow(username: string, password: string, role: 'a
 export async function verifyUser(
   username: string,
   password: string,
-): Promise<{ id: number; username: string; role: string; authVersion: number } | null> {
+): Promise<{
+  id: number;
+  username: string;
+  role: string;
+  authVersion: number;
+  email: string | null;
+  emailVerified: boolean;
+} | null> {
   const [row] = await db.select().from(users).where(eq(users.username, username)).limit(1);
   if (!row || row.disabled || !scryptVerify(password, row.passwordHash)) return null;
-  return { id: row.id, username: row.username, role: row.role, authVersion: row.authVersion };
+  return {
+    id: row.id,
+    username: row.username,
+    role: row.role,
+    authVersion: row.authVersion,
+    email: row.email,
+    emailVerified: row.emailVerified,
+  };
 }
 
 export async function getUserAuthorization(

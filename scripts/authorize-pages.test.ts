@@ -66,12 +66,15 @@ test('signup errors are localized, preserve only username, and explain restricte
   assert.equal(pageLanguage('en-US', 'zh-CN'), 'en-US');
 });
 
-test('self-registration validates username, password length, and confirmation on the server', () => {
-  assert.equal(validateSignup('alice', 'a-safe-password', 'a-safe-password'), null);
+test('self-registration validates username, email, password length, and confirmation on the server', () => {
+  assert.equal(validateSignup('alice', 'alice@example.com', 'a-safe-password', 'a-safe-password'), null);
   for (const name of ['', '*', 'a', 'a'.repeat(65), 'alice@example.com', '<script>']) {
-    assert.equal(validateSignup(name, 'a-safe-password', 'a-safe-password'), 'invalidUsername');
+    assert.equal(validateSignup(name, 'alice@example.com', 'a-safe-password', 'a-safe-password'), 'invalidUsername');
   }
-  assert.equal(validateSignup('alice', 'short', 'short'), 'invalidPassword');
-  assert.equal(validateSignup('alice', 'x'.repeat(257), 'x'.repeat(257)), 'invalidPassword');
-  assert.equal(validateSignup('alice', 'a-safe-password', 'another-password'), 'passwordMismatch');
+  for (const email of ['', 'alice', 'alice@', 'a@b', 'alice @example.com']) {
+    assert.equal(validateSignup('alice', email, 'a-safe-password', 'a-safe-password'), 'invalidEmail');
+  }
+  assert.equal(validateSignup('alice', 'alice@example.com', 'short', 'short'), 'invalidPassword');
+  assert.equal(validateSignup('alice', 'alice@example.com', 'x'.repeat(257), 'x'.repeat(257)), 'invalidPassword');
+  assert.equal(validateSignup('alice', 'alice@example.com', 'a-safe-password', 'another-password'), 'passwordMismatch');
 });

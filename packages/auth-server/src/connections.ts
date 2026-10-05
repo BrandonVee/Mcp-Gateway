@@ -8,6 +8,7 @@ import { decryptCredential, encryptCredential } from './credential-crypto.js';
 import { mcpServers, oauthConnectionStates, userMcpCredentials, userServerAccess, users } from './schema.js';
 import { consumeRateLimit, limitLoginAccount } from './rate-limit.js';
 import { createRegisteredUser, validateSignup } from './registration.js';
+import { sendEmailVerificationCode, verifyEmailCode } from './email-verification.js';
 import { lockAccessibleConnection, revokeUserConnection } from './connection-lifecycle.js';
 import {
   accessTokenValid,
@@ -21,10 +22,19 @@ import { recordAudit } from './admin.js';
 const cookieName = 'auth_session';
 const signupErrors = {
   invalidUsername: 'invalid_username',
+  invalidEmail: 'invalid_email',
   invalidPassword: 'invalid_password',
   passwordMismatch: 'password_mismatch',
 } as const;
-type User = { id: number; username: string; role: 'admin' | 'user'; allServers: boolean; authVersion: number };
+type User = {
+  id: number;
+  username: string;
+  role: 'admin' | 'user';
+  allServers: boolean;
+  authVersion: number;
+  email: string | null;
+  emailVerified: boolean;
+};
 
 async function currentUser(c: Context): Promise<User | null> {
   const token = getCookie(c, cookieName);
@@ -38,6 +48,8 @@ async function currentUser(c: Context): Promise<User | null> {
       disabled: users.disabled,
       allServers: users.allServers,
       authVersion: users.authVersion,
+      email: users.email,
+      emailVerified: users.emailVerified,
     })
     .from(users)
     .where(eq(users.id, session.userId))
@@ -49,11 +61,16 @@ async function currentUser(c: Context): Promise<User | null> {
         role: user.role,
         allServers: user.allServers,
         authVersion: user.authVersion,
+        email: user.email,
+        emailVerified: user.emailVerified,
       }
     : null;
 }
 
-async function accessibleServer(user: User, serverName: string) {
+async function accessibleServer(
+  user: Pick<User, 'id' | 'username' | 'role' | 'allServers' | 'authVersion'>,
+  serverName: string,
+) {
   const [server] = await db
     .select()
     .from(mcpServers)
@@ -188,6 +205,8 @@ export function createConnectionsRouter(): Hono {
           role: user.role,
           user_id: user.id,
           auth_version: user.authVersion,
+          email: user.email,
+          email_verified: user.emailVerified,
         })
       : c.json({ error: 'unauthorized' }, 401);
   });
@@ -240,6 +259,8 @@ export function createConnectionsRouter(): Hono {
       role: user.role,
       user_id: user.id,
       auth_version: user.authVersion,
+      email: user.email,
+      email_verified: user.emailVerified,
     });
   });
 
@@ -255,13 +276,16 @@ export function createConnectionsRouter(): Hono {
     if (await currentUser(c)) return c.json({ error: 'already_authenticated' }, 409);
     const body = (await c.req.json().catch(() => ({}))) as {
       username?: string;
+      email?: string;
       password?: string;
       confirm_password?: string;
     };
     const username = typeof body.username === 'string' ? body.username.trim() : '';
+    const email = typeof body.email === 'string' ? body.email : '';
     const password = typeof body.password === 'string' ? body.password : '';
     const invalid = validateSignup(
       username,
+      email,
       password,
       typeof body.confirm_password === 'string' ? body.confirm_password : '',
     );
@@ -275,11 +299,12 @@ export function createConnectionsRouter(): Hono {
     } catch {
       return c.json({ error: 'rate_limit_unavailable' }, 503);
     }
-    let user: { id: number; username: string; role: 'admin' | 'user'; authVersion: number } | null;
+    let user: { id: number; username: string; role: 'admin' | 'user'; authVersion: number };
     let token: string;
     try {
-      user = await createRegisteredUser(username, password);
-      if (!user) return c.json({ error: 'username_taken' }, 409);
+      const result = await createRegisteredUser(username, email, password);
+      if (result.status !== 'created') return c.json({ error: result.status }, 409);
+      user = result.user;
       token = await createLoginSession(user.id, user.authVersion);
     } catch {
       return c.json({ error: 'registration_unavailable' }, 503);
@@ -291,6 +316,10 @@ export function createConnectionsRouter(): Hono {
       path: '/',
       maxAge: 7 * 24 * 3600,
     });
+    // Verification mail is best effort: a broken relay must not block sign-up.
+    void sendEmailVerificationCode(user.id).catch((error) =>
+      console.error('[registration] verification mail failed', error instanceof Error ? error.name : 'UnknownError'),
+    );
     return c.json(
       {
         authenticated: true,
@@ -301,6 +330,46 @@ export function createConnectionsRouter(): Hono {
       },
       201,
     );
+  });
+
+  /** Sends a fresh verification code to the signed-in user's email address. */
+  router.post('/me/email/send-code', async (c) => {
+    const user = await currentUser(c);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    try {
+      if (!(await consumeRateLimit('email-verify-send', String(user.id), 5, 3600))) {
+        c.header('Retry-After', '3600');
+        return c.json({ error: 'rate_limit_exceeded' }, 429);
+      }
+    } catch {
+      return c.json({ error: 'rate_limit_unavailable' }, 503);
+    }
+    try {
+      const result = await sendEmailVerificationCode(user.id);
+      if (result === 'no_email') return c.json({ error: 'email_missing' }, 400);
+      if (result === 'not_configured') return c.json({ error: 'smtp_not_configured' }, 503);
+      return c.json({ ok: true });
+    } catch {
+      return c.json({ error: 'smtp_send_failed' }, 502);
+    }
+  });
+
+  router.post('/me/email/verify', async (c) => {
+    const user = await currentUser(c);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    const body = (await c.req.json().catch(() => ({}))) as { code?: string };
+    const code = typeof body.code === 'string' ? body.code.trim() : '';
+    if (!/^\d{6}$/.test(code)) return c.json({ error: 'invalid_code' }, 400);
+    try {
+      if (!(await consumeRateLimit('email-verify-check', String(user.id), 10, 3600))) {
+        c.header('Retry-After', '3600');
+        return c.json({ error: 'rate_limit_exceeded' }, 429);
+      }
+    } catch {
+      return c.json({ error: 'rate_limit_unavailable' }, 503);
+    }
+    const result = await verifyEmailCode(user.id, code);
+    return result === 'verified' ? c.json({ ok: true }) : c.json({ error: 'invalid_code' }, 400);
   });
 
   router.delete('/me/session', async (c) => {

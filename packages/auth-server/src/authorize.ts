@@ -8,6 +8,7 @@ import { saveAuthCode } from './stores.js';
 import { authIssuer, gatewayPublicUrl, registrationEnabled } from '@mcp/shared';
 import { consumeRateLimit, limitLoginAccount } from './rate-limit.js';
 import { createRegisteredUser, validateSignup } from './registration.js';
+import { sendEmailVerificationCode } from './email-verification.js';
 import { mcpServers } from './schema.js';
 import {
   authorizationLink,
@@ -82,6 +83,7 @@ authorizeRouter.post('/authorize/signup', async (c) => {
   if (invalid) return c.json(invalid, 400);
   if (!registrationEnabled()) return c.html(loginPage(q, language, await pageDetails(q), 'registrationDisabled'), 403);
   const username = str('username').trim();
+  const email = str('email').trim();
   const submittedToken = str('form_token');
   const cookieToken = getCookie(c, SIGNUP_FORM_COOKIE) ?? '';
   const origin = c.req.header('origin');
@@ -91,26 +93,40 @@ authorizeRouter.post('/authorize/signup', async (c) => {
     !/^[A-Za-z0-9_-]{43}$/.test(cookieToken) ||
     !timingSafeEqual(Buffer.from(cookieToken), Buffer.from(submittedToken))
   ) {
-    return showSignup(c, q, language, 'invalidForm', username, 403);
+    return showSignup(c, q, language, 'invalidForm', username, email, 403);
   }
   if (await getSessionFromCookie(c)) return c.redirect(authorizationLink('/authorize', q, language), 303);
-  const signupError = validateSignup(username, str('password'), str('confirm_password'));
-  if (signupError) return showSignup(c, q, language, signupError, username, 400);
+  const signupError = validateSignup(username, email, str('password'), str('confirm_password'));
+  if (signupError) return showSignup(c, q, language, signupError, username, email, 400);
   try {
     if (!(await consumeRateLimit('signup-account', username.toLowerCase(), 5, 3600))) {
       c.header('Retry-After', '3600');
-      return showSignup(c, q, language, 'tooManyAttempts', username, 429);
+      return showSignup(c, q, language, 'tooManyAttempts', username, email, 429);
     }
   } catch {
-    return showSignup(c, q, language, 'serviceUnavailable', username, 503);
+    return showSignup(c, q, language, 'serviceUnavailable', username, email, 503);
   }
   try {
-    const user = await createRegisteredUser(username, str('password'));
-    if (!user) return showSignup(c, q, language, 'usernameTaken', username, 409);
-    await setBrowserSession(c, user.id, 0);
+    const result = await createRegisteredUser(username, email, str('password'));
+    if (result.status !== 'created') {
+      return showSignup(
+        c,
+        q,
+        language,
+        result.status === 'username_taken' ? 'usernameTaken' : 'emailTaken',
+        username,
+        email,
+        409,
+      );
+    }
+    await setBrowserSession(c, result.user.id, 0);
+    // Verification mail is best effort: a broken relay must not block sign-up.
+    void sendEmailVerificationCode(result.user.id).catch((error) =>
+      console.error('[registration] verification mail failed', error instanceof Error ? error.name : 'UnknownError'),
+    );
   } catch (error) {
     console.error('[registration] failed', error instanceof Error ? error.name : 'UnknownError');
-    return showSignup(c, q, language, 'serviceUnavailable', username, 503);
+    return showSignup(c, q, language, 'serviceUnavailable', username, email, 503);
   }
   deleteCookie(c, SIGNUP_FORM_COOKIE, { path: '/authorize' });
   const target = new URL(authorizationLink('/authorize', q, language), authIssuer());
@@ -196,6 +212,7 @@ async function showSignup(
   language: AuthPageLanguage,
   error?: AuthPageError,
   username = '',
+  email = '',
   status: 200 | 400 | 403 | 409 | 429 | 503 = 200,
 ) {
   const token = randomBytes(32).toString('base64url');
@@ -207,7 +224,7 @@ async function showSignup(
     maxAge: 15 * 60,
   });
   c.header('Content-Language', language);
-  return c.html(signupPage(q, language, await pageDetails(q), token, error, username), status);
+  return c.html(signupPage(q, language, await pageDetails(q), token, error, username, email), status);
 }
 
 function resourceServer(resource: string | undefined): string | undefined {

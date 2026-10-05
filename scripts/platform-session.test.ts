@@ -42,9 +42,9 @@ test('self-registration posts anonymously and can read the switch without an ide
   });
   const page = apiForSession({ authenticated: true, user_id: 7, auth_version: 2, username: 'alice', role: 'user' });
   await api.signupStatus();
-  await api.mySignup('newcomer', 'a-long-enough-password', 'a-long-enough-password');
+  await api.mySignup('newcomer', 'newcomer@example.test', 'a-long-enough-password', 'a-long-enough-password');
   // A signed-in page must not send its identity either: signup is an anonymous write.
-  await page.mySignup('other', 'a-long-enough-password', 'a-long-enough-password');
+  await page.mySignup('other', 'other@example.test', 'a-long-enough-password', 'a-long-enough-password');
   assert.deepEqual(
     sent.map(({ url }) => url),
     ['/api/me/signup', '/api/me/signup', '/api/me/signup'],
@@ -57,6 +57,7 @@ test('self-registration posts anonymously and can read the switch without an ide
   const body = JSON.parse(String(sent[1].init.body)) as Record<string, string>;
   assert.deepEqual(body, {
     username: 'newcomer',
+    email: 'newcomer@example.test',
     password: 'a-long-enough-password',
     confirm_password: 'a-long-enough-password',
   });

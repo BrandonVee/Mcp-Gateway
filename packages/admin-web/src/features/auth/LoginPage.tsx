@@ -3,6 +3,7 @@ import {
   CheckCircleFilled,
   CloudServerOutlined,
   LockOutlined,
+  MailOutlined,
   SafetyCertificateOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -21,6 +22,7 @@ interface LoginForm {
 
 interface SignupForm {
   username: string;
+  email: string;
   password: string;
   confirmation: string;
 }
@@ -59,7 +61,7 @@ export function LoginPage({
     setError('');
     setBusy(true);
     try {
-      const session = await api.mySignup(values.username, values.password, values.confirmation);
+      const session = await api.mySignup(values.username, values.email, values.password, values.confirmation);
       onSuccess(session);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : t('common.operationFailed'));
@@ -177,7 +179,7 @@ export function LoginPage({
               key="signup"
               name="signup"
               layout="vertical"
-              initialValues={{ username: '', password: '', confirmation: '' }}
+              initialValues={{ username: '', email: '', password: '', confirmation: '' }}
               disabled={busy}
               onFinish={register}
               requiredMark={false}
@@ -196,6 +198,16 @@ export function LoginPage({
                   placeholder={t('auth.signup.usernamePlaceholder')}
                   autoComplete="username"
                 />
+              </Form.Item>
+              <Form.Item
+                name="email"
+                label={t('auth.signup.emailLabel')}
+                rules={[
+                  { required: true, message: t('auth.signup.emailRequired') },
+                  { type: 'email', message: t('auth.signup.emailRule') },
+                ]}
+              >
+                <Input prefix={<MailOutlined />} placeholder={t('auth.signup.emailPlaceholder')} autoComplete="email" />
               </Form.Item>
               <Form.Item
                 name="password"

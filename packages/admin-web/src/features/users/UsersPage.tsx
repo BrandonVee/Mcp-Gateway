@@ -1,6 +1,7 @@
 import { useI18n } from '../../i18n';
 import {
   DeleteOutlined,
+  EditOutlined,
   KeyOutlined,
   LinkOutlined,
   PlusOutlined,
@@ -33,13 +34,14 @@ interface UsersPageProps {
   users: AdminUser[];
   busy: boolean;
   onCreate: () => void;
+  onEdit: (user: AdminUser) => void;
   onAssign: (user: AdminUser) => void;
   onPassword: (user: AdminUser) => void;
   onToggle: (user: AdminUser) => void;
   onDelete: (user: AdminUser) => void;
 }
 
-export function UsersPage({ users, busy, onCreate, onAssign, onPassword, onToggle, onDelete }: UsersPageProps) {
+export function UsersPage({ users, busy, onCreate, onEdit, onAssign, onPassword, onToggle, onDelete }: UsersPageProps) {
   const { t } = useI18n();
   const [keyword, setKeyword] = useState('');
   const [role, setRole] = useState<'all' | AdminUser['role']>('all');
@@ -51,6 +53,7 @@ export function UsersPage({ users, busy, onCreate, onAssign, onPassword, onToggl
       const matchesKeyword =
         !normalizedKeyword ||
         user.username.toLowerCase().includes(normalizedKeyword) ||
+        (user.email ?? '').toLowerCase().includes(normalizedKeyword) ||
         user.servers.some((server) => server.toLowerCase().includes(normalizedKeyword));
       const matchesRole = role === 'all' || user.role === role;
       const matchesStatus =
@@ -77,6 +80,20 @@ export function UsersPage({ users, busy, onCreate, onAssign, onPassword, onToggl
           </span>
         </Flex>
       ),
+    },
+    {
+      title: t('common.email'),
+      dataIndex: 'email',
+      key: 'email',
+      render: (email: string | null, user) =>
+        email ? (
+          <Flex align="center" gap={6}>
+            <span>{email}</span>
+            {user.email_verified && <Tag color="success">{t('users.emailVerified')}</Tag>}
+          </Flex>
+        ) : (
+          <Typography.Text type="secondary">{t('users.noEmail')}</Typography.Text>
+        ),
     },
     {
       title: t('common.role'),
@@ -130,10 +147,13 @@ export function UsersPage({ users, busy, onCreate, onAssign, onPassword, onToggl
     {
       title: t('common.actions'),
       key: 'actions',
-      width: 156,
+      width: 186,
       align: 'right',
       render: (_, user) => (
         <Space size={4}>
+          <Tooltip title={t('userDialog.editUser')}>
+            <Button disabled={busy} type="text" icon={<EditOutlined />} onClick={() => onEdit(user)} />
+          </Tooltip>
           {user.role === 'user' && (
             <Tooltip title={t('servers.assignAccess')}>
               <Button disabled={busy} type="text" icon={<LinkOutlined />} onClick={() => onAssign(user)} />

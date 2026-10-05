@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { App, Alert, Badge, Button, Form, Input, InputNumber, Select, Switch, Tag } from 'antd';
+import { App, Alert, Badge, Button, Checkbox, Flex, Form, Input, InputNumber, Select, Switch, Tag } from 'antd';
 import {
   BarChartOutlined,
   BellOutlined,
@@ -8,9 +8,11 @@ import {
   GlobalOutlined,
   InfoCircleOutlined,
   LinkOutlined,
+  MailOutlined,
   ReloadOutlined,
   SaveOutlined,
   SafetyCertificateOutlined,
+  SendOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
 import { useI18n } from '../../i18n';
@@ -87,6 +89,7 @@ export function SettingsPage({
   onSave,
   onUpdate,
   onCheckUpdate,
+  onTestEmail,
   onDirtyChange,
 }: {
   settings: SystemSettings;
@@ -95,6 +98,7 @@ export function SettingsPage({
   onSave: (body: SystemSettingsInput) => Promise<SystemSettings | null>;
   onUpdate: (tag: string) => void;
   onCheckUpdate: () => Promise<void>;
+  onTestEmail: (to: string) => Promise<void>;
   onDirtyChange: (dirty: boolean) => void;
 }) {
   const { t } = useI18n();
@@ -113,8 +117,24 @@ export function SettingsPage({
   };
   const [form] = Form.useForm<SettingsFormValues>();
   const allowlistEnabled = Form.useWatch('upstream_allowlist_enabled', form) ?? true;
+  const smtpHost = Form.useWatch('smtp_host', form) ?? '';
   const [saving, setSaving] = useState(false),
     [dirty, setDirty] = useState(false);
+  const [clearSmtpPassword, setClearSmtpPassword] = useState(false);
+  const [testTo, setTestTo] = useState('');
+  const [testingEmail, setTestingEmail] = useState(false);
+  const mailReady = Boolean(settings.smtp_host && settings.smtp_from);
+  const sendTestEmail = async () => {
+    setTestingEmail(true);
+    try {
+      await onTestEmail(testTo.trim());
+      message.success(t('settings.smtpTestSuccess'));
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('common.operationFailed'));
+    } finally {
+      setTestingEmail(false);
+    }
+  };
   const initialValues = useMemo<SettingsFormValues>(
     () => ({
       public_url: settings.public_url ?? '',
@@ -127,6 +147,12 @@ export function SettingsPage({
       monitoring_error_rate: settings.monitoring_error_rate ?? 5,
       monitoring_slow_ms: settings.monitoring_slow_ms ?? 2000,
       upstream_hosts: settings.upstream_hosts.join('\n'),
+      smtp_host: settings.smtp_host ?? '',
+      smtp_port: settings.smtp_port ?? 465,
+      smtp_secure: settings.smtp_secure ?? true,
+      smtp_username: settings.smtp_username ?? '',
+      smtp_password: '',
+      smtp_from: settings.smtp_from ?? '',
     }),
     [settings],
   );
@@ -159,6 +185,7 @@ export function SettingsPage({
   const reset = () => {
     form.resetFields();
     form.setFieldsValue(initialValues);
+    setClearSmtpPassword(false);
     setDirty(false);
   };
 
@@ -190,19 +217,29 @@ export function SettingsPage({
         onFinish={async (values) => {
           setSaving(true);
           try {
+            // Password semantics: typed value replaces, explicit clear empties,
+            // otherwise the stored secret stays untouched server-side.
+            const { smtp_password, ...rest } = values;
             const saved = await onSave({
-              ...values,
+              ...rest,
               public_url: values.public_url.trim(),
               upstream_hosts: upstreamHosts(values.upstream_hosts),
+              ...(smtp_password
+                ? { smtp_password }
+                : clearSmtpPassword
+                  ? { smtp_password: '' }
+                  : { smtp_password: undefined }),
             });
             if (saved) {
               const normalized = {
                 ...values,
                 public_url: saved.public_url ?? '',
                 upstream_hosts: saved.upstream_hosts.join('\n'),
+                smtp_password: '',
               };
               baseline.current = normalized;
               form.setFieldsValue(normalized);
+              setClearSmtpPassword(false);
               setDirty(false);
             }
           } finally {
@@ -259,11 +296,110 @@ export function SettingsPage({
           </SettingsModule>
 
           <SettingsModule
+            id="settings-smtp"
+            icon={<MailOutlined />}
+            title={t('settings.smtpModule')}
+            description={t('settings.smtpDescription')}
+            number="03"
+            tone="orange"
+          >
+            <div className="settings-field-grid">
+              <Form.Item name="smtp_host" label={t('settings.smtpHost')} extra={t('settings.smtpHostHelp')}>
+                <Input placeholder="smtp.example.com" allowClear autoComplete="off" />
+              </Form.Item>
+              <Form.Item name="smtp_port" label={t('settings.smtpPort')} rules={[{ required: true }]}>
+                <InputNumber min={1} max={65535} precision={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </div>
+            <div className="settings-field-grid">
+              <Form.Item name="smtp_username" label={t('settings.smtpUsername')} extra={t('settings.smtpUsernameHelp')}>
+                <Input allowClear autoComplete="off" />
+              </Form.Item>
+              <Form.Item
+                name="smtp_password"
+                label={t('settings.smtpPassword')}
+                extra={
+                  settings.smtp_password_configured
+                    ? t('settings.smtpPasswordConfigured')
+                    : t('settings.smtpPasswordHelp')
+                }
+              >
+                <Input.Password autoComplete="new-password" disabled={clearSmtpPassword} />
+              </Form.Item>
+            </div>
+            {settings.smtp_password_configured && (
+              <Checkbox
+                checked={clearSmtpPassword}
+                disabled={!settings.managed || saving || updating}
+                onChange={(event) => {
+                  setClearSmtpPassword(event.target.checked);
+                  if (event.target.checked) form.setFieldValue('smtp_password', '');
+                  setDirty(true);
+                }}
+              >
+                {t('settings.smtpClearPassword')}
+              </Checkbox>
+            )}
+            <Form.Item
+              name="smtp_from"
+              label={t('settings.smtpFrom')}
+              extra={t('settings.smtpFromHelp')}
+              rules={[
+                {
+                  validator: (_, value) =>
+                    !smtpHost.trim() || (typeof value === 'string' && value.trim())
+                      ? Promise.resolve()
+                      : Promise.reject(new Error(t('settings.smtpFromRequired'))),
+                },
+              ]}
+            >
+              <Input placeholder={t('settings.smtpFromPlaceholder')} allowClear autoComplete="off" />
+            </Form.Item>
+            <div className="settings-toggle-row">
+              <div>
+                <label htmlFor="smtp_secure">{t('settings.smtpSecure')}</label>
+                <p id="smtp_secure-help">{t('settings.smtpSecureHelp')}</p>
+              </div>
+              <Form.Item name="smtp_secure" valuePropName="checked" noStyle>
+                <Switch
+                  id="smtp_secure"
+                  aria-label={t('settings.smtpSecure')}
+                  aria-describedby="smtp_secure-help"
+                  checkedChildren={t('settings.on')}
+                  unCheckedChildren={t('settings.off')}
+                />
+              </Form.Item>
+            </div>
+            <div className="settings-inline-note">
+              <InfoCircleOutlined />
+              <p>{t(mailReady ? 'settings.smtpReady' : 'settings.smtpNotConfigured')}</p>
+            </div>
+            <Flex gap={8} align="center">
+              <Input
+                value={testTo}
+                onChange={(event) => setTestTo(event.target.value)}
+                placeholder={t('settings.smtpTestTo')}
+                style={{ maxWidth: 320 }}
+                disabled={!mailReady || dirty || !settings.managed}
+              />
+              <Button
+                icon={<SendOutlined />}
+                loading={testingEmail}
+                disabled={!mailReady || dirty || !settings.managed || !testTo.trim()}
+                onClick={() => void sendTestEmail()}
+              >
+                {t('settings.smtpTest')}
+              </Button>
+            </Flex>
+            {dirty && mailReady && <p className="settings-test-hint">{t('settings.smtpTestSaveFirst')}</p>}
+          </SettingsModule>
+
+          <SettingsModule
             id="settings-upstream"
             icon={<SafetyCertificateOutlined />}
             title={t('settings.upstreamModule')}
             description={t('settings.upstreamDescription')}
-            number="03"
+            number="04"
             tone="cyan"
           >
             <SettingToggle
@@ -299,7 +435,7 @@ export function SettingsPage({
             icon={<BarChartOutlined />}
             title={t('settings.collectionModule')}
             description={t('settings.collectionDescription')}
-            number="04"
+            number="05"
             tone="green"
           >
             <SettingToggle
@@ -342,7 +478,7 @@ export function SettingsPage({
               icon={<BellOutlined />}
               title={t('settings.alertModule')}
               description={t('settings.alertDescription')}
-              number="05"
+              number="06"
               tone="amber"
             >
               <div className="settings-alert-layout">
@@ -384,7 +520,7 @@ export function SettingsPage({
                 icon={<CloudUploadOutlined />}
                 title={t('settings.updateModule')}
                 description={t('settings.updateDescription')}
-                number="06"
+                number="07"
                 tone="slate"
               >
                 <div className="settings-alert-layout">

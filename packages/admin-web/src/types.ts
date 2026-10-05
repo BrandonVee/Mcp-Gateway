@@ -4,6 +4,8 @@ export interface AdminUser {
   id: number;
   username: string;
   role: 'admin' | 'user';
+  email: string | null;
+  email_verified: boolean;
   disabled: boolean;
   can_disable: boolean;
   can_delete: boolean;
@@ -17,6 +19,8 @@ export interface PlatformSession {
   authenticated: true;
   username: string;
   role: 'admin' | 'user';
+  email?: string | null;
+  email_verified?: boolean;
 }
 
 export interface McpInstance {
@@ -113,6 +117,7 @@ export type View = 'overview' | 'users' | 'servers' | 'credentials' | 'topology'
 export type DialogState =
   | { type: null }
   | { type: 'create-user' }
+  | { type: 'edit-user'; user: AdminUser }
   | { type: 'assign-user'; user: AdminUser }
   | { type: 'reset-password'; user: AdminUser }
   | { type: 'create-server' }
@@ -126,7 +131,18 @@ export interface CreateUserInput {
   username: string;
   password: string;
   role: string;
+  email?: string;
   servers: string[];
+}
+
+export interface UpdateUserInput {
+  username?: string;
+  password?: string;
+  role?: string;
+  disabled?: boolean;
+  /** null clears the stored address. */
+  email?: string | null;
+  email_verified?: boolean;
 }
 
 export interface CreateServerInput {
@@ -177,10 +193,17 @@ export interface SystemSettings {
   monitoring_summary_days?: number;
   monitoring_error_rate?: number;
   monitoring_slow_ms?: number;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_secure?: boolean;
+  smtp_username?: string;
+  smtp_password?: string;
+  smtp_password_configured?: boolean;
+  smtp_from?: string;
 }
 export type SystemSettingsInput = Omit<
   SystemSettings,
-  'managed' | 'configured' | 'public_url' | 'public_url_requires_https'
+  'managed' | 'configured' | 'public_url' | 'public_url_requires_https' | 'smtp_password_configured'
 > & {
   public_url: string;
 };

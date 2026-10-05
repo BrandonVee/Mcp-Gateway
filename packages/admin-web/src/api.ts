@@ -16,6 +16,7 @@ import type {
   ServerAuthInput,
   SystemUpdateStatus,
   TopologySnapshot,
+  UpdateUserInput,
   UpstreamTestResult,
 } from './types';
 import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from './i18n';
@@ -84,6 +85,13 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     last_active_admin_required: 'users.lastAdminProtected',
     session_changed: 'api.sessionChanged',
     username_taken: 'api.usernameExists',
+    email_taken: 'api.emailExists',
+    'email already exists': 'api.emailExists',
+    invalid_email: 'api.invalidEmail',
+    email_missing: 'api.emailMissing',
+    smtp_not_configured: 'api.smtpNotConfigured',
+    smtp_send_failed: 'api.smtpSendFailed',
+    invalid_code: 'api.invalidCode',
     registration_disabled: 'api.registrationDisabled',
     invalid_username: 'api.invalidUsername',
     invalid_password: 'api.invalidPassword',
@@ -170,6 +178,11 @@ export function apiForSession(session?: PlatformSession) {
         method: 'PUT',
         body: JSON.stringify(body),
       }),
+    testEmail: (to: string) =>
+      request<{ ok: boolean }>('/api/admin/system-settings/test-email', {
+        method: 'POST',
+        body: JSON.stringify({ to }),
+      }),
     systemUpdate: (check = false, runtimeOnly = false) =>
       request<SystemUpdateStatus>(
         `/api/admin/system-update?${new URLSearchParams({ check: String(check), runtime: String(runtimeOnly) })}`,
@@ -210,12 +223,12 @@ export function apiForSession(session?: PlatformSession) {
       }),
     logout: () => request('/api/admin/session', { method: 'DELETE' }),
     users: () => request<{ users: AdminUser[] }>('/api/admin/users'),
-    createUser: (body: { username: string; password: string; role: string; servers: string[] }) =>
+    createUser: (body: { username: string; password: string; role: string; email?: string; servers: string[] }) =>
       request<AdminUser>('/api/admin/users', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    updateUser: (id: number, body: { password?: string; role?: string; disabled?: boolean }) =>
+    updateUser: (id: number, body: UpdateUserInput) =>
       request(`/api/admin/users/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
@@ -293,10 +306,10 @@ export function apiForSession(session?: PlatformSession) {
       }),
     myLogout: () => request('/api/me/session', { method: 'DELETE' }),
     signupStatus: () => request<{ registration_enabled: boolean }>('/api/me/signup'),
-    mySignup: (username: string, password: string, confirmation: string) =>
+    mySignup: (username: string, email: string, password: string, confirmation: string) =>
       request<PlatformSession>('/api/me/signup', {
         method: 'POST',
-        body: JSON.stringify({ username, password, confirm_password: confirmation }),
+        body: JSON.stringify({ username, email, password, confirm_password: confirmation }),
       }),
     myServers: () => request<{ servers: ConnectionServer[] }>('/api/me/servers'),
     saveApiKey: (name: string, apiKey: string) =>

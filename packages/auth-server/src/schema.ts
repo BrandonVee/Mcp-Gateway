@@ -15,17 +15,39 @@ import {
 const epoch = (name: string) => bigint(name, { mode: 'number' }).notNull();
 export const userRole = pgEnum('user_role', ['admin', 'user']);
 
-export const users = pgTable('users', {
-  id: bigserial('id', { mode: 'number' }).primaryKey(),
-  username: text('username').notNull().unique(),
-  passwordHash: text('password_hash').notNull(),
-  role: userRole('role').notNull().default('user'),
-  disabled: boolean('disabled').notNull().default(false),
-  allServers: boolean('all_servers').notNull().default(false),
-  authVersion: integer('auth_version').notNull().default(0),
-  createdAt: epoch('created_at'),
-  updatedAt: epoch('updated_at'),
-});
+export const users = pgTable(
+  'users',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    username: text('username').notNull().unique(),
+    passwordHash: text('password_hash').notNull(),
+    role: userRole('role').notNull().default('user'),
+    email: text('email'),
+    emailVerified: boolean('email_verified').notNull().default(false),
+    disabled: boolean('disabled').notNull().default(false),
+    allServers: boolean('all_servers').notNull().default(false),
+    authVersion: integer('auth_version').notNull().default(0),
+    createdAt: epoch('created_at'),
+    updatedAt: epoch('updated_at'),
+  },
+  // Postgres treats NULLs as distinct, so only real addresses are unique.
+  (table) => [uniqueIndex('uq_users_email').on(table.email)],
+);
+
+/** One active verification code per user; replaced on every resend. */
+export const emailVerificationCodes = pgTable(
+  'email_verification_codes',
+  {
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    codeHash: text('code_hash').notNull(),
+    expiresAt: epoch('expires_at'),
+    createdAt: epoch('created_at'),
+  },
+  (table) => [primaryKey({ columns: [table.userId] })],
+);
 
 export const clients = pgTable('clients', {
   clientId: text('client_id').primaryKey(),

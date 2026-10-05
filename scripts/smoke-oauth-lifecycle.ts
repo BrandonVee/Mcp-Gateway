@@ -102,12 +102,22 @@ async function main() {
       role: 'admin',
       user_id: user.id,
       auth_version: 0,
+      email: null,
+      email_verified: false,
     });
     const signedIn = await request('/me/session', 'POST', { username: user.username, password });
     assert.equal(signedIn.status, 200);
     assert.deepEqual(
       await signedIn.json(),
-      { authenticated: true, username: user.username, role: 'admin', user_id: user.id, auth_version: 0 },
+      {
+        authenticated: true,
+        username: user.username,
+        role: 'admin',
+        user_id: user.id,
+        auth_version: 0,
+        email: null,
+        email_verified: false,
+      },
       'login returns the same immutable identity as session validation',
     );
     assert.equal(

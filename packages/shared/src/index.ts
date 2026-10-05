@@ -212,6 +212,14 @@ export interface SystemSettings {
   monitoring_summary_days?: number;
   monitoring_error_rate?: number;
   monitoring_slow_ms?: number;
+  /** Outbound mail for verification codes. Empty host disables sending. */
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_secure?: boolean;
+  smtp_username?: string;
+  /** Encrypted at rest (credential envelope); never sent back to browsers. */
+  smtp_password?: string;
+  smtp_from?: string;
 }
 export const systemOptionDefaults = {
   registration_enabled: true,
@@ -221,6 +229,12 @@ export const systemOptionDefaults = {
   monitoring_summary_days: 365,
   monitoring_error_rate: 5,
   monitoring_slow_ms: 2000,
+  smtp_host: '',
+  smtp_port: 465,
+  smtp_secure: true,
+  smtp_username: '',
+  smtp_password: '',
+  smtp_from: '',
 };
 export function runtimeSettings() {
   return { ...systemOptionDefaults, ...currentSystemSettings() };
@@ -314,6 +328,17 @@ const systemSettingsSchema = (production: boolean) =>
     monitoring_summary_days: boundedInt(730).optional(),
     monitoring_error_rate: boundedInt(100).optional(),
     monitoring_slow_ms: boundedInt(3_600_000).optional(),
+    smtp_host: z
+      .string()
+      .max(253)
+      .regex(/^$|^[a-z0-9][a-z0-9.-]*(\.[a-z0-9][a-z0-9.-]*)+$|^\d{1,3}(\.\d{1,3}){3}$/i)
+      .optional(),
+    smtp_port: boundedInt(65535).optional(),
+    smtp_secure: z.boolean().optional(),
+    smtp_username: z.string().max(254).optional(),
+    // Accepts plaintext (encrypted before persistence) or the stored envelope.
+    smtp_password: z.string().max(4096).optional(),
+    smtp_from: z.string().max(254).optional(),
   });
 
 export function normalizeSystemSettings(
@@ -352,4 +377,17 @@ export function bootstrapOriginAllowed(
   } catch {
     return false;
   }
+}
+
+// Pragmatic address check: one @, non-empty labels, a dot in the domain.
+export const EMAIL_RE = /^[^\s@]{1,64}@[^\s@.]{1,253}(\.[^\s@.]{1,253})+$/;
+export function normalizeEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const email = value.trim().toLowerCase();
+  return email.length <= 254 && EMAIL_RE.test(email) ? email : null;
+}
+
+/** Sending requires at least a relay host and a From address. */
+export function smtpConfigured(settings: SystemSettings): boolean {
+  return Boolean(settings.smtp_host && settings.smtp_from);
 }
