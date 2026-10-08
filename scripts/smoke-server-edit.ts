@@ -83,7 +83,7 @@ async function main() {
       200,
     );
     const testUser = await request('/admin/users', 'POST', {
-      username: name,
+      username: `${name}@example.test`,
       password: randomUUID(),
       role: 'user',
       servers: [name],

@@ -1,17 +1,34 @@
 import { useI18n } from '../../i18n';
 import {
-  ApiOutlined,
   CheckCircleFilled,
-  CloudServerOutlined,
-  DatabaseOutlined,
+  BarChartOutlined,
+  ClockCircleOutlined,
+  WarningOutlined,
   DeploymentUnitOutlined,
   SafetyCertificateOutlined,
   SyncOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Avatar, Badge, Card, Col, Empty, Flex, List, Progress, Row, Statistic, Tag, Typography, theme } from 'antd';
-import type { ReactNode } from 'react';
-import type { AdminUser, AuthHealth, GatewayHealth, McpServer, SystemSettings } from '../../types';
+import {
+  Alert,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Col,
+  Empty,
+  Flex,
+  List,
+  Progress,
+  Row,
+  Statistic,
+  Tag,
+  Typography,
+  theme,
+} from 'antd';
+import { useEffect, useState, type ReactNode } from 'react';
+import type { api as platformApi } from '../../api';
+import type { AdminUser, AuthHealth, GatewayHealth, McpServer, SystemSettings, UsageSummary, View } from '../../types';
 import { routableInstances } from '../servers/upstream-allowlist';
 import { formatTime, initials } from '../../utils/format';
 
@@ -21,46 +38,99 @@ interface OverviewPageProps {
   health: GatewayHealth | null;
   authHealth: AuthHealth | null;
   settings: SystemSettings | null;
+  api: Pick<typeof platformApi, 'usageSummary'>;
+  onNavigate: (view: View) => void;
 }
 
-export function OverviewPage({ users, servers, health, authHealth, settings }: OverviewPageProps) {
+export function OverviewPage({ users, servers, health, authHealth, settings, api, onNavigate }: OverviewPageProps) {
   const { t, language } = useI18n();
   const { token } = theme.useToken();
-  const activeUsers = users.filter((user) => !user.disabled).length;
-  const routableServers = servers.filter((server) => routableInstances(server, settings).length > 0).length;
-  const enabledInstances = servers.reduce((total, server) => total + routableInstances(server, settings).length, 0);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const [usageError, setUsageError] = useState('');
+  useEffect(() => {
+    let active = true,
+      fetching = false;
+    const refresh = async () => {
+      if (fetching) return;
+      fetching = true;
+      try {
+        const result = await api.usageSummary({ hours: 24 }, 'server');
+        if (active) {
+          setUsage(result);
+          setUsageError('');
+        }
+      } catch (error) {
+        if (active) setUsageError(error instanceof Error ? error.message : t('common.refreshFailed'));
+      } finally {
+        fetching = false;
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 10000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [api, t]);
+  const stats = usage?.enabled ? usage.summary : null;
+  const attentionServers = new Set(
+    servers
+      .filter((server) => server.enabled && !routableInstances(server, settings).length)
+      .map((server) => server.name),
+  );
+  for (const alert of usage?.alerts ?? [])
+    if (servers.some((server) => server.enabled && server.name === alert.server)) attentionServers.add(alert.server);
+  const number = (value: number | null | undefined, suffix = '') =>
+    value == null ? '—' : new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(value) + suffix;
+  const callDetail =
+    usage?.enabled === false
+      ? t('usage.disabled')
+      : usage
+        ? t('overview.failedCalls24h', { count: number(usage.summary.failed) })
+        : t('monitoring.checking');
   const recentUsers = [...users].sort((a, b) => b.created_at - a.created_at).slice(0, 5);
 
   return (
     <div className="page-stack page-enter">
+      {usageError && <Alert type="error" showIcon message={usageError} />}
       <Row gutter={[16, 16]}>
         <MetricCard
-          title={t('overview.totalIdentities')}
-          value={users.length}
-          icon={<TeamOutlined />}
-          detail={t('overview.countActiveIdentities', { count: activeUsers })}
+          title={t('overview.calls24h')}
+          value={number(stats?.calls)}
+          icon={<BarChartOutlined />}
+          detail={callDetail}
           tone="blue"
+          action={t('overview.viewCalls')}
+          onClick={() => onNavigate('monitoring')}
         />
         <MetricCard
-          title={t('overview.logicalServers')}
-          value={servers.length}
-          icon={<CloudServerOutlined />}
-          detail={t('overview.countRoutable', { count: routableServers })}
+          title={t('overview.successRate24h')}
+          value={number(stats?.success_rate, '%')}
+          icon={<CheckCircleFilled />}
+          detail={
+            stats ? t('overview.knownResults', { count: number(stats.success + stats.failed) }) : t('usage.successHint')
+          }
+          tone={stats?.failed ? 'amber' : 'green'}
+          action={t('overview.viewCalls')}
+          onClick={() => onNavigate('monitoring')}
+        />
+        <MetricCard
+          title={t('overview.p95Latency24h')}
+          value={number(stats?.p95_ms, ' ms')}
+          icon={<ClockCircleOutlined />}
+          detail={t('usage.latencyHint')}
           tone="cyan"
+          action={t('overview.viewCalls')}
+          onClick={() => onNavigate('monitoring')}
         />
         <MetricCard
-          title={t('overview.onlineInstances')}
-          value={enabledInstances}
-          icon={<DeploymentUnitOutlined />}
-          detail={t('overview.dynamicUpstreamPool')}
-          tone="amber"
-        />
-        <MetricCard
-          title={t('overview.stateStores')}
-          value={health?.redis && authHealth?.postgres ? t('status.healthy') : t('status.degraded')}
-          icon={<DatabaseOutlined />}
-          detail="PostgreSQL + Redis"
-          tone={health?.redis && authHealth?.postgres ? 'green' : 'red'}
+          title={t('overview.servicesNeedAttention')}
+          value={attentionServers.size}
+          icon={<WarningOutlined />}
+          detail={t('overview.servicesNeedAttentionHelp')}
+          tone={attentionServers.size ? 'red' : 'green'}
+          action={t('overview.viewServices')}
+          onClick={() => onNavigate('servers')}
         />
       </Row>
 
@@ -189,7 +259,11 @@ export function OverviewPage({ users, servers, health, authHealth, settings }: O
             value={health?.redis ? t('status.connected') : t('status.offline')}
             healthy={health?.redis}
           />
-          <InfraStatus label="PostgreSQL" value={t('overview.managedDrizzle')} healthy />
+          <InfraStatus
+            label="PostgreSQL"
+            value={t(authHealth?.postgres ? 'status.connected' : 'status.offline')}
+            healthy={authHealth?.postgres}
+          />
           <Progress
             className="health-progress"
             percent={health?.ok ? 100 : 68}
@@ -209,12 +283,16 @@ function MetricCard({
   icon,
   detail,
   tone,
+  action,
+  onClick,
 }: {
   title: string;
   value: string | number;
   icon: ReactNode;
   detail: string;
   tone: string;
+  action: string;
+  onClick: () => void;
 }) {
   return (
     <Col xs={24} sm={12} xl={6}>
@@ -223,9 +301,10 @@ function MetricCard({
           <Statistic title={title} value={value} />
           <span className="metric-icon">{icon}</span>
         </Flex>
-        <div className="metric-detail">
-          <CheckCircleFilled /> {detail}
-        </div>
+        <div className="metric-detail">{detail}</div>
+        <Button type="link" size="small" onClick={onClick} style={{ paddingInline: 0, marginTop: 8 }}>
+          {action}
+        </Button>
       </Card>
     </Col>
   );

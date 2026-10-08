@@ -67,10 +67,16 @@ export class RequestMonitor {
     this.instance = createHash('sha256').update(url).digest('hex').slice(0, 12);
   }
   observer(contentType: string) {
-    return new ResponseObserver(contentType, (id, failed, error) => {
+    return new ResponseObserver(contentType, (id, failed, error, output) => {
       const item = this.items.find((item) => !item.done && item.rpc.id !== null && item.rpc.id === id);
       if (item)
-        this.record(item, failed || this.status >= 400 ? 'failed' : 'success', error, Date.now() - this.started);
+        this.record(
+          item,
+          failed || this.status >= 400 ? 'failed' : 'success',
+          error,
+          Date.now() - this.started,
+          output,
+        );
     });
   }
   private record(
@@ -78,6 +84,7 @@ export class RequestMonitor {
     outcome: CallEvent['outcome'],
     error: string,
     duration: number | null,
+    output: string | null = null,
   ) {
     item.done = true;
     if (!runtimeSettings().monitoring_enabled) return;
@@ -98,6 +105,8 @@ export class RequestMonitor {
       error: safeLabel(error),
       instance: this.instance,
       attempts: this.attempts,
+      input: this.detail ? (item.rpc.input ?? null) : null,
+      output: this.detail ? output : null,
       detail: this.detail && runtimeSettings().monitoring_logs_enabled,
     });
   }

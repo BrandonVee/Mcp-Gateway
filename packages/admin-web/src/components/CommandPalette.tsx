@@ -7,6 +7,7 @@ import {
   TeamOutlined,
   KeyOutlined,
   MonitorOutlined,
+  AuditOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
 import { Empty, Input, Modal, Tag } from 'antd';
@@ -58,9 +59,17 @@ const commands: Array<{
     view: 'monitoring',
     title: 'nav.monitoring.title',
     description: 'nav.monitoring.description',
-    keywords: 'monitoring audit logs observability 日志 监控 审计',
+    keywords: 'monitoring logs observability 日志 监控',
     icon: <MonitorOutlined />,
     shortcut: 'G M',
+  },
+  {
+    view: 'audit',
+    title: 'nav.audit.title',
+    description: 'nav.audit.description',
+    keywords: 'audit administrator activity 操作 审计 管理员',
+    icon: <AuditOutlined />,
+    shortcut: 'G A',
   },
   {
     view: 'settings',

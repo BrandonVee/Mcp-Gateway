@@ -1,3 +1,4 @@
+import type { SmtpSettingsInput } from './types';
 import type {
   PlatformSession,
   AlertEvent,
@@ -87,11 +88,15 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     session_changed: 'api.sessionChanged',
     username_taken: 'api.usernameExists',
     email_taken: 'api.emailExists',
+    invalid_verification_code: 'auth.signup.invalidCode',
+    verification_unavailable: 'auth.signup.verificationUnavailable',
     'email already exists': 'api.emailExists',
     invalid_email: 'api.invalidEmail',
     email_missing: 'api.emailMissing',
     smtp_not_configured: 'api.smtpNotConfigured',
     smtp_send_failed: 'api.smtpSendFailed',
+    invalid_smtp_settings: 'api.invalidSmtpSettings',
+    smtp_test_password_required: 'api.smtpTestPasswordRequired',
     invalid_code: 'api.invalidCode',
     registration_disabled: 'api.registrationDisabled',
     invalid_username: 'api.invalidUsername',
@@ -135,7 +140,9 @@ export class ApiError extends Error {
 
 async function sendRequest<T>(url: string, init?: RequestInit, identity?: string): Promise<T> {
   // Sign-in and self-registration write the identity they create, not an existing one.
-  const anonymousWrite = init?.method === 'POST' && (url.endsWith('/session') || url.endsWith('/signup'));
+  const anonymousWrite =
+    init?.method === 'POST' &&
+    (url.endsWith('/session') || url.endsWith('/signup') || url.endsWith('/signup/send-code'));
   let response: Response;
   try {
     response = await fetch(url, {
@@ -179,10 +186,10 @@ export function apiForSession(session?: PlatformSession) {
         method: 'PUT',
         body: JSON.stringify(body),
       }),
-    testEmail: (to: string) =>
+    testEmail: (to: string, smtp?: SmtpSettingsInput) =>
       request<{ ok: boolean }>('/api/admin/system-settings/test-email', {
         method: 'POST',
-        body: JSON.stringify({ to }),
+        body: JSON.stringify({ to, smtp }),
       }),
     systemUpdate: (check = false, runtimeOnly = false) =>
       request<SystemUpdateStatus>(
@@ -209,6 +216,15 @@ export function apiForSession(session?: PlatformSession) {
     usageCalls: (filters: UsageFilters, cursor?: string) =>
       request<{ events: UsageCall[]; next_cursor: string | null }>(
         '/api/admin/monitoring/calls?' +
+          new URLSearchParams(
+            Object.entries({ ...filters, cursor })
+              .filter(([, value]) => value !== undefined && value !== '')
+              .map(([key, value]) => [key, String(value)]),
+          ),
+      ),
+    myUsageCalls: (filters: UsageFilters, cursor?: string) =>
+      request<{ events: UsageCall[]; next_cursor: string | null }>(
+        '/api/me/monitoring/calls?' +
           new URLSearchParams(
             Object.entries({ ...filters, cursor })
               .filter(([, value]) => value !== undefined && value !== '')
@@ -309,12 +325,21 @@ export function apiForSession(session?: PlatformSession) {
         body: JSON.stringify({ username, password }),
       }),
     myLogout: () => request('/api/me/session', { method: 'DELETE' }),
-    signupStatus: () => request<{ registration_enabled: boolean }>('/api/me/signup'),
-    mySignup: (username: string, email: string, password: string, confirmation: string) =>
+    signupStatus: () =>
+      request<{ registration_enabled: boolean; registration_email_verification: boolean }>('/api/me/signup'),
+    mySignup: (username: string, email: string, password: string, confirmation: string, verificationCode?: string) =>
       request<PlatformSession>('/api/me/signup', {
         method: 'POST',
-        body: JSON.stringify({ username, email, password, confirm_password: confirmation }),
+        body: JSON.stringify({
+          username: email,
+          email,
+          password,
+          confirm_password: confirmation,
+          verification_code: verificationCode,
+        }),
       }),
+    signupSendCode: (email: string) =>
+      request<{ ok: boolean }>('/api/me/signup/send-code', { method: 'POST', body: JSON.stringify({ email }) }),
     myServers: () => request<{ servers: ConnectionServer[] }>('/api/me/servers'),
     saveApiKey: (name: string, apiKey: string) =>
       request(`/api/me/servers/${encodeURIComponent(name)}/credential`, {

@@ -56,7 +56,7 @@ test('self-registration posts anonymously and can read the switch without an ide
   assert.ok(sent.every(({ init }) => !new Headers(init.headers).has('x-session-identity')));
   const body = JSON.parse(String(sent[1].init.body)) as Record<string, string>;
   assert.deepEqual(body, {
-    username: 'newcomer',
+    username: 'newcomer@example.test',
     email: 'newcomer@example.test',
     password: 'a-long-enough-password',
     confirm_password: 'a-long-enough-password',

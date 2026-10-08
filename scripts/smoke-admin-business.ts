@@ -48,7 +48,7 @@ async function main() {
       });
       return { status: response.status, data: (await response.json()) as any };
     };
-    const user = { username: 'workflow-user', password: 'workflow-password', role: 'user', servers: [] };
+    const user = { username: 'workflow-user@example.test', password: 'workflow-password', role: 'user', servers: [] };
     for (const body of [
       null,
       { ...user, username: 'bad/name' },
@@ -58,9 +58,9 @@ async function main() {
       { ...user, role: 'invalid' },
     ])
       assert.equal((await request('/admin/users', 'POST', body)).status, 400, 'malformed user creation must not throw');
-    const created = await request('/admin/users', 'POST', { ...user, username: ' workflow-user ' });
+    const created = await request('/admin/users', 'POST', { ...user, username: ' workflow-user@example.test ' });
     assert.equal(created.status, 201);
-    assert.equal(created.data.username, 'workflow-user');
+    assert.equal(created.data.username, 'workflow-user@example.test');
     assert.equal((await request('/admin/users', 'POST', user)).status, 409);
     const createServer = (name: string, extra: object = {}) =>
       request('/admin/servers', 'POST', {

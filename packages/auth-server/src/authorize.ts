@@ -1,3 +1,4 @@
+import { normalizeEmail, registrationEmailVerificationEnabled } from '@mcp/shared';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
@@ -7,8 +8,7 @@ import { verifyUser, createLoginSession, getSessionUser, getUserAuthorization, d
 import { saveAuthCode } from './stores.js';
 import { authIssuer, gatewayPublicUrl, registrationEnabled } from '@mcp/shared';
 import { consumeRateLimit, limitLoginAccount } from './rate-limit.js';
-import { createRegisteredUser, validateSignup } from './registration.js';
-import { sendEmailVerificationCode } from './email-verification.js';
+import { createRegisteredUser, sendSignupEmailCode, validateSignup } from './registration.js';
 import { mcpServers } from './schema.js';
 import {
   authorizationLink,
@@ -82,8 +82,8 @@ authorizeRouter.post('/authorize/signup', async (c) => {
   const invalid = await validateAuthorizeParams(q);
   if (invalid) return c.json(invalid, 400);
   if (!registrationEnabled()) return c.html(loginPage(q, language, await pageDetails(q), 'registrationDisabled'), 403);
-  const username = str('username').trim();
   const email = str('email').trim();
+  const username = normalizeEmail(email) ?? '';
   const submittedToken = str('form_token');
   const cookieToken = getCookie(c, SIGNUP_FORM_COOKIE) ?? '';
   const origin = c.req.header('origin');
@@ -96,6 +96,30 @@ authorizeRouter.post('/authorize/signup', async (c) => {
     return showSignup(c, q, language, 'invalidForm', username, email, 403);
   }
   if (await getSessionFromCookie(c)) return c.redirect(authorizationLink('/authorize', q, language), 303);
+  if (str('action') === 'send-code') {
+    if (!registrationEmailVerificationEnabled())
+      return showSignup(c, q, language, 'registrationDisabled', username, email, 403);
+    try {
+      const result = await sendSignupEmailCode(email);
+      return showSignup(
+        c,
+        q,
+        language,
+        result === 'sent'
+          ? 'verificationSent'
+          : result === 'invalid_email'
+            ? 'invalidEmail'
+            : result === 'rate_limit_exceeded'
+              ? 'tooManyAttempts'
+              : 'serviceUnavailable',
+        username,
+        email,
+        result === 'sent' ? 200 : 400,
+      );
+    } catch {
+      return showSignup(c, q, language, 'serviceUnavailable', username, email, 503);
+    }
+  }
   const signupError = validateSignup(username, email, str('password'), str('confirm_password'));
   if (signupError) return showSignup(c, q, language, signupError, username, email, 400);
   try {
@@ -107,23 +131,25 @@ authorizeRouter.post('/authorize/signup', async (c) => {
     return showSignup(c, q, language, 'serviceUnavailable', username, email, 503);
   }
   try {
-    const result = await createRegisteredUser(username, email, str('password'));
+    const result = await createRegisteredUser(username, email, str('password'), str('verification_code'));
     if (result.status !== 'created') {
       return showSignup(
         c,
         q,
         language,
-        result.status === 'username_taken' ? 'usernameTaken' : 'emailTaken',
+        result.status === 'invalid_verification_code'
+          ? 'invalidVerificationCode'
+          : result.status === 'verification_unavailable'
+            ? 'serviceUnavailable'
+            : result.status === 'username_taken'
+              ? 'usernameTaken'
+              : 'emailTaken',
         username,
         email,
         409,
       );
     }
     await setBrowserSession(c, result.user.id, 0);
-    // Verification mail is best effort: a broken relay must not block sign-up.
-    void sendEmailVerificationCode(result.user.id).catch((error) =>
-      console.error('[registration] verification mail failed', error instanceof Error ? error.name : 'UnknownError'),
-    );
   } catch (error) {
     console.error('[registration] failed', error instanceof Error ? error.name : 'UnknownError');
     return showSignup(c, q, language, 'serviceUnavailable', username, email, 503);

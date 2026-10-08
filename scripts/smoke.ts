@@ -466,11 +466,11 @@ async function main(): Promise<void> {
   });
   check('MCP session cannot be reused by a different user', stolenSession.status === 404);
 
-  const aliceName = `alice-${randomBytes(3).toString('hex')}`; // unique per run (parallel-safe)
+  const aliceName = `alice-${randomBytes(3).toString('hex')}@example.test`; // unique per run (parallel-safe)
   const createRes = await fetch(`${AUTH}/admin/users`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` },
-    body: JSON.stringify({ username: aliceName, password: 'alice-pass-1', role: 'user' }),
+    body: JSON.stringify({ username: aliceName, password: 'alice-test-password-123', role: 'user' }),
   });
   check(
     'admin creates user via API',
@@ -491,7 +491,7 @@ async function main(): Promise<void> {
           (event) => event.path === '/admin/users' && event.status_code === createRes.status && event.request_id,
         ),
       ) &&
-      !JSON.stringify(auditBody).includes('alice-pass-1'),
+      !JSON.stringify(auditBody).includes('alice-test-password-123'),
   );
   const invalidAuditPage = await fetch(`${AUTH}/admin/audit-events?limit=500`, {
     headers: { authorization: `Bearer ${adminToken}` },
@@ -505,11 +505,11 @@ async function main(): Promise<void> {
     await fetch(`${AUTH}/admin/users/${existing!.id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({ password: 'alice-pass-1', disabled: false }),
+      body: JSON.stringify({ password: 'alice-test-password-123', disabled: false }),
     });
   }
 
-  const aliceFlow = await pkceLogin(aliceName, 'alice-pass-1');
+  const aliceFlow = await pkceLogin(aliceName, 'alice-test-password-123');
   check('new user can log in', aliceFlow.submit.status === 302);
   const aliceToken =
     (
@@ -657,7 +657,7 @@ async function main(): Promise<void> {
 
   // A newly issued JWT carries the updated grants. Existing short-lived JWTs
   // retain their snapshot until expiry.
-  const aliceGrantedFlow = await pkceLogin(aliceName, 'alice-pass-1');
+  const aliceGrantedFlow = await pkceLogin(aliceName, 'alice-test-password-123');
   const aliceGrantedToken =
     (
       await exchangeCode(
@@ -739,7 +739,7 @@ async function main(): Promise<void> {
   const personalLogin = await fetch(`${AUTH}/me/session`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: aliceName, password: 'alice-pass-1' }),
+    body: JSON.stringify({ username: aliceName, password: 'alice-test-password-123' }),
   });
   const personalCookie = personalLogin.headers.get('set-cookie')?.split(';', 1)[0] ?? '';
   const personalSessionData = (await personalLogin.json()) as { role?: string };
@@ -750,7 +750,7 @@ async function main(): Promise<void> {
   const badOrigin = await fetch(`${AUTH}/me/session`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: 'https://unrelated.example' },
-    body: JSON.stringify({ username: aliceName, password: 'alice-pass-1' }),
+    body: JSON.stringify({ username: aliceName, password: 'alice-test-password-123' }),
   });
   check('connection center rejects cross-origin writes', badOrigin.status === 403);
   await fetch(`${AUTH}/me/servers/${externalServerName}/credential`, {
@@ -897,7 +897,7 @@ async function main(): Promise<void> {
     'admin API shows wildcard grant',
     ((await wildcardView.json()) as { servers: string[] }).servers.join(',') === '*',
   );
-  const wildcardFlow = await pkceLogin(aliceName, 'alice-pass-1');
+  const wildcardFlow = await pkceLogin(aliceName, 'alice-test-password-123');
   const wildcardToken =
     (
       await exchangeCode(
@@ -1000,7 +1000,7 @@ async function main(): Promise<void> {
     headers: { 'content-type': 'application/json', authorization: `Bearer ${adminToken}` },
     body: JSON.stringify({ disabled: true }),
   });
-  const disabledLogin = await pkceLogin(aliceName, 'alice-pass-1');
+  const disabledLogin = await pkceLogin(aliceName, 'alice-test-password-123');
   check('disabled user rejected (401)', disabledLogin.submit.status === 401);
   const disabledOldToken = await fetch(`${GW}/mcp/reports`, {
     method: 'POST',

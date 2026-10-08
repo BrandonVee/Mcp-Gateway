@@ -34,7 +34,11 @@ const upstream = createServer(async (req, res) => {
   const result = {
     jsonrpc: '2.0',
     id: request.id,
-    result: { isError: request.params?.name === 'fail', content: [{ type: 'text', text: secret }] },
+    result: {
+      isError: request.params?.name === 'fail',
+      content: [{ type: 'text', text: 'monitoring test output' }],
+      api_key: secret,
+    },
   };
   if (request.params?.name === 'unknown') {
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -116,6 +120,17 @@ async function main() {
     const logs = (await admin('/monitoring/calls?server=' + name)).data.events;
     assert.equal(logs.length, 23);
     assert.equal(JSON.stringify(logs).includes(secret), false);
+    assert.ok(logs.every((event: any) => JSON.parse(event.input).arguments.password === '[REDACTED]'));
+    assert.ok(
+      logs
+        .filter((event: any) => event.outcome !== 'unknown')
+        .every((event: any) => JSON.parse(event.output).content[0].text === 'monitoring test output'),
+    );
+    assert.ok(
+      logs
+        .filter((event: any) => event.output)
+        .every((event: any) => JSON.parse(event.output).api_key === '[REDACTED]'),
+    );
     assert.equal((await admin('/monitoring/calls?server=' + name + '&outcome=failed')).data.events.length, 20);
     const hourly = (await admin('/monitoring/summary?server=' + name + '&hours=1')).data;
     assert.ok(hourly.trend.length >= 60);
@@ -177,7 +192,7 @@ async function main() {
       first.events.length + next.events.length,
     );
     console.log(
-      'PASS: JSON/SSE tool results, HTTP-200 errors, unknown outcomes, metadata privacy, duplicate delivery, rankings, alerts, filters, cursor pagination and monitoring switches',
+      'PASS: JSON/SSE tool results, HTTP-200 errors, unknown outcomes, input/output capture and credential redaction, duplicate delivery, rankings, alerts, filters, cursor pagination and monitoring switches',
     );
   } finally {
     if (original === undefined) await pool.query("DELETE FROM meta WHERE key='system_settings'");

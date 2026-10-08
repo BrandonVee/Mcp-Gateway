@@ -250,8 +250,11 @@ export const mcpCallEvents = pgTable(
     error: text('error').notNull(),
     instance: text('instance').notNull(),
     attempts: integer('attempts').notNull(),
+    input: text('input'),
+    output: text('output'),
   },
   (table) => [
+    index('idx_mcp_calls_user_time').on(table.userId, table.startedAt),
     index('idx_mcp_calls_time').on(table.startedAt),
     index('idx_mcp_calls_server_time').on(table.server, table.startedAt),
   ],
@@ -303,4 +306,16 @@ export const alertEvents = pgTable(
     index('idx_alert_last_seen').on(table.lastSeenAt),
     index('idx_alert_open').on(table.resolvedAt, table.lastSeenAt),
   ],
+);
+
+/** Pending verification belongs to an email address before an account exists. */
+export const signupEmailCodes = pgTable(
+  'signup_email_codes',
+  {
+    email: text('email').primaryKey(),
+    codeHash: text('code_hash').notNull(),
+    expiresAt: epoch('expires_at'),
+    createdAt: epoch('created_at'),
+  },
+  (table) => [index('idx_signup_email_codes_expiry').on(table.expiresAt)],
 );

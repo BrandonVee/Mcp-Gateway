@@ -80,6 +80,8 @@ export async function storeCallEvent(input: unknown) {
         error: event.error,
         instance: event.instance,
         attempts: event.attempts,
+        input: event.input,
+        output: event.output,
       });
     const histogram = latencyHistogram(event.duration_ms);
     await tx

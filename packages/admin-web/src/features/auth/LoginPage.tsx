@@ -8,7 +8,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { Alert, Button, Card, Divider, Form, Input, Space, Typography } from 'antd';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { useI18n } from '../../i18n';
 import { LanguageSwitcher } from '../../components/LanguageSwitcher';
@@ -21,7 +21,7 @@ interface LoginForm {
 }
 
 interface SignupForm {
-  username: string;
+  verificationCode?: string;
   email: string;
   password: string;
   confirmation: string;
@@ -30,11 +30,40 @@ interface SignupForm {
 export function LoginPage({
   onSuccess,
   registrationEnabled,
+  emailVerificationRequired,
 }: {
   onSuccess: (session: PlatformSession) => void;
   registrationEnabled?: boolean;
+  emailVerificationRequired?: boolean;
 }) {
   const { t } = useI18n();
+  const [signupForm] = Form.useForm<SignupForm>();
+  const [sendingCode, setSendingCode] = useState(false);
+  const [codeCooldown, setCodeCooldown] = useState(0);
+  const [codeSent, setCodeSent] = useState(false);
+  useEffect(() => {
+    if (!codeCooldown) return;
+    const timer = window.setTimeout(() => setCodeCooldown((value) => value - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [codeCooldown]);
+  const sendCode = async () => {
+    try {
+      await signupForm.validateFields(['email']);
+    } catch {
+      return;
+    }
+    setSendingCode(true);
+    setError('');
+    try {
+      await api.signupSendCode(signupForm.getFieldValue('email').trim());
+      setCodeCooldown(60);
+      setCodeSent(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('common.operationFailed'));
+    } finally {
+      setSendingCode(false);
+    }
+  };
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -61,7 +90,13 @@ export function LoginPage({
     setError('');
     setBusy(true);
     try {
-      const session = await api.mySignup(values.username, values.email, values.password, values.confirmation);
+      const session = await api.mySignup(
+        values.email,
+        values.email,
+        values.password,
+        values.confirmation,
+        values.verificationCode,
+      );
       onSuccess(session);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : t('common.operationFailed'));
@@ -177,28 +212,14 @@ export function LoginPage({
           ) : (
             <Form<SignupForm>
               key="signup"
+              form={signupForm}
               name="signup"
               layout="vertical"
-              initialValues={{ username: '', email: '', password: '', confirmation: '' }}
+              initialValues={{ email: '', password: '', confirmation: '' }}
               disabled={busy}
               onFinish={register}
               requiredMark={false}
             >
-              <Form.Item
-                name="username"
-                label={t('auth.signup.usernameLabel')}
-                extra={t('auth.signup.usernameRule')}
-                rules={[
-                  { required: true, message: t('auth.signup.usernameRequired') },
-                  { pattern: /^[a-zA-Z0-9._-]{2,64}$/, message: t('auth.signup.usernameRule') },
-                ]}
-              >
-                <Input
-                  prefix={<UserOutlined />}
-                  placeholder={t('auth.signup.usernamePlaceholder')}
-                  autoComplete="username"
-                />
-              </Form.Item>
               <Form.Item
                 name="email"
                 label={t('auth.signup.emailLabel')}
@@ -209,6 +230,37 @@ export function LoginPage({
               >
                 <Input prefix={<MailOutlined />} placeholder={t('auth.signup.emailPlaceholder')} autoComplete="email" />
               </Form.Item>
+              {emailVerificationRequired && (
+                <>
+                  <Form.Item
+                    name="verificationCode"
+                    label={t('auth.signup.codeLabel')}
+                    rules={[
+                      { required: true, message: t('auth.signup.codeRequired') },
+                      { pattern: /^\d{6}$/, message: t('auth.signup.invalidCode') },
+                    ]}
+                  >
+                    <Input
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      addonAfter={
+                        <Button
+                          type="link"
+                          disabled={codeCooldown > 0 || busy}
+                          loading={sendingCode}
+                          onClick={() => void sendCode()}
+                        >
+                          {codeCooldown
+                            ? t('auth.signup.resendCountdown', { seconds: codeCooldown })
+                            : t('auth.signup.sendCode')}
+                        </Button>
+                      }
+                    />
+                  </Form.Item>
+                  {codeSent && <Alert type="success" showIcon message={t('auth.signup.codeSent')} />}
+                </>
+              )}
               <Form.Item
                 name="password"
                 label={t('auth.signup.passwordLabel')}

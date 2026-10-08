@@ -71,7 +71,7 @@ function CreateUserDialog({
             username: values.username.trim(),
             password: values.password,
             role: values.role,
-            email: values.email?.trim() || undefined,
+            email: values.username.trim().toLowerCase(),
             servers: values.role === 'admin' ? [] : values.all_servers ? ['*'] : (values.servers ?? []),
           }),
         )
@@ -87,20 +87,13 @@ function CreateUserDialog({
         <Form.Item
           name="username"
           normalize={(value: string) => value.trim()}
-          label={t('connections.username')}
+          label={t('auth.signup.emailLabel')}
           rules={[
             { required: true, message: t('connections.enterUsername') },
-            { pattern: /^[a-zA-Z0-9._-]{2,64}$/, message: t('auth.signup.usernameRule') },
+            { type: 'email', message: t('auth.signup.emailRule') },
           ]}
         >
-          <Input placeholder={t('userDialog.exampleDataAgent')} autoFocus />
-        </Form.Item>
-        <Form.Item
-          name="email"
-          label={t('userDialog.emailOptional')}
-          rules={[{ type: 'email', message: t('auth.signup.emailRule') }]}
-        >
-          <Input prefix={<MailOutlined />} placeholder={t('auth.signup.emailPlaceholder')} autoComplete="off" />
+          <Input placeholder={t('auth.signup.emailPlaceholder')} autoFocus />
         </Form.Item>
         <Form.Item
           name="password"
@@ -206,7 +199,7 @@ function EditUserDialog({
           onEdit(user, {
             username: values.username.trim(),
             role: values.role,
-            email: values.email.trim() || null,
+            email: user.username.includes('@') ? values.username.trim().toLowerCase() : values.email.trim() || null,
             email_verified: values.email_verified,
           }),
         )
@@ -231,13 +224,23 @@ function EditUserDialog({
           label={t('connections.username')}
           rules={[
             { required: true, message: t('connections.enterUsername') },
-            { pattern: /^[a-zA-Z0-9._-]{2,64}$/, message: t('auth.signup.usernameRule') },
+            {
+              validator: (_, value) =>
+                (
+                  user.username.includes('@')
+                    ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+                    : /^[a-zA-Z0-9._-]{2,64}$/.test(value) || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+                )
+                  ? Promise.resolve()
+                  : Promise.reject(new Error(t('auth.signup.emailRule'))),
+            },
           ]}
         >
           <Input autoFocus />
         </Form.Item>
         <Form.Item
           name="email"
+          hidden={user.username.includes('@')}
           label={t('userDialog.emailOptional')}
           extra={t('userDialog.emailChangeHelp')}
           rules={[{ type: 'email', message: t('auth.signup.emailRule') }]}

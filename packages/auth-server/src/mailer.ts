@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { currentSystemSettings, smtpConfigured, systemOptionDefaults } from '@mcp/shared';
+import { currentSystemSettings, smtpConfigured, systemOptionDefaults, type SystemSettings } from '@mcp/shared';
 import { decryptCredential } from './credential-crypto.js';
 
 export function mailConfigured(): boolean {
@@ -14,17 +14,33 @@ export function mailConfigured(): boolean {
 export async function sendMail(to: string, subject: string, text: string): Promise<void> {
   const settings = currentSystemSettings();
   if (!smtpConfigured(settings)) throw new Error('smtp_not_configured');
-  const username = settings.smtp_username ?? '';
   const stored = settings.smtp_password ?? '';
+  await sendMailWithSettings(settings, stored ? decryptCredential(stored) : '', to, subject, text);
+}
+
+/** Password is plaintext and used only for this delivery. */
+export async function sendMailWithSettings(
+  settings: SystemSettings,
+  password: string,
+  to: string,
+  subject: string,
+  text: string,
+): Promise<void> {
+  if (!smtpConfigured(settings)) throw new Error('smtp_not_configured');
+  const username = settings.smtp_username ?? '';
   const transport = nodemailer.createTransport({
     host: settings.smtp_host,
     port: settings.smtp_port ?? systemOptionDefaults.smtp_port,
     secure: settings.smtp_secure ?? systemOptionDefaults.smtp_secure,
-    auth: username ? { user: username, pass: stored ? decryptCredential(stored) : '' } : undefined,
+    auth: username ? { user: username, pass: password } : undefined,
     connectionTimeout: 10_000,
     socketTimeout: 15_000,
   });
-  await transport.sendMail({ from: settings.smtp_from, to, subject, text });
+  try {
+    await transport.sendMail({ from: settings.smtp_from, to, subject, text });
+  } finally {
+    transport.close();
+  }
 }
 
 export function verificationCodeMail(code: string): { subject: string; text: string } {

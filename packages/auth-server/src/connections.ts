@@ -1,13 +1,22 @@
+import { listMonitoringCalls } from './monitoring-api.js';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { authIssuer, adminWebUrl, bootstrapOriginAllowed, registrationEnabled, systemConfigured } from '@mcp/shared';
+import {
+  authIssuer,
+  adminWebUrl,
+  bootstrapOriginAllowed,
+  registrationEnabled,
+  registrationEmailVerificationEnabled,
+  normalizeEmail,
+  systemConfigured,
+} from '@mcp/shared';
 import { createLoginSession, db, deleteLoginSession, getSessionUser, verifyUser } from './db.js';
 import { decryptCredential, encryptCredential } from './credential-crypto.js';
 import { mcpServers, oauthConnectionStates, userMcpCredentials, userServerAccess, users } from './schema.js';
 import { consumeRateLimit, limitLoginAccount } from './rate-limit.js';
-import { createRegisteredUser, validateSignup } from './registration.js';
+import { createRegisteredUser, sendSignupEmailCode, validateSignup } from './registration.js';
 import { sendEmailVerificationCode, verifyEmailCode } from './email-verification.js';
 import { lockAccessibleConnection, revokeUserConnection } from './connection-lifecycle.js';
 import {
@@ -184,7 +193,9 @@ export function createConnectionsRouter(): Hono {
       if (!allowed) return c.json({ error: 'invalid_origin' }, 403);
       const expectedIdentity = c.req.header('x-session-identity');
       // Sign-in and self-registration are the only anonymous writes.
-      const anonymous = c.req.method === 'POST' && (c.req.path === '/me/session' || c.req.path === '/me/signup');
+      const anonymous =
+        c.req.method === 'POST' &&
+        (c.req.path === '/me/session' || c.req.path === '/me/signup' || c.req.path === '/me/signup/send-code');
       if (expectedIdentity !== undefined && !anonymous) {
         const user = await currentUser(c);
         const expiredLogout = !user && c.req.method === 'DELETE' && c.req.path === '/me/session';
@@ -194,6 +205,12 @@ export function createConnectionsRouter(): Hono {
       }
     }
     await next();
+  });
+
+  router.get('/me/monitoring/calls', async (c) => {
+    const user = await currentUser(c);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    return listMonitoringCalls(c, user.role === 'admin' ? undefined : user.id);
   });
 
   router.get('/me/session', async (c) => {
@@ -267,7 +284,25 @@ export function createConnectionsRouter(): Hono {
   /** Anonymous read so the login page can hide the entry when signup is closed. */
   router.get('/me/signup', (c) => {
     c.header('Cache-Control', 'no-store');
-    return c.json({ registration_enabled: registrationEnabled() });
+    return c.json({
+      registration_enabled: registrationEnabled(),
+      registration_email_verification: registrationEmailVerificationEnabled(),
+    });
+  });
+
+  router.post('/me/signup/send-code', async (c) => {
+    if (!registrationEnabled() || !registrationEmailVerificationEnabled())
+      return c.json({ error: 'registration_disabled' }, 403);
+    if (await currentUser(c)) return c.json({ error: 'already_authenticated' }, 409);
+    const body = await c.req.json().catch(() => null);
+    try {
+      const result = await sendSignupEmailCode(typeof body?.email === 'string' ? body.email : '');
+      return result === 'sent'
+        ? c.json({ ok: true })
+        : c.json({ error: result }, result === 'rate_limit_exceeded' ? 429 : result === 'invalid_email' ? 400 : 503);
+    } catch {
+      return c.json({ error: 'smtp_send_failed' }, 502);
+    }
   });
 
   router.post('/me/signup', async (c) => {
@@ -279,9 +314,10 @@ export function createConnectionsRouter(): Hono {
       email?: string;
       password?: string;
       confirm_password?: string;
+      verification_code?: string;
     };
-    const username = typeof body.username === 'string' ? body.username.trim() : '';
-    const email = typeof body.email === 'string' ? body.email : '';
+    const email = typeof body.email === 'string' ? body.email : typeof body.username === 'string' ? body.username : '';
+    const username = normalizeEmail(email) ?? '';
     const password = typeof body.password === 'string' ? body.password : '';
     const invalid = validateSignup(
       username,
@@ -302,8 +338,21 @@ export function createConnectionsRouter(): Hono {
     let user: { id: number; username: string; role: 'admin' | 'user'; authVersion: number };
     let token: string;
     try {
-      const result = await createRegisteredUser(username, email, password);
-      if (result.status !== 'created') return c.json({ error: result.status }, 409);
+      const result = await createRegisteredUser(
+        username,
+        email,
+        password,
+        typeof body.verification_code === 'string' ? body.verification_code : '',
+      );
+      if (result.status !== 'created')
+        return c.json(
+          { error: result.status },
+          result.status === 'invalid_verification_code'
+            ? 400
+            : result.status === 'verification_unavailable'
+              ? 503
+              : 409,
+        );
       user = result.user;
       token = await createLoginSession(user.id, user.authVersion);
     } catch {
@@ -316,10 +365,6 @@ export function createConnectionsRouter(): Hono {
       path: '/',
       maxAge: 7 * 24 * 3600,
     });
-    // Verification mail is best effort: a broken relay must not block sign-up.
-    void sendEmailVerificationCode(user.id).catch((error) =>
-      console.error('[registration] verification mail failed', error instanceof Error ? error.name : 'UnknownError'),
-    );
     return c.json(
       {
         authenticated: true,

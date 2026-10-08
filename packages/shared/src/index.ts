@@ -207,6 +207,7 @@ export interface SystemSettings {
   upstream_allowlist_enabled: boolean;
   upstream_hosts: string[];
   registration_enabled?: boolean;
+  registration_email_verification?: boolean;
   monitoring_enabled?: boolean;
   monitoring_logs_enabled?: boolean;
   monitoring_retention_days?: number;
@@ -226,6 +227,7 @@ export interface SystemSettings {
 }
 export const systemOptionDefaults = {
   registration_enabled: true,
+  registration_email_verification: false,
   monitoring_enabled: true,
   monitoring_logs_enabled: true,
   monitoring_retention_days: 14,
@@ -323,6 +325,7 @@ const publicOrigin = (production: boolean) =>
   });
 const webhookUrl = z
   .string()
+  .trim()
   .max(2048)
   .refine((value) => {
     if (!value) return true;
@@ -339,6 +342,7 @@ const systemSettingsSchema = (production: boolean) =>
     upstream_allowlist_enabled: z.boolean().optional(),
     upstream_hosts: z.array(upstreamHost).max(200),
     registration_enabled: z.boolean().optional(),
+    registration_email_verification: z.boolean().optional(),
     monitoring_enabled: z.boolean().optional(),
     monitoring_logs_enabled: z.boolean().optional(),
     monitoring_retention_days: boundedInt(90).optional(),
@@ -413,4 +417,8 @@ export function smtpConfigured(settings: SystemSettings): boolean {
 
 export function alertNotificationsConfigured(settings: SystemSettings): boolean {
   return Boolean(settings.alert_webhook_url || (settings.alert_email_recipients?.length && smtpConfigured(settings)));
+}
+
+export function registrationEmailVerificationEnabled(): boolean {
+  return runtimeSettings().registration_email_verification;
 }

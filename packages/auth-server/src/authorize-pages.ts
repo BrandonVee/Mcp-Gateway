@@ -1,5 +1,5 @@
 import escapeHtml from 'escape-html';
-import { registrationEnabled } from '@mcp/shared';
+import { registrationEnabled, registrationEmailVerificationEnabled } from '@mcp/shared';
 
 export type AuthPageLanguage = 'zh-CN' | 'en-US';
 export type AuthPageError =
@@ -14,7 +14,9 @@ export type AuthPageError =
   | 'invalidForm'
   | 'tooManyAttempts'
   | 'serviceUnavailable'
-  | 'registrationDisabled';
+  | 'registrationDisabled'
+  | 'invalidVerificationCode'
+  | 'verificationSent';
 export interface AuthPageDetails {
   clientName: string;
   resourceName?: string;
@@ -40,8 +42,12 @@ const text = {
     stepAccount: '登录账号',
     stepConsent: '确认授权',
     stepReturn: '返回客户端',
-    username: '用户名',
-    email: '邮箱',
+    username: '邮箱或已有用户名',
+    email: '邮箱账号',
+    verificationCode: '邮箱验证码',
+    sendCode: '发送验证码',
+    invalidVerificationCode: '验证码无效或已过期，请重新获取。',
+    verificationSent: '验证码已发送，10 分钟内有效，请填写验证码并完成注册。',
     password: '密码',
     confirmPassword: '确认密码',
     usernameHelp: '2–64 个字符，可使用字母、数字、点、下划线和连字符。',
@@ -96,8 +102,12 @@ const text = {
     stepAccount: 'Sign in',
     stepConsent: 'Authorize',
     stepReturn: 'Return to client',
-    username: 'Username',
-    email: 'Email',
+    username: 'Email or existing username',
+    email: 'Email account',
+    verificationCode: 'Email verification code',
+    sendCode: 'Send code',
+    invalidVerificationCode: 'The code is invalid or expired. Request a new code.',
+    verificationSent: 'Code sent. Complete registration within 10 minutes.',
     password: 'Password',
     confirmPassword: 'Confirm password',
     usernameHelp: '2–64 letters, numbers, dots, underscores, or hyphens.',
@@ -259,7 +269,7 @@ export function loginPage(
     language,
     `<h2 id="page-title">${copy.signInHeading}</h2><p class="description">${copy.signInDescription}</p>${requestDetails(q, details, language)}${errorNotice(error, language)}
 <form method="post" action="/authorize/submit">${hiddenFields(q, language)}
-<div class="field"><label for="username">${copy.username}</label><input id="username" name="username" autocomplete="username" placeholder="${copy.usernamePlaceholder}" value="${esc(username)}" maxlength="64" required></div>
+<div class="field"><label for="username">${copy.username}</label><input id="username" name="username" autocomplete="username" placeholder="${copy.usernamePlaceholder}" value="${esc(username)}" maxlength="254" required></div>
 <div class="field"><label for="password">${copy.password}</label><input id="password" name="password" type="password" autocomplete="current-password" placeholder="${copy.passwordPlaceholder}" required></div>
 <button class="submit" type="submit">${copy.signInSubmit}${ARROW}</button></form>
 ${registrationEnabled() ? `<p class="alternate">${copy.noAccount}<a href="${esc(authorizationLink('/authorize/signup', q, language))}">${copy.createAccount}</a></p>` : ''}`,
@@ -283,8 +293,8 @@ export function signupPage(
     language,
     `<h2 id="page-title">${copy.signupHeading}</h2><p class="description">${copy.signupDescription}</p>${requestDetails(q, details, language)}${errorNotice(error, language)}
 <form method="post" action="/authorize/signup">${hiddenFields(q, language)}${hidden('form_token', csrfToken)}
-<div class="field"><label for="username">${copy.username}</label><input id="username" name="username" autocomplete="username" placeholder="${copy.usernamePlaceholder}" value="${esc(username)}" minlength="2" maxlength="64" pattern="[a-zA-Z0-9._\\-]{2,64}" aria-describedby="username-help" required><small id="username-help">${copy.usernameHelp}</small></div>
-<div class="field"><label for="email">${copy.email}</label><input id="email" name="email" type="email" autocomplete="email" placeholder="${copy.emailPlaceholder}" value="${esc(email)}" maxlength="254" aria-describedby="email-help" required><small id="email-help">${copy.emailHelp}</small></div>
+<div class="field"><label for="email">${copy.email}</label><input id="email" name="email" type="email" autocomplete="email" placeholder="${copy.emailPlaceholder}" value="${esc(email || username)}" maxlength="254" aria-describedby="email-help" required><small id="email-help">${copy.emailHelp}</small></div>
+${registrationEmailVerificationEnabled() ? `<div class="field"><label for="verification_code">${copy.verificationCode}</label><input id="verification_code" name="verification_code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required><button type="submit" name="action" value="send-code" formnovalidate>${copy.sendCode}</button></div>` : ''}
 <div class="field"><label for="password">${copy.password}</label><input id="password" name="password" type="password" autocomplete="new-password" placeholder="${copy.newPasswordPlaceholder}" minlength="12" maxlength="256" aria-describedby="password-help" required><small id="password-help">${copy.passwordHelp}</small></div>
 <div class="field"><label for="confirm-password">${copy.confirmPassword}</label><input id="confirm-password" name="confirm_password" type="password" autocomplete="new-password" placeholder="${copy.confirmPasswordPlaceholder}" minlength="12" maxlength="256" required></div>
 <button class="submit" type="submit">${copy.signupSubmit}${ARROW}</button></form>

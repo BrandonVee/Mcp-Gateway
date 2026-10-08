@@ -14,10 +14,10 @@ const suffix = randomBytes(5).toString('hex');
 const defaultName = `signup-${suffix}`;
 const privateName = `manual-${suffix}`;
 const pausedName = `paused-${suffix}`;
-const firstUsername = `new-${suffix}`;
-const secondUsername = `later-${suffix}`;
-const consoleName = `console-${suffix}`;
-const consoleName2 = `console2-${suffix}`;
+const firstUsername = `new-${suffix}@example.test`;
+const secondUsername = `later-${suffix}@example.test`;
+const consoleName = `console-${suffix}@example.test`;
+const consoleName2 = `console2-${suffix}@example.test`;
 const password = 'signup-test-password-123';
 let adminCookie = '';
 const cookie = (response: Response, name: string) =>
@@ -131,7 +131,7 @@ async function main() {
       const html = await page.text();
       const body = hiddenFields(html);
       body.set('username', username);
-      body.set('email', `${username}@example.test`);
+      body.set('email', username);
       body.set('password', password);
       body.set('confirm_password', confirmation);
       // None of these caller-supplied privilege fields may affect registration.
@@ -253,26 +253,25 @@ async function main() {
     assert.equal(status.headers.get('cache-control'), 'no-store');
     assert.equal((await status.json()).registration_enabled, true);
     assert.equal(
-      (await signupJson({ username: 'bad name', email: 'bad@example.test', password, confirm_password: password }))
-        .status,
+      (await signupJson({ username: 'bad name', email: 'invalid-email', password, confirm_password: password })).status,
       400,
     );
     const weak = await signupJson({
       username: consoleName,
-      email: `${consoleName}@example.test`,
+      email: consoleName,
       password: password.slice(0, 11),
       confirm_password: password.slice(0, 11),
     });
     assert.equal(weak.status, 400);
     assert.equal((await weak.json()).error, 'invalid_password');
-    const missingEmail = await signupJson({ username: consoleName, password, confirm_password: password });
+    const missingEmail = await signupJson({ username: 'missing-email', password, confirm_password: password });
     assert.equal(missingEmail.status, 400);
     assert.equal((await missingEmail.json()).error, 'invalid_email');
     assert.equal(
       (
         await signupJson({
           username: consoleName,
-          email: `${consoleName}@example.test`,
+          email: consoleName,
           password,
           confirm_password: 'wrong-confirmation',
         })
@@ -282,7 +281,7 @@ async function main() {
     assert.equal(
       (
         await signupJson(
-          { username: consoleName, email: `${consoleName}@example.test`, password, confirm_password: password },
+          { username: consoleName, email: consoleName, password, confirm_password: password },
           'https://attacker.example.test',
         )
       ).status,
@@ -290,7 +289,7 @@ async function main() {
     );
     const created = await signupJson({
       username: consoleName,
-      email: `${consoleName}@example.test`,
+      email: consoleName,
       password,
       confirm_password: password,
     });
@@ -302,13 +301,13 @@ async function main() {
     const me = await fetch(`${AUTH}/me/session`, { headers: { cookie: consoleCookie, origin: new URL(AUTH).origin } });
     const meBody = await me.json();
     assert.equal(meBody.role, 'user', 'console registration signs the new account in');
-    assert.equal(meBody.email, `${consoleName}@example.test`);
+    assert.equal(meBody.email, consoleName);
     assert.equal(meBody.email_verified, false);
     assert.equal(
       (
         await signupJson({
           username: consoleName,
-          email: `${consoleName}@example.test`,
+          email: consoleName,
           password,
           confirm_password: password,
         })
@@ -318,7 +317,7 @@ async function main() {
     // Caller-supplied privilege fields must not change the created account.
     const elevated = await signupJson({
       username: consoleName2,
-      email: `${consoleName2}@example.test`,
+      email: consoleName2,
       password,
       confirm_password: password,
       role: 'admin',

@@ -1,9 +1,11 @@
+import { captureCallContent } from '@mcp/shared';
 import { StringDecoder } from 'node:string_decoder';
 
 export interface RpcMetadata {
   id: string | number | null;
   method: string;
   tool: string;
+  input?: string | null;
 }
 const label = (value: unknown) => (typeof value === 'string' && /^[a-zA-Z0-9_.:/-]{1,128}$/.test(value) ? value : '');
 export function requestMetadata(body: unknown, httpMethod: string): RpcMetadata[] {
@@ -19,14 +21,19 @@ export function requestMetadata(body: unknown, httpMethod: string): RpcMetadata[
           ? request.id
           : null;
       const method = label(request.method) || 'unknown';
-      return { id, method, tool: method === 'tools/call' ? label(request.params?.name) : '' };
+      return {
+        id,
+        method,
+        tool: method === 'tools/call' ? label(request.params?.name) : '',
+        input: captureCallContent(request.params),
+      };
     });
   } catch {
     return [{ id: null, method: 'http/' + httpMethod, tool: '' }];
   }
 }
 
-/** Bounded metadata observer. Bytes and backpressure are handled by the proxy. */
+/** Bounded RPC response observer. Bytes and backpressure are handled by the proxy. */
 export class ResponseObserver {
   private decoder = new StringDecoder('utf8');
   private buffer = '';
@@ -36,7 +43,7 @@ export class ResponseObserver {
   private skippingLine = false;
   constructor(
     private contentType: string,
-    private result: (id: unknown, failed: boolean, error: string) => void,
+    private result: (id: unknown, failed: boolean, error: string, output?: string | null) => void,
     private limit = 256 * 1024,
   ) {}
   private json(text: string) {
@@ -46,7 +53,12 @@ export class ResponseObserver {
         if (!value || typeof value !== 'object' || !Object.hasOwn(value, 'id')) continue;
         if (!Object.hasOwn(value, 'result') && !Object.hasOwn(value, 'error')) continue;
         const failed = Object.hasOwn(value, 'error') || value.result?.isError === true;
-        this.result(value.id, failed, Object.hasOwn(value, 'error') ? 'json_rpc_error' : failed ? 'tool_error' : '');
+        this.result(
+          value.id,
+          failed,
+          Object.hasOwn(value, 'error') ? 'json_rpc_error' : failed ? 'tool_error' : '',
+          captureCallContent(value.error ?? value.result),
+        );
       }
     } catch {
       /* Parsing failure never changes the forwarded response. */

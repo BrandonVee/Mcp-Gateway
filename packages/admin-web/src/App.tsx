@@ -55,6 +55,9 @@ const ConnectionsAdminPage = lazy(() =>
 const MonitoringPage = lazy(() =>
   import('./features/monitoring/MonitoringPage').then((module) => ({ default: module.MonitoringPage })),
 );
+const AuditPage = lazy(() =>
+  import('./features/monitoring/AuditPage').then((module) => ({ default: module.AuditPage })),
+);
 const TopologyPage = lazy(() =>
   import('./features/topology/TopologyPage').then((module) => ({ default: module.TopologyPage })),
 );
@@ -91,7 +94,13 @@ function SessionRouter() {
     );
   if (identity.session === undefined) return <BootScreen />;
   if (!identity.session)
-    return <LoginPage onSuccess={identity.signedIn} registrationEnabled={identity.registrationEnabled} />;
+    return (
+      <LoginPage
+        onSuccess={identity.signedIn}
+        registrationEnabled={identity.registrationEnabled}
+        emailVerificationRequired={identity.emailVerificationRequired}
+      />
+    );
   const session = identity.session;
   const key = `${session.user_id}:${session.auth_version}:${session.role}`;
   return (
@@ -266,13 +275,15 @@ function ControlPlane({
               onDirtyChange={setSettingsDirty}
               onUpdate={startUpdate}
               onCheckUpdate={controlPlane.refreshUpdate}
-              onTestEmail={async (to) => {
-                await controlPlane.api.testEmail(to);
+              onTestEmail={async (to, smtp) => {
+                await controlPlane.api.testEmail(to, smtp);
               }}
             />
           )}
           {view === 'overview' && (
             <OverviewPage
+              api={controlPlane.api}
+              onNavigate={navigate}
               users={controlPlane.users}
               servers={controlPlane.servers}
               health={controlPlane.health}
@@ -409,6 +420,7 @@ function ControlPlane({
           {view === 'topology' && <TopologyPage />}
 
           {view === 'monitoring' && <MonitoringPage />}
+          {view === 'audit' && <AuditPage />}
 
           <UserDialogs
             state={dialog}

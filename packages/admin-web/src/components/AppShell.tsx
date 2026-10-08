@@ -8,6 +8,7 @@ import {
   LinkOutlined,
   KeyOutlined,
   MonitorOutlined,
+  AuditOutlined,
   ShareAltOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -52,6 +53,7 @@ const titles: Record<View, { eyebrow: MessageKey; title: MessageKey; description
     title: 'nav.monitoring.title',
     description: 'nav.monitoring.description',
   },
+  audit: { eyebrow: 'nav.audit.eyebrow', title: 'nav.audit.title', description: 'nav.audit.description' },
   topology: {
     eyebrow: 'nav.topology.eyebrow',
     title: 'nav.topology.title',
@@ -104,6 +106,7 @@ export function AppShell({
     { key: 'credentials', icon: <KeyOutlined />, label: t('nav.connections.title') },
     { key: 'topology', icon: <ShareAltOutlined />, label: t('nav.topology.label') },
     { key: 'monitoring', icon: <MonitorOutlined />, label: t('nav.monitoring.title') },
+    { key: 'audit', icon: <AuditOutlined />, label: t('nav.audit.title') },
     { key: 'settings', icon: <SettingOutlined />, label: t('settings.title') },
   ];
 

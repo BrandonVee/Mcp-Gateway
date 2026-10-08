@@ -1,3 +1,4 @@
+import { monitoringFilters, callLogQuery } from './monitoring-query.js';
 import type { Hono, Context } from 'hono';
 import { alertEventSchema, histogramP95, runtimeSettings } from '@mcp/shared';
 import { pool } from './db.js';
@@ -6,23 +7,6 @@ import { acknowledgeAlert, listAlertEvents } from './alert-history.js';
 
 const histogramSql =
   'ARRAY[' + Array.from({ length: 16 }, (_, i) => `COALESCE(sum(histogram[${i + 1}]),0)`).join(',') + ']';
-function filters(c: Context, table: 'metrics' | 'events', fixedMinutes?: number) {
-  const hours = c.req.query('hours') === undefined ? 24 : Number(c.req.query('hours'));
-  if (![1, 24, 168, 720, 8760].includes(hours)) throw new Error('invalid hours');
-  const params: unknown[] = [Date.now() - (fixedMinutes ?? hours * 60) * 60000];
-  const clauses = [`${table === 'metrics' ? 'minute' : 'started_at'} >= $1`];
-  for (const key of ['server', 'tool', 'client_id', 'user_id', 'outcome'] as const) {
-    const value = c.req.query(key);
-    if (value === undefined || value === '') continue;
-    if (value.length > 128 || /[\x00-\x1f\x7f]/.test(value)) throw new Error('invalid filter');
-    if (key === 'user_id' && (!Number.isSafeInteger(Number(value)) || Number(value) < 0))
-      throw new Error('invalid user');
-    if (key === 'outcome' && !['success', 'failed', 'unknown'].includes(value)) throw new Error('invalid outcome');
-    params.push(key === 'user_id' ? Number(value) : value);
-    clauses.push(`${key}=$${params.length}`);
-  }
-  return { where: clauses.join(' AND '), params, hours };
-}
 const number = (value: unknown) => Number(value ?? 0);
 function statistics(row: Record<string, unknown>) {
   const success = number(row.success),
@@ -47,10 +31,10 @@ const totalsSql = `sum(calls) calls, sum(calls) FILTER (WHERE outcome='success')
 export function registerMonitoringRoutes(router: Hono) {
   router.get('/admin/monitoring/summary', async (c) => {
     c.header('Cache-Control', 'no-store');
-    let filter: ReturnType<typeof filters>, recent: ReturnType<typeof filters>;
+    let filter: ReturnType<typeof monitoringFilters>, recent: ReturnType<typeof monitoringFilters>;
     try {
-      filter = filters(c, 'metrics');
-      recent = filters(c, 'metrics', 5);
+      filter = monitoringFilters(c, 'metrics');
+      recent = monitoringFilters(c, 'metrics', 5);
     } catch {
       return c.json({ error: 'invalid_monitoring_filter' }, 400);
     }
@@ -139,51 +123,7 @@ export function registerMonitoringRoutes(router: Hono) {
     });
   });
   router.get('/admin/monitoring/calls', async (c) => {
-    c.header('Cache-Control', 'no-store');
-    let filter: ReturnType<typeof filters>;
-    try {
-      filter = filters(c, 'events');
-    } catch {
-      return c.json({ error: 'invalid_monitoring_filter' }, 400);
-    }
-    const params = [...filter.params],
-      clauses = [filter.where];
-    const cursor = c.req.query('cursor');
-    if (cursor) {
-      try {
-        if (cursor.length > 200) throw new Error();
-        const [time, id] = JSON.parse(Buffer.from(cursor, 'base64url').toString());
-        if (
-          !Number.isSafeInteger(time) ||
-          typeof id !== 'string' ||
-          !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id)
-        )
-          throw new Error();
-        params.push(time, id);
-        clauses.push(`(started_at,id)<($${params.length - 1},$${params.length})`);
-      } catch {
-        return c.json({ error: 'invalid_cursor' }, 400);
-      }
-    }
-    const result = await pool.query(
-      `SELECT * FROM mcp_call_events WHERE ${clauses.join(' AND ')} ORDER BY started_at DESC,id DESC LIMIT 51`,
-      params,
-    );
-    const rows = result.rows.slice(0, 50).map((row) => ({
-      ...row,
-      started_at: number(row.started_at),
-      finished_at: number(row.finished_at),
-      user_id: number(row.user_id),
-      duration_ms: row.duration_ms === null ? null : number(row.duration_ms),
-    }));
-    const last = rows.at(-1);
-    return c.json({
-      events: rows,
-      next_cursor:
-        result.rows.length > 50 && last
-          ? Buffer.from(JSON.stringify([last.started_at, last.id])).toString('base64url')
-          : null,
-    });
+    return listMonitoringCalls(c);
   });
   router.get('/admin/monitoring/alerts', async (c) => {
     c.header('Cache-Control', 'no-store');
@@ -205,5 +145,42 @@ export function registerMonitoringRoutes(router: Hono) {
     const event = await acknowledgeAlert(id, typeof actor === 'string' && actor ? actor : 'admin');
     if (!event) return c.json({ error: 'alert_not_found' }, 404);
     return c.json({ event });
+  });
+}
+
+/** userId is supplied by authenticated server identity, never by a query parameter. */
+export async function listMonitoringCalls(c: Context, userId?: number) {
+  c.header('Cache-Control', 'no-store');
+  let query: ReturnType<typeof callLogQuery>;
+  try {
+    query = callLogQuery(c, userId);
+  } catch (error) {
+    return c.json(
+      {
+        error:
+          error instanceof Error && error.message === 'invalid_cursor' ? 'invalid_cursor' : 'invalid_monitoring_filter',
+      },
+      400,
+    );
+  }
+  const { params, clauses } = query;
+  const result = await pool.query(
+    `SELECT * FROM mcp_call_events WHERE ${clauses.join(' AND ')} ORDER BY started_at DESC,id DESC LIMIT 51`,
+    params,
+  );
+  const rows = result.rows.slice(0, 50).map((row) => ({
+    ...row,
+    started_at: number(row.started_at),
+    finished_at: number(row.finished_at),
+    user_id: number(row.user_id),
+    duration_ms: row.duration_ms === null ? null : number(row.duration_ms),
+  }));
+  const last = rows.at(-1);
+  return c.json({
+    events: rows,
+    next_cursor:
+      result.rows.length > 50 && last
+        ? Buffer.from(JSON.stringify([last.started_at, last.id])).toString('base64url')
+        : null,
   });
 }

@@ -1,3 +1,5 @@
+import { applySystemSettings, currentSystemSettings, normalizeSystemSettings } from '../packages/shared/src/index.js';
+import { hashSignupCode, matchesSignupCode } from '../packages/auth-server/src/registration.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -66,10 +68,10 @@ test('signup errors are localized, preserve only username, and explain restricte
   assert.equal(pageLanguage('en-US', 'zh-CN'), 'en-US');
 });
 
-test('self-registration validates username, email, password length, and confirmation on the server', () => {
+test('self-registration uses email as identity and validates password length and confirmation', () => {
   assert.equal(validateSignup('alice', 'alice@example.com', 'a-safe-password', 'a-safe-password'), null);
   for (const name of ['', '*', 'a', 'a'.repeat(65), 'alice@example.com', '<script>']) {
-    assert.equal(validateSignup(name, 'alice@example.com', 'a-safe-password', 'a-safe-password'), 'invalidUsername');
+    assert.equal(validateSignup(name, 'alice@example.com', 'a-safe-password', 'a-safe-password'), null);
   }
   for (const email of ['', 'alice', 'alice@', 'a@b', 'alice @example.com']) {
     assert.equal(validateSignup('alice', email, 'a-safe-password', 'a-safe-password'), 'invalidEmail');
@@ -77,4 +79,38 @@ test('self-registration validates username, email, password length, and confirma
   assert.equal(validateSignup('alice', 'alice@example.com', 'short', 'short'), 'invalidPassword');
   assert.equal(validateSignup('alice', 'alice@example.com', 'x'.repeat(257), 'x'.repeat(257)), 'invalidPassword');
   assert.equal(validateSignup('alice', 'alice@example.com', 'a-safe-password', 'another-password'), 'passwordMismatch');
+});
+
+test('registration email verification setting controls the OAuth signup fields', () => {
+  const saved = currentSystemSettings();
+  try {
+    applySystemSettings({ ...saved, registration_email_verification: false });
+    const withoutCode = signupPage(q, 'zh-CN', details, 'csrf', undefined, '', 'alice@example.com');
+    assert.ok(!withoutCode.includes('name="verification_code"'));
+    assert.ok(!withoutCode.includes('name="username"'));
+    applySystemSettings({ ...saved, registration_email_verification: true });
+    const withCode = signupPage(q, 'zh-CN', details, 'csrf', 'verificationSent', '', 'alice@example.com');
+    assert.ok(withCode.includes('name="verification_code"'));
+    assert.ok(withCode.includes('value="send-code" formnovalidate'));
+    assert.ok(withCode.includes('name="form_token"'));
+    assert.ok(withCode.includes('name="code_challenge"'));
+    assert.ok(withCode.includes('验证码已发送'));
+  } finally {
+    applySystemSettings(saved);
+  }
+  const settings = { public_url: 'https://mcp.example.test', upstream_hosts: [] };
+  assert.equal(
+    normalizeSystemSettings({ ...settings, registration_email_verification: true })?.registration_email_verification,
+    true,
+  );
+  assert.equal(normalizeSystemSettings({ ...settings, registration_email_verification: 'true' }), null);
+});
+test('signup codes are hashed and malformed values never verify', () => {
+  const hash = hashSignupCode('012345');
+  assert.equal(hash.length, 64);
+  assert.notEqual(hash, '012345');
+  assert.equal(matchesSignupCode('012345', hash), true);
+  for (const value of ['', '12345', '1234567', '000000', '<script>'])
+    assert.equal(matchesSignupCode(value, hash), false);
+  assert.equal(matchesSignupCode('012345', 'bad hash'), false);
 });

@@ -1,4 +1,4 @@
-/** Metadata-only monitoring contract. Never accept argument/result objects. */
+/** Bounded, redacted MCP call monitoring contract. */
 export const latencyBounds = [
   25, 50, 100, 250, 500, 1000, 2000, 5000, 10000, 30000, 60000, 300000, 3600000, 86400000, 604800000, 1000000000,
 ];
@@ -22,6 +22,8 @@ export interface CallEvent {
   instance: string;
   attempts: number;
   detail: boolean;
+  input?: string | null;
+  output?: string | null;
 }
 export function safeLabel(value: unknown, length = 128): string {
   return typeof value === 'string' ? value.replace(/[\x00-\x1f\x7f]/g, '').slice(0, length) : '';
@@ -55,7 +57,10 @@ export function validCallEvent(value: unknown, now = Date.now()): CallEvent | nu
   for (const key of ['username', 'client_id', 'server', 'method', 'tool', 'error', 'instance'] as const) {
     if (typeof e[key] !== 'string' || e[key].length > 128 || /[\x00-\x1f\x7f]/.test(e[key])) return null;
   }
-  // Explicit projection prevents extra payload/credential fields reaching storage.
+  for (const key of ['input', 'output'] as const)
+    if (e[key] !== undefined && e[key] !== null && (typeof e[key] !== 'string' || Buffer.byteLength(e[key]!) > 65536))
+      return null;
+  // Explicit projection prevents unrelated fields reaching storage.
   return {
     id: e.id,
     request_id: e.request_id,
@@ -74,6 +79,8 @@ export function validCallEvent(value: unknown, now = Date.now()): CallEvent | nu
     instance: e.instance,
     attempts: e.attempts,
     detail: e.detail,
+    input: e.detail ? (e.input ?? null) : null,
+    output: e.detail ? (e.output ?? null) : null,
   };
 }
 export function latencyHistogram(duration: number | null): number[] {
@@ -94,4 +101,21 @@ export function histogramP95(histogram: number[]): number | null {
     if (seen >= rank) return latencyBounds[i];
   }
   return null;
+}
+
+/** Store a readable bounded snapshot; never collect transport headers or credentials. */
+export function captureCallContent(value: unknown): string | null {
+  if (value === undefined) return null;
+  try {
+    const text = JSON.stringify(value, (key, item) =>
+      /^(authorization|cookie|set-cookie|password|passwd|secret|.*token|api[-_]?key|.*secret|.*password)$/i.test(key)
+        ? '[REDACTED]'
+        : item,
+    );
+    if (text === undefined) return null;
+    const bytes = Buffer.from(text);
+    return bytes.length <= 65536 ? text : bytes.subarray(0, 65000).toString('utf8') + '\n[TRUNCATED]';
+  } catch {
+    return '[UNAVAILABLE]';
+  }
 }

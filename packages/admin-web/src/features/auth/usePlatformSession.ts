@@ -8,6 +8,7 @@ export function usePlatformSession() {
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [registrationEnabled, setRegistrationEnabled] = useState<boolean | undefined>(undefined);
+  const [emailVerificationRequired, setEmailVerificationRequired] = useState(false);
   const generation = useRef(0);
 
   // Older backends have no signup route; treat every failure as a closed entry.
@@ -16,7 +17,10 @@ export function usePlatformSession() {
     api
       .signupStatus()
       .then((status) => {
-        if (active) setRegistrationEnabled(status.registration_enabled);
+        if (active) {
+          setRegistrationEnabled(status.registration_enabled);
+          setEmailVerificationRequired(status.registration_email_verification ?? false);
+        }
       })
       .catch(() => {
         if (active) setRegistrationEnabled(false);
@@ -80,5 +84,5 @@ export function usePlatformSession() {
     window.history.replaceState(null, '', '/');
   };
 
-  return { session, error, checking, refresh, signedIn, logout, registrationEnabled };
+  return { session, error, checking, refresh, signedIn, logout, registrationEnabled, emailVerificationRequired };
 }

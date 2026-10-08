@@ -1,3 +1,4 @@
+import { canReuseSmtpPassword, smtpTestConfigSchema } from './smtp-config.js';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { jwtVerify } from 'jose';
@@ -35,14 +36,14 @@ import {
   allowedUpstreamHosts,
   upstreamAllowlistEnabled,
 } from '@mcp/shared';
-import { encryptCredential } from './credential-crypto.js';
+import { decryptCredential, encryptCredential } from './credential-crypto.js';
 import { DockerError, getUpdateStatus, getUpdateTaskStatus, startUpdate, updateEnabled } from './system-update.js';
 import { limitLoginAccount } from './rate-limit.js';
 import { trustedAdminBearerClient } from './admin-bearer.js';
 import { addUpstreamHost, currentSystemSettings, saveSystemSettings } from './system-settings.js';
 import { validateMcpEndpoint } from './upstream-endpoint.js';
-import { systemOptionDefaults, registrationEnabled, normalizeEmail } from '@mcp/shared';
-import { mailConfigured, sendMail } from './mailer.js';
+import { systemOptionDefaults, registrationEnabled, normalizeEmail, smtpConfigured } from '@mcp/shared';
+import { mailConfigured, sendMail, sendMailWithSettings } from './mailer.js';
 import { registerMonitoringRoutes } from './monitoring-api.js';
 import { registerTopologyRoutes } from './topology-api.js';
 import { revokeUserConnection } from './connection-lifecycle.js';
@@ -70,7 +71,8 @@ const userCreateSchema = z.object({
   username: z
     .string()
     .trim()
-    .regex(/^[a-zA-Z0-9._-]{2,64}$/, 'invalid_username'),
+    .max(254)
+    .refine((value) => Boolean(normalizeEmail(value)), 'invalid_email'),
   password: z.string().min(12, 'invalid_password').max(256, 'invalid_password'),
   role: z.enum(['admin', 'user']).default('user'),
   email: z.string().trim().max(254, 'invalid_email').optional(),
@@ -434,6 +436,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const raw = await c.req.json().catch(() => null);
     const settings = normalizeSystemSettings(raw);
     if (!settings) return c.json({ error: 'invalid_system_settings' }, 400);
+    if (settings.registration_email_verification && !smtpConfigured({ ...currentSystemSettings(), ...settings }))
+      return c.json({ error: 'verification_unavailable' }, 400);
     // Password semantics: a non-empty value replaces the stored secret, an empty
     // string clears it, and an absent field keeps the current envelope.
     const plaintext =
@@ -458,18 +462,40 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     });
   });
 
-  /** Sends a message through the saved relay so admins can verify SMTP before relying on it. */
+  /** Test a transient SMTP draft or the saved relay without changing configuration. */
   router.post('/admin/system-settings/test-email', async (c) => {
-    if (!mailConfigured()) return c.json({ error: 'smtp_not_configured' }, 409);
     const body = await c.req.json().catch(() => null);
     const to = normalizeEmail((body as { to?: unknown } | null)?.to);
     if (!to) return c.json({ error: 'invalid_email' }, 400);
+    const smtp = (body as { smtp?: unknown } | null)?.smtp;
+    const parsed = smtp === undefined ? null : smtpTestConfigSchema.safeParse(smtp);
+    if (parsed && !parsed.success) return c.json({ error: 'invalid_smtp_settings' }, 400);
+    if (!parsed && !mailConfigured()) return c.json({ error: 'smtp_not_configured' }, 409);
+    const subject = 'MCP Gateway SMTP 测试 / SMTP test';
+    const text =
+      '这是一封测试邮件，说明 SMTP 配置可以发送邮件。\nThis test message confirms your SMTP configuration works.';
     try {
-      await sendMail(
-        to,
-        'MCP Gateway SMTP 测试 / SMTP test',
-        '这是一封测试邮件,说明发件邮箱配置已生效。\nThis test message confirms your sender configuration works.',
-      );
+      if (parsed?.success) {
+        const saved = currentSystemSettings();
+        const config = parsed.data;
+        if (
+          config.smtp_username &&
+          config.smtp_password === undefined &&
+          saved.smtp_password &&
+          !canReuseSmtpPassword(config, saved)
+        )
+          return c.json({ error: 'smtp_test_password_required' }, 400);
+        // A blank form password retains the stored envelope; explicit empty clears it for this test.
+        const password =
+          config.smtp_password === undefined
+            ? config.smtp_username && saved.smtp_password
+              ? decryptCredential(saved.smtp_password)
+              : ''
+            : config.smtp_password;
+        await sendMailWithSettings({ ...saved, ...config }, password, to, subject, text);
+      } else {
+        await sendMail(to, subject, text);
+      }
       return c.json({ ok: true });
     } catch (error) {
       console.error('[smtp] test email failed', error instanceof Error ? error.name : 'UnknownError');
@@ -610,7 +636,9 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         field === 'username' ? 'invalid_username' : field === 'password' ? 'invalid_password' : 'invalid_user_payload',
       );
     }
-    const { username, password, role: userRole, email: rawEmail, servers } = parsed.data;
+    const { username: rawUsername, password, role: userRole, servers } = parsed.data;
+    const username = normalizeEmail(rawUsername)!;
+    const rawEmail = username;
     const email = rawEmail === undefined || rawEmail === '' ? null : normalizeEmail(rawEmail);
     if (rawEmail !== undefined && rawEmail !== '' && !email) return jsonError(c, 'invalid_email');
     const requestedServers = userRole === 'admin' ? [] : [...new Set(servers ?? [])];
@@ -789,10 +817,13 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       return jsonError(c, 'password must be 12-256 characters');
     if (role !== undefined && role !== 'admin' && role !== 'user') return jsonError(c, 'role must be admin or user');
     if (disabled !== undefined && typeof disabled !== 'boolean') return jsonError(c, 'disabled must be a boolean');
-    if (username !== undefined && (typeof username !== 'string' || !/^[a-zA-Z0-9._-]{2,64}$/.test(username.trim())))
+    if (
+      username !== undefined &&
+      (typeof username !== 'string' || (!normalizeEmail(username) && !/^[a-zA-Z0-9._-]{2,64}$/.test(username.trim())))
+    )
       return jsonError(c, 'invalid_username');
     // null or '' clears the address; anything else must be a valid email.
-    const nextEmail = email === undefined ? undefined : email === null || email === '' ? null : normalizeEmail(email);
+    let nextEmail = email === undefined ? undefined : email === null || email === '' ? null : normalizeEmail(email);
     if (email !== undefined && email !== null && email !== '' && nextEmail === null)
       return jsonError(c, 'invalid_email');
     if (email_verified !== undefined && typeof email_verified !== 'boolean')
@@ -803,7 +834,14 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(762441, 2)`);
       const [row] = await tx.select().from(users).where(eq(users.id, id)).for('update').limit(1);
       if (!row) return 'missing';
-      const nextUsername = username === undefined ? row.username : username.trim();
+      const requestedName = username === undefined ? row.username : username.trim();
+      const accountEmail = normalizeEmail(requestedName);
+      if (accountEmail) {
+        // Email accounts have one identity field; reject contradictory updates.
+        if (nextEmail !== undefined && nextEmail !== accountEmail) return 'invalid_email';
+        nextEmail = accountEmail;
+      }
+      const nextUsername = accountEmail ?? requestedName;
       const nextRole = role ?? row.role;
       const nextDisabled = disabled ?? row.disabled;
       if (row.role === 'admin' && !row.disabled && (nextRole !== 'admin' || nextDisabled)) {
@@ -818,7 +856,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         if (taken) return 'username_taken';
       }
       const emailChanged = nextEmail !== undefined && nextEmail !== row.email;
-      if (emailChanged && nextEmail !== null) {
+      if (emailChanged && nextEmail !== null && nextEmail !== undefined) {
         const [taken] = await tx.select({ id: users.id }).from(users).where(eq(users.email, nextEmail)).limit(1);
         if (taken) return 'email_taken';
       }
@@ -845,6 +883,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
       if (revoke) await revokeUserAuthentication(tx, id);
       return 'updated';
     });
+    if (result === 'invalid_email') return jsonError(c, 'invalid_email');
     if (result === 'missing') return jsonError(c, 'user not found', 404);
     if (result === 'last_admin') return jsonError(c, 'last_active_admin_required', 409);
     if (result === 'username_taken') return jsonError(c, 'username already exists', 409);

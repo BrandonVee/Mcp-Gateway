@@ -109,6 +109,7 @@ const publicPostLimits: Record<string, [number, number]> = {
   '/me/session': [20, 60],
   // Separate from /authorize/signup: one address may create twice as many accounts.
   '/me/signup': [10, 3600],
+  '/me/signup/send-code': [10, 3600],
   '/me/email/send-code': [10, 3600],
   '/me/email/verify': [20, 3600],
   '/token': [120, 60],

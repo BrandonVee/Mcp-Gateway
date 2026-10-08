@@ -45,7 +45,7 @@ async function main() {
     });
     assert.equal(server.response.status, 201);
     const user = await request('/admin/users', 'POST', {
-      username: serverName,
+      username: `${serverName}@example.test`,
       password,
       role: 'user',
       servers: [serverName],
@@ -53,7 +53,7 @@ async function main() {
     assert.equal(user.response.status, 201);
     userId = user.data.id;
 
-    process.env.MCP_USER = serverName;
+    process.env.MCP_USER = `${serverName}@example.test`;
     process.env.MCP_PASSWORD = password;
     const token = (await getAccessToken()).access_token;
     const call = async () =>

@@ -1,3 +1,4 @@
+import { MyCallLogs } from '../monitoring/MyCallLogs';
 import { useEffect, useMemo, useState } from 'react';
 import { App, Button, Card, Empty, Input, Modal, Tag, Typography } from 'antd';
 import {
@@ -378,6 +379,7 @@ export function ConnectionsPage({
         />
         {key && !validApiKey(key) && <Typography.Text type="danger">{t('api.invalidApiKey')}</Typography.Text>}
       </Modal>
+      <MyCallLogs session={session} />
     </main>
   );
 }

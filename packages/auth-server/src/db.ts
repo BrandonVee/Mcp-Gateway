@@ -1,5 +1,5 @@
 import { randomToken, scryptHash, scryptVerify } from './users.js';
-import { loadPlatformConfig } from '@mcp/shared';
+import { loadPlatformConfig, normalizeEmail } from '@mcp/shared';
 import { and, count, eq, lt, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
@@ -13,6 +13,7 @@ import {
   mcpServers,
   oauthConnectionStates,
   refreshTokens,
+  signupEmailCodes,
   userServerAccess,
   users,
 } from './schema.js';
@@ -103,6 +104,7 @@ export async function sweepExpired(): Promise<void> {
     db.delete(refreshTokens).where(lt(refreshTokens.expiresAt, now)),
     db.delete(loginSessions).where(lt(loginSessions.expiresAt, now)),
     db.delete(oauthConnectionStates).where(lt(oauthConnectionStates.expiresAt, now)),
+    db.delete(signupEmailCodes).where(lt(signupEmailCodes.expiresAt, now)),
     db.delete(auditEvents).where(lt(auditEvents.createdAt, now - auditRetentionDays * 24 * 3600 * 1000)),
   ]);
 }
@@ -204,7 +206,13 @@ export async function verifyUser(
   email: string | null;
   emailVerified: boolean;
 } | null> {
-  const [row] = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  const email = normalizeEmail(username);
+  let [row] = await db
+    .select()
+    .from(users)
+    .where(eq(email ? users.email : users.username, email ?? username))
+    .limit(1);
+  if (!row && email) [row] = await db.select().from(users).where(eq(users.username, email)).limit(1);
   if (!row || row.disabled || !scryptVerify(password, row.passwordHash)) return null;
   return {
     id: row.id,

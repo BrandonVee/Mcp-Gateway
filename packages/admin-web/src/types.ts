@@ -112,7 +112,7 @@ export interface AdminConnection {
   updated_at: number;
 }
 
-export type View = 'overview' | 'users' | 'servers' | 'credentials' | 'topology' | 'monitoring' | 'settings';
+export type View = 'overview' | 'users' | 'servers' | 'credentials' | 'topology' | 'monitoring' | 'audit' | 'settings';
 
 export type DialogState =
   | { type: null }
@@ -187,6 +187,7 @@ export interface SystemSettings {
   upstream_hosts: string[];
   public_url_requires_https?: boolean;
   registration_enabled?: boolean;
+  registration_email_verification?: boolean;
   monitoring_enabled?: boolean;
   monitoring_logs_enabled?: boolean;
   monitoring_retention_days?: number;
@@ -217,6 +218,9 @@ export interface UsageFilters {
   user_id?: string;
   client_id?: string;
   outcome?: string;
+  method?: string;
+  request_id?: string;
+  q?: string;
 }
 export interface UsageStat {
   name?: string;
@@ -269,6 +273,8 @@ export interface AlertEvent {
   notification_error: string | null;
 }
 export interface UsageCall {
+  input: string | null;
+  output: string | null;
   id: string;
   request_id: string;
   started_at: number;
@@ -333,3 +339,8 @@ export interface TopologySnapshot {
   flows: TopologyFlowEdge[];
   degraded: { health: boolean; sessions: boolean; flows: boolean };
 }
+
+export type SmtpSettingsInput = Pick<
+  SystemSettingsInput,
+  'smtp_host' | 'smtp_port' | 'smtp_secure' | 'smtp_username' | 'smtp_password' | 'smtp_from'
+>;

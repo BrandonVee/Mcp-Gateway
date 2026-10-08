@@ -5,12 +5,13 @@ import {
   latencyHistogram,
   histogramP95,
   validCallEvent,
+  captureCallContent,
   normalizeSystemSettings,
 } from '../packages/shared/src/index.js';
 import { alertFingerprint } from '../packages/shared/src/alerts.js';
 import { ResponseObserver, requestMetadata } from '../packages/gateway/src/response-observer.js';
 
-test('monitoring extracts only RPC metadata and never retains tool arguments', () => {
+test('monitoring captures RPC inputs with credential fields redacted', () => {
   const input = {
     jsonrpc: '2.0',
     id: 42,
@@ -18,7 +19,12 @@ test('monitoring extracts only RPC metadata and never retains tool arguments', (
     params: { name: 'lookup', arguments: { token: 'secret' } },
   };
   assert.deepEqual(requestMetadata(Buffer.from(JSON.stringify(input)), 'POST'), [
-    { id: 42, method: 'tools/call', tool: 'lookup' },
+    {
+      id: 42,
+      method: 'tools/call',
+      tool: 'lookup',
+      input: JSON.stringify({ name: 'lookup', arguments: { token: '[REDACTED]' } }),
+    },
   ]);
   assert.deepEqual(requestMetadata(Buffer.from('invalid'), 'POST'), [{ id: null, method: 'http/POST', tool: '' }]);
 });
@@ -34,8 +40,8 @@ test('JSON and chunked SSE observe actual RPC and tool errors, including UTF-8 s
     for (const byte of wire) observer.write(Buffer.from([byte]));
     observer.end();
     assert.deepEqual(seen, [
-      ['a', true, 'tool_error'],
-      [2, true, 'json_rpc_error'],
+      ['a', true, 'tool_error', JSON.stringify({ isError: true, content: [{ text: '秘密' }] })],
+      [2, true, 'json_rpc_error', JSON.stringify({ code: -32600, message: 'secret' })],
     ]);
   }
 });
@@ -45,7 +51,7 @@ test('oversized SSE events are ignored and subsequent bounded events still work'
   observer.write(Buffer.from('data: ' + 'x'.repeat(10000) + '\n\n'));
   observer.write(Buffer.from('data: {"id":9,"result":{}}\n\n'));
   observer.end();
-  assert.deepEqual(seen, [[9, false, '']]);
+  assert.deepEqual(seen, [[9, false, '', '{}']]);
   const json = new ResponseObserver('application/json', () => assert.fail('oversized JSON must stay unknown'), 10);
   json.write(Buffer.from('{"id":9,"result":{}}'));
   json.end();
@@ -77,10 +83,16 @@ test('collection envelopes project safe fields, reject invalid values, and valid
     attempts: 1,
     detail: true,
   };
-  assert.deepEqual(validCallEvent({ ...event, arguments: { token: 'secret' }, response: 'secret' }), event);
+  assert.deepEqual(validCallEvent({ ...event, arguments: { token: 'secret' }, response: 'secret' }), {
+    ...event,
+    input: null,
+    output: null,
+  });
   assert.equal(validCallEvent({ ...event, outcome: 'pending' }), null);
   assert.equal(validCallEvent({ ...event, started_at: 0 }), null);
   assert.equal(validCallEvent({ ...event, detail: 'true' }), null);
+  assert.equal(validCallEvent({ ...event, input: 'a'.repeat(65537) }), null);
+  assert.equal(validCallEvent({ ...event, detail: false, input: 'private', output: 'private' })?.input, null);
   const base = { public_url: 'https://mcp.example.test', upstream_hosts: [] };
   assert.equal(normalizeSystemSettings({ ...base, registration_enabled: false })?.registration_enabled, false);
   assert.equal(normalizeSystemSettings({ ...base, registration_enabled: 'false' }), null);
@@ -98,4 +110,34 @@ test('alert settings and fingerprints follow normalized validation rules', () =>
   assert.equal(settings?.alert_webhook_url, 'https://hooks.example.test/alert');
   assert.equal(normalizeSystemSettings({ ...base, alert_webhook_url: 'ftp://bad' }), null);
   assert.equal(alertFingerprint('a', 'slow_calls'), 'a\x1fslow_calls');
+});
+
+test('content snapshots preserve user text, redact nested credentials, and cap UTF-8 byte size', () => {
+  assert.equal(captureCallContent(undefined), null);
+  assert.deepEqual(
+    JSON.parse(
+      captureCallContent({
+        query: '用户输入',
+        nested: { api_key: 'secret', access_token: 'secret', password: 'secret', answer: '输出' },
+      })!,
+    ),
+    {
+      query: '用户输入',
+      nested: { api_key: '[REDACTED]', access_token: '[REDACTED]', password: '[REDACTED]', answer: '输出' },
+    },
+  );
+  const large = captureCallContent({ text: '中'.repeat(100000) })!;
+  assert.ok(Buffer.byteLength(large) <= 65536);
+  assert.ok(large.endsWith('[TRUNCATED]'));
+  const batch = requestMetadata(
+    Buffer.from(
+      JSON.stringify([
+        { id: 1, method: 'tools/call', params: { name: 'a', arguments: { text: 'first' } } },
+        { id: 2, method: 'tools/call', params: { name: 'b', arguments: { text: 'second' } } },
+      ]),
+    ),
+    'POST',
+  );
+  assert.equal(JSON.parse(batch[0].input!).arguments.text, 'first');
+  assert.equal(JSON.parse(batch[1].input!).arguments.text, 'second');
 });
