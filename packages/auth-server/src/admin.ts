@@ -16,6 +16,7 @@ import type { Context as HonoContext } from 'hono';
 import { and, count, desc, eq, lt, sql } from 'drizzle-orm';
 import {
   auditEvents,
+  alertEvents,
   mcpServerInstances,
   mcpServers,
   oauthConnectionStates,
@@ -338,6 +339,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     }
     const actor = await getAdminActor(c, deps);
     if (!actor) return jsonError(c, 'admin privileges required', 403);
+    (c as unknown as { set(key: string, value: string): void }).set('adminActor', actor);
     await next();
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(c.req.method)) {
       await recordAudit(c, actor, c.res.status);
@@ -1174,6 +1176,14 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         if (credentialsChanged) await tx.delete(userMcpCredentials).where(eq(userMcpCredentials.serverName, name));
         // ON UPDATE CASCADE retains instances, grants, and saved credentials.
         await tx.update(mcpServers).set(changes).where(eq(mcpServers.name, name));
+        if (nextName !== name)
+          await tx
+            .update(alertEvents)
+            .set({
+              fingerprint: sql`concat(${nextName}::text, right(${alertEvents.fingerprint}::text, position(${'\x1f'}::text in ${alertEvents.fingerprint}::text)))`,
+              server: nextName,
+            })
+            .where(eq(alertEvents.server, name));
         return { name: nextName };
       });
       if (result.error) return jsonError(c, result.error, result.status);

@@ -29,7 +29,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '../../api';
 import { useI18n } from '../../i18n';
-import type { GatewayHealth, UsageCall, UsageFilters, UsageSummary } from '../../types';
+import type { AlertEvent, GatewayHealth, UsageCall, UsageFilters, UsageSummary } from '../../types';
 
 function Trend({ data, bucket }: { data: UsageSummary['trend']; bucket: number }) {
   const { t, language } = useI18n();
@@ -127,6 +127,7 @@ export function UsageMonitoring({ gateway }: { gateway: GatewayHealth | null }) 
     [loadingMore, setLoadingMore] = useState(false);
   const [revision, setRevision] = useState(0),
     [services, setServices] = useState<string[]>([]);
+  const [alertEvents, setAlertEvents] = useState<AlertEvent[]>([]);
   const [historical, setHistorical] = useState(false);
   const filtersKey = JSON.stringify(filters),
     identity = filtersKey + dimension + tab + revision;
@@ -154,6 +155,10 @@ export function UsageMonitoring({ gateway }: { gateway: GatewayHealth | null }) 
         const summary = await api.usageSummary(filters, dimension);
         if (!active) return;
         setData(summary);
+        api
+          .usageAlerts()
+          .then((result) => active && setAlertEvents(result.events))
+          .catch(() => {});
         if (tab === 'logs' && !paged.current) {
           const calls = await api.usageCalls(filters);
           if (active && !paged.current) {
@@ -199,6 +204,16 @@ export function UsageMonitoring({ gateway }: { gateway: GatewayHealth | null }) 
     form.resetFields();
     setFilters({ hours: 24 });
     setRevision((value) => value + 1);
+  };
+  const acknowledge = async (id: number) => {
+    try {
+      await api.acknowledgeAlert(id);
+      setAlertEvents((rows) =>
+        rows.map((row) => (row.id === id ? { ...row, acknowledged_at: Date.now(), acknowledged_by: 'admin' } : row)),
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
   };
   const format = (value: number | null, unit = '') =>
     value === null ? '—' : new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(value) + unit;
@@ -612,6 +627,59 @@ export function UsageMonitoring({ gateway }: { gateway: GatewayHealth | null }) 
                       </Button>
                     </div>
                   )}
+                  {alertEvents.length > 0 && (
+                    <section className="usage-alert-list" aria-label={t('usage.alertHistory')}>
+                      {alertEvents.map((event) => (
+                        <article className="usage-alert-card" key={event.id}>
+                          <div className="usage-alert-card-heading">
+                            <span className="usage-rule-icon">
+                              <WarningOutlined />
+                            </span>
+                            <div>
+                              <h4>{t(event.type === 'error_rate' ? 'usage.errorRateAlert' : 'usage.slowAlert')}</h4>
+                              <code>{event.server}</code>
+                            </div>
+                            <Tag color={event.resolved_at ? 'success' : 'warning'} variant="filled">
+                              {t(event.resolved_at ? 'usage.alertResolved' : 'usage.alertOpen')}
+                            </Tag>
+                            {!event.acknowledged_at && !event.resolved_at && (
+                              <Button size="small" onClick={() => void acknowledge(event.id)}>
+                                {t('usage.alertAcknowledge')}
+                              </Button>
+                            )}
+                          </div>
+                          <div className="usage-alert-values">
+                            <div>
+                              <span>{t('usage.observedValue')}</span>
+                              <strong>{format(event.value, event.type === 'error_rate' ? '%' : ' ms')}</strong>
+                            </div>
+                            <div>
+                              <span>{t('usage.threshold')}</span>
+                              <strong>{format(event.threshold, event.type === 'error_rate' ? '%' : ' ms')}</strong>
+                            </div>
+                            <div>
+                              <span>{t('usage.alertFirstSeen')}</span>
+                              <strong>{time(event.first_seen_at)}</strong>
+                            </div>
+                            <div>
+                              <span>{t('usage.alertLastSeen')}</span>
+                              <strong>{time(event.last_seen_at)}</strong>
+                            </div>
+                          </div>
+                          {(event.acknowledged_by || event.notification_error) && (
+                            <p className="usage-alert-meta">
+                              {event.acknowledged_by &&
+                                t('usage.alertAcknowledged', {
+                                  actor: event.acknowledged_by,
+                                })}
+                              {event.notification_error &&
+                                t('usage.alertNotificationError', { error: event.notification_error })}
+                            </p>
+                          )}
+                        </article>
+                      ))}
+                    </section>
+                  )}
                 </section>
                 {historical && <Alert type="info" showIcon message={t('usage.historyPaused')} />}
                 <div className="usage-info-note">
@@ -626,8 +694,10 @@ export function UsageMonitoring({ gateway }: { gateway: GatewayHealth | null }) 
             label: (
               <span className="usage-tab-label">
                 <WarningOutlined />
-                {t('usage.alerts')}
-                {Boolean(data?.alerts.length) && <span className="usage-alert-count">{data!.alerts.length}</span>}
+                {t('usage.alertHistory')}
+                {Boolean(data?.alerts.length || alertEvents.length) && (
+                  <span className="usage-alert-count">{alertEvents.length || data!.alerts.length}</span>
+                )}
               </span>
             ),
             children: (

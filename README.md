@@ -99,6 +99,8 @@ curl --fail https://mcp.example.com/healthz    # 替换为实际域名
 
 备份默认写入 `backups/`，包含 PostgreSQL、配置和凭据加密密钥（权限 `0600`，保留 14 天，**不含 Redis 会话**）。定时备份与恢复步骤见 [备份与恢复](docs/production.md#备份与恢复)。不要用 `down -v` 停止生产部署，它会删除数据库卷。
 
+健康检查失败、注册表不可用、Redis 异常、上游连接失败、监控积压或告警未通知时，按 [故障排查](docs/troubleshooting.md) 处理。
+
 ### 常见部署问题
 
 | 现象                                 | 排查与处理                                                           |
@@ -278,6 +280,7 @@ pnpm typecheck && pnpm test:unit
 | 文档                                                   | 内容                                                 |
 | ------------------------------------------------------ | ---------------------------------------------------- |
 | [生产部署与上线检查](docs/production.md)               | 分离部署、外部数据库、网络与密钥、备份恢复、自动发布 |
+| [故障排查](docs/troubleshooting.md)                    | Registry、Redis、上游、监控与告警通知问题            |
 | [架构与运行机制](docs/architecture.md)                 | 权限模型、状态存储、实例池、配置文件、日志与监控     |
 | [上游服务接入与用户凭据](docs/upstream-connections.md) | 注册外部 MCP Server、API Key / OAuth 连接、凭据加密  |
 | [管理 API 与管理端](docs/admin-api.md)                 | 管理接口清单、授权与账号生命周期、前端能力           |

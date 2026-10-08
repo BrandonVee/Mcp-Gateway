@@ -506,6 +506,12 @@
   margin: 0 0 0 auto;
   white-space: nowrap;
 }
+.usage-alert-meta {
+  margin-top: 14px;
+  color: #9caec3;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .usage-alert-values {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -1,7 +1,8 @@
 import type { Hono, Context } from 'hono';
-import { histogramP95, runtimeSettings } from '@mcp/shared';
+import { alertEventSchema, histogramP95, runtimeSettings } from '@mcp/shared';
 import { pool } from './db.js';
 import { monitoringStatus } from './monitoring.js';
+import { acknowledgeAlert, listAlertEvents } from './alert-history.js';
 
 const histogramSql =
   'ARRAY[' + Array.from({ length: 16 }, (_, i) => `COALESCE(sum(histogram[${i + 1}]),0)`).join(',') + ']';
@@ -183,5 +184,26 @@ export function registerMonitoringRoutes(router: Hono) {
           ? Buffer.from(JSON.stringify([last.started_at, last.id])).toString('base64url')
           : null,
     });
+  });
+  router.get('/admin/monitoring/alerts', async (c) => {
+    c.header('Cache-Control', 'no-store');
+    const status = c.req.query('status') ?? 'open';
+    const limitRaw = c.req.query('limit') ?? '50';
+    if (!['open', 'all'].includes(status) || !/^\d+$/.test(limitRaw) || Number(limitRaw) < 1 || Number(limitRaw) > 100)
+      return c.json({ error: 'invalid_alert_filter' }, 400);
+    try {
+      const events = await listAlertEvents(status as 'open' | 'all', Number(limitRaw));
+      return c.json({ events });
+    } catch {
+      return c.json({ error: 'alert_history_unavailable' }, 503);
+    }
+  });
+  router.post('/admin/monitoring/alerts/:id/ack', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isSafeInteger(id) || id <= 0) return c.json({ error: 'invalid_alert_id' }, 400);
+    const actor = (c as unknown as { get(key: string): unknown }).get('adminActor');
+    const event = await acknowledgeAlert(id, typeof actor === 'string' && actor ? actor : 'admin');
+    if (!event) return c.json({ error: 'alert_not_found' }, 404);
+    return c.json({ event });
   });
 }

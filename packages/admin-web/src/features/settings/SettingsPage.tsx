@@ -19,6 +19,7 @@ import { useI18n } from '../../i18n';
 import type { SystemSettings, SystemSettingsInput, SystemUpdateStatus } from '../../types';
 import './settings.css';
 import { isPublicOrigin, upstreamHosts, validUpstreamHosts, validationRule } from '../../utils/validation';
+import { validWebhookUrl } from '../../utils/validation.alert';
 import { mergeDraft } from '../../utils/operations';
 
 type SettingsFormValues = Omit<SystemSettingsInput, 'upstream_hosts'> & { upstream_hosts: string };
@@ -146,6 +147,8 @@ export function SettingsPage({
       monitoring_summary_days: settings.monitoring_summary_days ?? 365,
       monitoring_error_rate: settings.monitoring_error_rate ?? 5,
       monitoring_slow_ms: settings.monitoring_slow_ms ?? 2000,
+      alert_email_recipients: settings.alert_email_recipients ?? [],
+      alert_webhook_url: settings.alert_webhook_url ?? '',
       upstream_hosts: settings.upstream_hosts.join('\n'),
       smtp_host: settings.smtp_host ?? '',
       smtp_port: settings.smtp_port ?? 465,
@@ -219,11 +222,13 @@ export function SettingsPage({
           try {
             // Password semantics: typed value replaces, explicit clear empties,
             // otherwise the stored secret stays untouched server-side.
-            const { smtp_password, ...rest } = values;
+            const { smtp_password, alert_email_recipients, alert_webhook_url, ...rest } = values;
             const saved = await onSave({
               ...rest,
               public_url: values.public_url.trim(),
               upstream_hosts: upstreamHosts(values.upstream_hosts),
+              alert_email_recipients,
+              alert_webhook_url: (alert_webhook_url ?? '').trim(),
               ...(smtp_password
                 ? { smtp_password }
                 : clearSmtpPassword
@@ -508,7 +513,23 @@ export function SettingsPage({
                   >
                     <InputNumber min={1} max={3600000} precision={0} suffix={t('settings.millisecondsUnit')} />
                   </Form.Item>
+                  <Form.Item name="alert_email_recipients" label={t('settings.alertEmailRecipients')}>
+                    <Select
+                      mode="tags"
+                      open={false}
+                      tokenSeparators={[',', ' ', ';']}
+                      placeholder={t('settings.alertEmailPlaceholder')}
+                    />
+                  </Form.Item>
                 </div>
+                <Form.Item
+                  name="alert_webhook_url"
+                  label={t('settings.alertWebhook')}
+                  extra={t('settings.alertWebhookHelp')}
+                  rules={[validationRule(validWebhookUrl, t('settings.invalidWebhook'))]}
+                >
+                  <Input placeholder="https://hooks.example.com/..." allowClear />
+                </Form.Item>
               </div>
             </SettingsModule>
           </div>

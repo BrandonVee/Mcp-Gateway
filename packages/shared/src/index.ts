@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+export * from './alerts.js';
 export { upstreamTestResultSchema, unavailableUpstreamTest, type UpstreamTestResult } from './upstream-test.js';
 
 /** A backend MCP server: one logical name mapped to N instance URLs. */
@@ -212,6 +213,8 @@ export interface SystemSettings {
   monitoring_summary_days?: number;
   monitoring_error_rate?: number;
   monitoring_slow_ms?: number;
+  alert_email_recipients?: string[];
+  alert_webhook_url?: string;
   /** Outbound mail for verification codes. Empty host disables sending. */
   smtp_host?: string;
   smtp_port?: number;
@@ -229,6 +232,8 @@ export const systemOptionDefaults = {
   monitoring_summary_days: 365,
   monitoring_error_rate: 5,
   monitoring_slow_ms: 2000,
+  alert_email_recipients: [],
+  alert_webhook_url: '',
   smtp_host: '',
   smtp_port: 465,
   smtp_secure: true,
@@ -316,6 +321,18 @@ const publicOrigin = (production: boolean) =>
       return false;
     }
   });
+const webhookUrl = z
+  .string()
+  .max(2048)
+  .refine((value) => {
+    if (!value) return true;
+    try {
+      const url = new URL(value);
+      return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
+    } catch {
+      return false;
+    }
+  });
 const systemSettingsSchema = (production: boolean) =>
   z.object({
     public_url: publicOrigin(production),
@@ -328,6 +345,8 @@ const systemSettingsSchema = (production: boolean) =>
     monitoring_summary_days: boundedInt(730).optional(),
     monitoring_error_rate: boundedInt(100).optional(),
     monitoring_slow_ms: boundedInt(3_600_000).optional(),
+    alert_email_recipients: z.array(z.string().max(254)).max(20).optional(),
+    alert_webhook_url: webhookUrl.optional(),
     smtp_host: z
       .string()
       .max(253)
@@ -390,4 +409,8 @@ export function normalizeEmail(value: unknown): string | null {
 /** Sending requires at least a relay host and a From address. */
 export function smtpConfigured(settings: SystemSettings): boolean {
   return Boolean(settings.smtp_host && settings.smtp_from);
+}
+
+export function alertNotificationsConfigured(settings: SystemSettings): boolean {
+  return Boolean(settings.alert_webhook_url || (settings.alert_email_recipients?.length && smtpConfigured(settings)));
 }

@@ -1,6 +1,7 @@
 import {
   bigint,
   bigserial,
+  doublePrecision,
   boolean,
   index,
   integer,
@@ -276,5 +277,30 @@ export const mcpCallMetrics = pgTable(
       columns: [table.minute, table.server, table.method, table.tool, table.userId, table.clientId, table.outcome],
     }),
     index('idx_mcp_metrics_time').on(table.minute),
+  ],
+);
+
+/** Persisted alert lifecycle; fingerprints collapse repeated 5-minute windows. */
+export const alertEvents = pgTable(
+  'alert_events',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    fingerprint: text('fingerprint').notNull(),
+    server: text('server').notNull(),
+    type: text('type').notNull(),
+    value: doublePrecision('value').notNull(),
+    threshold: doublePrecision('threshold').notNull(),
+    firstSeenAt: bigint('first_seen_at', { mode: 'number' }).notNull(),
+    lastSeenAt: bigint('last_seen_at', { mode: 'number' }).notNull(),
+    resolvedAt: bigint('resolved_at', { mode: 'number' }),
+    acknowledgedAt: bigint('acknowledged_at', { mode: 'number' }),
+    acknowledgedBy: text('acknowledged_by'),
+    notifiedAt: bigint('notified_at', { mode: 'number' }),
+    notificationError: text('notification_error'),
+  },
+  (table) => [
+    uniqueIndex('uq_alert_fingerprint').on(table.fingerprint),
+    index('idx_alert_last_seen').on(table.lastSeenAt),
+    index('idx_alert_open').on(table.resolvedAt, table.lastSeenAt),
   ],
 );

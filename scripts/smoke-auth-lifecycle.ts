@@ -443,7 +443,13 @@ async function main() {
       'one-time refresh rotation remains atomic',
     );
     assert.equal((await mutate(`/users/${targetId}`, { disabled: true })).status, 200);
+    assert.equal((await liveAccess(1)).status, 403, 'disabled users are rejected regardless of auth version');
     assert.equal((await mutate(`/users/${targetId}`, { disabled: false })).status, 200);
+    const reissued = await exchangeCode(await authCode(targetId));
+    assert.equal(reissued.status, 200, 're-enabled users can authenticate again');
+    const reissuedClaims = decodeJwt(reissued.body.access_token);
+    const currentAuthVersion = await identity(targetId);
+    assert.equal(reissuedClaims.auth_version, currentAuthVersion.userAuthVersion);
     await assert.rejects(
       database.createLoginSession(targetId, 1),
       're-enabling cannot revive credentials captured before disable',

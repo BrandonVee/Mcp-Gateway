@@ -1,5 +1,6 @@
 import type {
   PlatformSession,
+  AlertEvent,
   SystemSettings,
   SystemSettingsInput,
   UsageFilters,
@@ -214,6 +215,9 @@ export function apiForSession(session?: PlatformSession) {
               .map(([key, value]) => [key, String(value)]),
           ),
       ),
+    usageAlerts: () => request<{ events: AlertEvent[] }>('/api/admin/monitoring/alerts?status=open&limit=100'),
+    acknowledgeAlert: (id: number) =>
+      request<{ event: AlertEvent }>(`/api/admin/monitoring/alerts/${id}/ack`, { method: 'POST' }),
     topologySnapshot: (window = 5) => request<TopologySnapshot>(`/api/admin/topology/snapshot?window=${window}`),
     session: () => request<{ authenticated: boolean }>('/api/admin/session'),
     login: (username: string, password: string) =>

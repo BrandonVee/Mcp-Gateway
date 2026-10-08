@@ -193,6 +193,8 @@ export interface SystemSettings {
   monitoring_summary_days?: number;
   monitoring_error_rate?: number;
   monitoring_slow_ms?: number;
+  alert_email_recipients?: string[];
+  alert_webhook_url?: string;
   smtp_host?: string;
   smtp_port?: number;
   smtp_secure?: boolean;
@@ -233,7 +235,38 @@ export interface UsageSummary {
   trend: { time: number; calls: number; failed: number }[];
   bucket_ms: number;
   alerts: { server: string; type: string; value: number; threshold: number }[];
+  alert_events: AlertEvent[];
   collection: { lastProcessedAt: number; lastError: string; queued: number | null; dropped: number | null };
+}
+
+export interface AlertEvent {
+  id: number;
+  server: string;
+  type: 'error_rate' | 'slow_calls';
+  value: number;
+  threshold: number;
+  first_seen_at: number;
+  last_seen_at: number;
+  resolved_at: number | null;
+  acknowledged_at: number | null;
+  acknowledged_by: string | null;
+  notified_at: number | null;
+  notification_error: string | null;
+}
+
+export interface AlertEvent {
+  id: number;
+  server: string;
+  type: 'error_rate' | 'slow_calls';
+  value: number;
+  threshold: number;
+  first_seen_at: number;
+  last_seen_at: number;
+  resolved_at: number | null;
+  acknowledged_at: number | null;
+  acknowledged_by: string | null;
+  notified_at: number | null;
+  notification_error: string | null;
 }
 export interface UsageCall {
   id: string;

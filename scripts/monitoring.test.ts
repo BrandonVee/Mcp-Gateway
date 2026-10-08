@@ -7,6 +7,7 @@ import {
   validCallEvent,
   normalizeSystemSettings,
 } from '../packages/shared/src/index.js';
+import { alertFingerprint } from '../packages/shared/src/alerts.js';
 import { ResponseObserver, requestMetadata } from '../packages/gateway/src/response-observer.js';
 
 test('monitoring extracts only RPC metadata and never retains tool arguments', () => {
@@ -85,4 +86,16 @@ test('collection envelopes project safe fields, reject invalid values, and valid
   assert.equal(normalizeSystemSettings({ ...base, registration_enabled: 'false' }), null);
   assert.equal(normalizeSystemSettings({ ...base, monitoring_retention_days: 0 }), null);
   assert.equal(normalizeSystemSettings({ ...base, monitoring_slow_ms: 1.5 }), null);
+});
+test('alert settings and fingerprints follow normalized validation rules', () => {
+  const base = { public_url: 'https://mcp.example.test', upstream_hosts: [] };
+  const settings = normalizeSystemSettings({
+    ...base,
+    alert_email_recipients: ['ops@example.test'],
+    alert_webhook_url: 'https://hooks.example.test/alert',
+  });
+  assert.deepEqual(settings?.alert_email_recipients, ['ops@example.test']);
+  assert.equal(settings?.alert_webhook_url, 'https://hooks.example.test/alert');
+  assert.equal(normalizeSystemSettings({ ...base, alert_webhook_url: 'ftp://bad' }), null);
+  assert.equal(alertFingerprint('a', 'slow_calls'), 'a\x1fslow_calls');
 });

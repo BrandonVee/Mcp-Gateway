@@ -12,6 +12,7 @@ import {
 } from '@mcp/shared';
 import { db } from './db.js';
 import { mcpCallEvents, mcpCallMetrics, mcpEventReceipts } from './schema.js';
+import { currentActiveAlerts, evaluateAlerts } from './alert-history.js';
 
 const redis = new Redis(process.env.REDIS_URL ?? loadPlatformConfig().gateway.redisUrl, {
   maxRetriesPerRequest: 1,
@@ -185,6 +186,13 @@ export function startMonitoring() {
   setInterval(
     () => void sweepMonitoring().catch(() => console.error('[monitoring] retention sweep failed')),
     600000,
+  ).unref();
+  setInterval(
+    () =>
+      void currentActiveAlerts()
+        .then(evaluateAlerts)
+        .catch(() => console.error('[monitoring] alert evaluation failed')),
+    60000,
   ).unref();
 }
 export async function monitoringStatus() {
