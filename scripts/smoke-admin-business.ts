@@ -165,8 +165,60 @@ async function main() {
         data: { error: 'invalid_api_key' },
       });
     assert.equal((await request('/me/servers/api-key/credential', 'PUT', { api_key: 'valid-test-key' })).status, 200);
+    // A shared upstream key stays server-side and still requires an individual grant.
+    process.env.CREDENTIAL_BROKER_TOKEN = 'system-key-test-broker';
+    assert.equal((await createServer('shared', { auth_mode: 'system_api_key' })).status, 400);
+    for (const system_api_key of ['', '   ', 'key\nvalue', 'x'.repeat(4097), 42])
+      assert.equal((await createServer('shared', { auth_mode: 'system_api_key', system_api_key })).status, 400);
+    const sharedAuth = {
+      auth_mode: 'system_api_key',
+      system_api_key: 'shared-test-key',
+      api_key_header: 'x-api-key',
+      api_key_prefix: '',
+    };
+    assert.equal((await createServer('shared', sharedAuth)).status, 201);
+    const sharedDto = (await request('/admin/servers')).data.servers.find((server: any) => server.name === 'shared');
+    assert.equal(sharedDto.system_api_key_configured, true);
+    assert.ok(!Object.hasOwn(sharedDto, 'system_api_key'));
+    assert.ok(!JSON.stringify(sharedDto).includes('shared-test-key'));
+    let stored = (await db.select().from(mcpServers)).find((server) => server.name === 'shared')!;
+    assert.notEqual(stored.systemApiKey, 'shared-test-key', 'shared keys are encrypted at rest');
+    const originalSecret = stored.systemApiKey;
+    const connections = createConnectionsRouter();
+    const broker = async (authVersion = 0, authorization = 'Bearer system-key-test-broker') => {
+      const response = await connections.request(
+        `/internal/connector-credential?server=shared&user_id=${created.data.id}&auth_version=${authVersion}`,
+        { headers: { authorization } },
+      );
+      return { status: response.status, data: await response.json() };
+    };
+    assert.equal((await broker()).status, 403, 'unassigned users cannot fetch shared credentials');
+    assert.equal((await request(grants, 'PUT', { servers: ['shared'] })).status, 200);
+    assert.deepEqual(await broker(), { status: 200, data: { header: 'x-api-key', value: 'shared-test-key' } });
+    assert.equal((await broker(1)).status, 403, 'revoked user versions are denied');
+    assert.equal((await broker(0, 'Bearer incorrect')).status, 401);
+    const userToken = await createLoginSession(created.data.id, 0);
+    const personal = await connections.request('/me/servers', { headers: { cookie: `auth_session=${userToken}` } });
+    const personalDto = ((await personal.json()) as any).servers.find((server: any) => server.name === 'shared');
+    assert.equal(personalDto.connection_status, 'not_required');
+    assert.ok(!JSON.stringify(personalDto).includes('shared-test-key'));
+    assert.equal((await request('/me/servers/shared/credential', 'PUT', { api_key: 'override' })).status, 400);
+    assert.equal((await request('/admin/servers/shared', 'PATCH', { auth_mode: 'system_api_key' })).status, 200);
+    stored = (await db.select().from(mcpServers)).find((server) => server.name === 'shared')!;
+    assert.equal(stored.systemApiKey, originalSecret, 'omitted secret retains the saved key');
+    assert.equal(stored.authRevision, 0, 'unchanged settings retain their revision');
+    assert.equal(
+      (await request('/admin/servers/shared', 'PATCH', { ...sharedAuth, system_api_key: 'rotated-key' })).status,
+      200,
+    );
+    assert.deepEqual(await broker(), { status: 200, data: { header: 'x-api-key', value: 'rotated-key' } });
+    assert.equal((await request(grants, 'PUT', { servers: [] })).status, 200);
+    assert.equal((await broker()).status, 403, 'revoking access immediately blocks the shared key');
+    assert.equal((await request('/admin/servers/shared', 'PATCH', { auth_mode: 'api_key' })).status, 200);
+    stored = (await db.select().from(mcpServers)).find((server) => server.name === 'shared')!;
+    assert.equal(stored.systemApiKey, null, 'switching modes removes the shared secret');
     console.log(
-      'PASS: account validation, paused grants, duplicate instance rollback, OAuth secret retention, unchanged auth preservation, real auth revocation and API key validation',
+      'PASS: account validation, paused grants, duplicate instance rollback, OAuth secret retention, unchanged auth preservation, real auth revocation API key validation and shared system key lifecycle',
     );
   } finally {
     await pool.end();

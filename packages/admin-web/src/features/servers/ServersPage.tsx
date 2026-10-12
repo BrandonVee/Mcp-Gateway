@@ -163,9 +163,11 @@ export function ServersPage(props: ServersPageProps) {
                     <strong>
                       {server.auth_mode === 'none'
                         ? t('servers.platformSign')
-                        : server.auth_mode === 'api_key'
-                          ? t('servers.platformSignApiKey')
-                          : t('servers.platformSignOauth')}
+                        : server.auth_mode === 'system_api_key'
+                          ? t('servers.platformSignSystemApiKey')
+                          : server.auth_mode === 'api_key'
+                            ? t('servers.platformSignApiKey')
+                            : t('servers.platformSignOauth')}
                     </strong>
                   </div>
                   <Button

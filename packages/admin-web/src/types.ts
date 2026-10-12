@@ -35,9 +35,10 @@ export interface McpServer {
   description?: string;
   enabled: boolean;
   signup_access: boolean;
-  auth_mode: 'none' | 'api_key' | 'oauth';
+  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth';
   api_key_header: string;
   api_key_prefix: string;
+  system_api_key_configured?: boolean;
   oauth_authorize_url: string | null;
   oauth_token_url: string | null;
   oauth_client_id: string | null;
@@ -151,9 +152,10 @@ export interface CreateServerInput {
   description?: string;
   signup_access?: boolean;
   instances: Array<{ id?: string; url: string }>;
-  auth_mode: 'none' | 'api_key' | 'oauth';
+  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth';
   api_key_header?: string;
   api_key_prefix?: string;
+  system_api_key?: string;
   oauth_authorize_url?: string;
   oauth_token_url?: string;
   oauth_client_id?: string;
@@ -170,7 +172,7 @@ export interface ConnectionServer {
   name: string;
   display_name: string;
   description?: string;
-  auth_mode: 'none' | 'api_key' | 'oauth';
+  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth';
   connection_status: 'not_required' | 'not_connected' | 'connected' | 'expired';
 }
 

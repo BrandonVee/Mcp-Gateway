@@ -212,3 +212,22 @@ test('business errors and OAuth callback failures provide actionable localized e
     assert.equal(apiErrorMessage(400, { error: result }, 'zh-CN'), apiErrorMessage(400, {}, 'zh-CN'));
   }
 });
+
+test('system key forms send shared authentication settings and preserve omitted secrets', () => {
+  const base = {
+    name: 'shared',
+    url: 'https://upstream.test/mcp',
+    signup_access: false,
+    auth_mode: 'system_api_key' as const,
+    api_key_header: 'x-api-key',
+    api_key_prefix: '',
+  };
+  assert.deepEqual(authFields({ ...base, system_api_key: 'shared-key' }), {
+    auth_mode: 'system_api_key',
+    api_key_header: 'x-api-key',
+    api_key_prefix: '',
+    system_api_key: 'shared-key',
+  });
+  assert.equal(authFields({ ...base, system_api_key: '' }).system_api_key, undefined);
+  assert.ok(!Object.hasOwn(authFields({ ...base, auth_mode: 'none', system_api_key: 'shared-key' }), 'system_api_key'));
+});

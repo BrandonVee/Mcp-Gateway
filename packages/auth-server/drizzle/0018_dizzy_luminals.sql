@@ -1,0 +1,1 @@
+ALTER TABLE "mcp_servers" ADD COLUMN "system_api_key" text;

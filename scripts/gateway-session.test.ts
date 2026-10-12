@@ -82,10 +82,12 @@ async function fixture(t: TestContext) {
   const name = 'session-test';
   const id = 'owned-session';
   let upstreamRequests = 0;
+  let upstreamAuthorization: string | undefined;
   let status = 200;
   const streams = new Set<ServerResponse>();
   const upstream = createServer(async (req, res) => {
     upstreamRequests++;
+    upstreamAuthorization = req.headers.authorization;
     if (req.method === 'GET') {
       res.writeHead(200, { 'content-type': 'text/event-stream' });
       res.write(': connected\n\n');
@@ -167,6 +169,7 @@ async function fixture(t: TestContext) {
       authVersion = version;
     },
     requests: () => upstreamRequests,
+    authorization: () => upstreamAuthorization,
     status: (code: number) => {
       status = code;
     },
@@ -205,7 +208,7 @@ test('Gateway preserves owned sessions without an echoed response header', async
 test('Gateway sends the verified token revision to both internal authorization checks', async (t) => {
   const f = await fixture(t);
   f.authVersion(7);
-  for (const mode of ['none', 'api_key', 'oauth'] as const) {
+  for (const mode of ['none', 'api_key', 'system_api_key', 'oauth'] as const) {
     serverConfigs.get(f.name)!.authMode = mode;
     const response = await f.app.inject({
       method: 'POST',
@@ -311,4 +314,17 @@ test('Gateway renews a long SSE session only while its response remains active',
   assert.equal(f.store.touches, touches, 'closing the downstream stream stops renewal');
   assert.equal(await f.store.get(f.owner), null, 'an inactive session can expire normally');
   t.mock.timers.reset();
+});
+
+test('system API keys are injected upstream and rejected keys require administrator repair', async (t) => {
+  const f = await fixture(t);
+  serverConfigs.get(f.name)!.authMode = 'system_api_key';
+  assert.equal((await f.rpc('initialize')).statusCode, 200);
+  assert.equal(f.authorization(), 'Bearer isolated-upstream-token');
+  for (const status of [401, 403]) {
+    f.status(status);
+    const response = await f.rpc();
+    assert.equal(response.statusCode, 503);
+    assert.deepEqual(response.json(), { error: 'system_credential_rejected', server: f.name });
+  }
 });

@@ -699,6 +699,12 @@ export const messages = {
   'serverDialog.enterValidHttpHttpsUrl': 'Enter a valid HTTP/HTTPS URL',
   'serverDialog.userConnectionMethod': 'User connection method',
   'serverDialog.noAdditionalAuth': 'No additional auth',
+  'serverDialog.systemApiKey': 'System API key',
+  'serverDialog.enterSystemApiKey': 'Enter a system API key',
+  'serverDialog.keepSystemApiKey': 'Leave blank to keep the current key',
+  'serverDialog.systemApiKeyHelp':
+    'Managed by administrators. Authorized users can use this service without receiving the upstream key.',
+  'servers.platformSignSystemApiKey': 'Platform authentication + system API key',
   'serverDialog.userApiKey': 'User API key',
   'serverDialog.userOauth': 'User OAuth',
   'serverDialog.upstreamHeader': 'Upstream header',

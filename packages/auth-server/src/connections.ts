@@ -128,6 +128,10 @@ async function resolveCredential(
   return db.transaction(async (tx) => {
     const server = await lockAccessibleConnection(tx, userId, snapshot.name, snapshot.authRevision, authVersion);
     if (!server || server.authMode === 'none') return null;
+    if (server.authMode === 'system_api_key')
+      return server.systemApiKey
+        ? { header: server.apiKeyHeader, value: `${server.apiKeyPrefix}${decryptCredential(server.systemApiKey)}` }
+        : null;
     const [row] = await tx
       .select()
       .from(userMcpCredentials)
@@ -468,7 +472,7 @@ export function createConnectionsRouter(): Hono {
             description: server.description,
             auth_mode: server.authMode,
             connection_status:
-              server.authMode === 'none'
+              server.authMode === 'none' || server.authMode === 'system_api_key'
                 ? 'not_required'
                 : !credential || credential.mode !== server.authMode
                   ? 'not_connected'

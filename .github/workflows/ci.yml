@@ -121,6 +121,8 @@ jobs:
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5173/gateway/mcp/demo)" = 404
       - name: Verify account lifecycle and last-administrator protection
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-auth-lifecycle.ts
+      - name: Verify admin workflows and shared system API keys
+        run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-admin-business.ts
       - name: Verify upstream OAuth lifecycle and revocation races
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-oauth-lifecycle.ts
       # The broader smoke test deliberately exhausts /register's shared IP

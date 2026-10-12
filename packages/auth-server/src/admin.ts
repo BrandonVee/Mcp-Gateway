@@ -133,10 +133,10 @@ function authSettings(
   existing?: typeof mcpServers.$inferSelect,
 ): { values?: Partial<typeof mcpServers.$inferInsert>; error?: string } {
   const mode = body.auth_mode ?? 'none';
-  if (mode !== 'none' && mode !== 'api_key' && mode !== 'oauth')
-    return { error: 'auth_mode must be none, api_key or oauth' };
+  if (mode !== 'none' && mode !== 'api_key' && mode !== 'system_api_key' && mode !== 'oauth')
+    return { error: 'auth_mode must be none, api_key, system_api_key or oauth' };
   const values: Partial<typeof mcpServers.$inferInsert> = { authMode: mode };
-  if (mode !== 'api_key') {
+  if (mode !== 'api_key' && mode !== 'system_api_key') {
     values.apiKeyHeader = 'authorization';
     values.apiKeyPrefix = 'Bearer ';
   }
@@ -150,15 +150,34 @@ function authSettings(
     values.oauthIssuer = null;
     values.oauthClientAuthMethod = 'none';
   }
-  if (mode === 'api_key') {
-    const header = body.api_key_header ?? (existing?.authMode === 'api_key' ? existing.apiKeyHeader : 'authorization');
-    const prefix = body.api_key_prefix ?? (existing?.authMode === 'api_key' ? existing.apiKeyPrefix : 'Bearer ');
+  if (mode === 'api_key' || mode === 'system_api_key') {
+    const header =
+      body.api_key_header ??
+      (existing?.authMode === 'api_key' || existing?.authMode === 'system_api_key'
+        ? existing.apiKeyHeader
+        : 'authorization');
+    const prefix =
+      body.api_key_prefix ??
+      (existing?.authMode === 'api_key' || existing?.authMode === 'system_api_key' ? existing.apiKeyPrefix : 'Bearer ');
     if (typeof header !== 'string' || !/^(authorization|x-[a-z0-9-]{1,60})$/i.test(header))
       return { error: 'api_key_header must be authorization or an x-* header' };
     if (typeof prefix !== 'string' || prefix.length > 100 || /[\x00-\x1f\x7f]/.test(prefix))
       return { error: 'invalid api_key_prefix' };
     values.apiKeyHeader = header.toLowerCase();
     values.apiKeyPrefix = prefix;
+  }
+  if (mode === 'system_api_key') {
+    const key = body.system_api_key;
+    if (
+      key !== undefined &&
+      (typeof key !== 'string' || !key.trim() || key.length > 4096 || /[\x00-\x1f\x7f]/.test(key))
+    )
+      return { error: 'invalid_api_key' };
+    if (key === undefined && (existing?.authMode !== 'system_api_key' || !existing.systemApiKey))
+      return { error: 'system_api_key is required' };
+    values.systemApiKey = typeof key === 'string' ? encryptCredential(key) : existing!.systemApiKey;
+  } else {
+    values.systemApiKey = null;
   }
   if (mode === 'oauth') {
     const authorizeUrl = body.oauth_authorize_url ?? existing?.oauthAuthorizeUrl;
@@ -968,6 +987,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         authMode: mcpServers.authMode,
         apiKeyHeader: mcpServers.apiKeyHeader,
         apiKeyPrefix: mcpServers.apiKeyPrefix,
+        systemApiKeyConfigured: sql<boolean>`${mcpServers.systemApiKey} IS NOT NULL`,
         oauthAuthorizeUrl: mcpServers.oauthAuthorizeUrl,
         oauthTokenUrl: mcpServers.oauthTokenUrl,
         oauthClientId: mcpServers.oauthClientId,
@@ -999,6 +1019,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
           auth_mode: row.authMode,
           api_key_header: row.apiKeyHeader,
           api_key_prefix: row.apiKeyPrefix,
+          system_api_key_configured: row.systemApiKeyConfigured,
           oauth_authorize_url: row.oauthAuthorizeUrl,
           oauth_token_url: row.oauthTokenUrl,
           oauth_client_id: row.oauthClientId,
@@ -1184,7 +1205,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
           credentialsChanged = Boolean(
             auth.values &&
             (existing.authMode !== auth.values.authMode ||
-              (auth.values.authMode === 'api_key' &&
+              existing.systemApiKey !== auth.values.systemApiKey ||
+              ((auth.values.authMode === 'api_key' || auth.values.authMode === 'system_api_key') &&
                 (existing.apiKeyHeader !== auth.values.apiKeyHeader ||
                   existing.apiKeyPrefix !== auth.values.apiKeyPrefix)) ||
               (auth.values.authMode === 'oauth' &&

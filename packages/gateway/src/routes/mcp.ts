@@ -96,6 +96,10 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
         signal: AbortSignal.timeout(10_000),
       });
       if (result.status === 409) {
+        if (cfg.authMode === 'system_api_key') {
+          await reply.code(503).send({ error: 'system_credential_unavailable', server: serverName });
+          return;
+        }
         await reply
           .code(409)
           .send({ error: 'connection_required', server: serverName, connect_url: env.connectionsWebUrl });
@@ -245,6 +249,10 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
 
       if (cfg.authMode !== 'none' && (upstream.statusCode === 401 || upstream.statusCode === 403)) {
         await upstream.body.dump();
+        if (cfg.authMode === 'system_api_key') {
+          await reply.code(503).send({ error: 'system_credential_rejected', server: serverName });
+          return;
+        }
         await reply
           .code(409)
           .send({ error: 'upstream_credential_rejected', server: serverName, connect_url: env.connectionsWebUrl });

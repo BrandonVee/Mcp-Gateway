@@ -67,7 +67,7 @@ export async function refreshServerConfigs(): Promise<void> {
       system_settings?: SystemSettings;
       servers?: Array<{
         name: string;
-        authMode?: 'none' | 'api_key' | 'oauth';
+        authMode?: 'none' | 'api_key' | 'system_api_key' | 'oauth';
         instances: Array<{ id: string; url: string }>;
       }>;
     };
@@ -91,7 +91,7 @@ export async function refreshServerConfigs(): Promise<void> {
         return url ? [url] : [];
       });
       if (!instances.length) continue;
-      if (server.authMode && !['none', 'api_key', 'oauth'].includes(server.authMode))
+      if (server.authMode && !['none', 'api_key', 'system_api_key', 'oauth'].includes(server.authMode))
         throw new Error(`invalid auth mode for ${server.name}`);
       next.set(server.name, { name: server.name, authMode: server.authMode ?? 'none', instances });
     }

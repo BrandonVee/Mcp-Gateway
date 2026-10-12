@@ -51,11 +51,17 @@ export function ConnectionsAdminPage({ users, servers, connections, busy, onRevo
         const key = `${user.id}:${server.name}`;
         const credential = byKey.get(key);
         const hasAccess = user.role === 'admin' || user.servers.includes('*') || user.servers.includes(server.name);
-        if ((!hasAccess || server.auth_mode === 'none') && !credential) continue;
+        if ((!hasAccess || server.auth_mode === 'none' || server.auth_mode === 'system_api_key') && !credential)
+          continue;
         let status: ConnectionStatus;
         if (user.disabled) status = 'disabled';
         else if (!server.enabled) status = 'paused';
-        else if (!hasAccess || server.auth_mode === 'none' || (credential && credential.mode !== server.auth_mode))
+        else if (
+          !hasAccess ||
+          server.auth_mode === 'none' ||
+          server.auth_mode === 'system_api_key' ||
+          (credential && credential.mode !== server.auth_mode)
+        )
           status = 'stale';
         else if (!credential) status = 'pending';
         else if (credential.expires_at && credential.expires_at <= Date.now() && !credential.has_refresh_token)
@@ -113,9 +119,11 @@ export function ConnectionsAdminPage({ users, servers, connections, busy, onRevo
         >
           {row.server.auth_mode === 'oauth'
             ? 'OAuth'
-            : row.server.auth_mode === 'api_key'
-              ? t('connections.modeApiKey')
-              : t('connectionsAdmin.noAuthRequired')}
+            : row.server.auth_mode === 'system_api_key'
+              ? t('serverDialog.systemApiKey')
+              : row.server.auth_mode === 'api_key'
+                ? t('connections.modeApiKey')
+                : t('connectionsAdmin.noAuthRequired')}
         </Tag>
       ),
     },

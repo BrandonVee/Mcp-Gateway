@@ -52,9 +52,10 @@ interface ServerFormValues {
   signup_access: boolean;
   instanceId?: string;
   url: string;
-  auth_mode: 'none' | 'api_key' | 'oauth';
+  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth';
   api_key_header?: string;
   api_key_prefix?: string;
+  system_api_key?: string;
   oauth_authorize_url?: string;
   oauth_token_url?: string;
   oauth_client_id?: string;
@@ -405,9 +406,10 @@ function EditInstanceDialog({
 export function authFields(values: ServerFormValues): ServerAuthInput {
   return {
     auth_mode: values.auth_mode,
-    ...(values.auth_mode === 'api_key'
+    ...(values.auth_mode === 'api_key' || values.auth_mode === 'system_api_key'
       ? { api_key_header: values.api_key_header, api_key_prefix: values.api_key_prefix }
       : {}),
+    ...(values.auth_mode === 'system_api_key' ? { system_api_key: values.system_api_key || undefined } : {}),
     ...(values.auth_mode === 'oauth'
       ? {
           oauth_authorize_url: values.oauth_authorize_url?.trim(),
@@ -433,13 +435,14 @@ function AuthFormFields({ server }: { server?: McpServer } = {}) {
           options={[
             { value: 'none', label: t('serverDialog.noAdditionalAuth') },
             { value: 'api_key', label: t('serverDialog.userApiKey') },
+            { value: 'system_api_key', label: t('serverDialog.systemApiKey') },
             { value: 'oauth', label: t('serverDialog.userOauth') },
           ]}
         />
       </Form.Item>
       <Form.Item noStyle shouldUpdate={(prev, next) => prev.auth_mode !== next.auth_mode}>
         {({ getFieldValue }) =>
-          getFieldValue('auth_mode') === 'api_key' ? (
+          ['api_key', 'system_api_key'].includes(getFieldValue('auth_mode')) ? (
             <>
               <Form.Item
                 name="api_key_header"
@@ -464,7 +467,30 @@ function AuthFormFields({ server }: { server?: McpServer } = {}) {
               >
                 <Input placeholder={t('serverDialog.bearerOptional')} />
               </Form.Item>
-              <Alert type="info" showIcon message={t('serverDialog.usersEnterOwnKeyConnections')} />
+              {getFieldValue('auth_mode') === 'system_api_key' ? (
+                <>
+                  <Form.Item
+                    name="system_api_key"
+                    label={t('serverDialog.systemApiKey')}
+                    rules={[
+                      { required: !server?.system_api_key_configured, message: t('serverDialog.enterSystemApiKey') },
+                      validationRule(
+                        (value) => value.length <= 4096 && !/[\x00-\x1f\x7f]/.test(value) && Boolean(value.trim()),
+                        t('api.invalidApiKey'),
+                        true,
+                      ),
+                    ]}
+                  >
+                    <Input.Password
+                      autoComplete="new-password"
+                      placeholder={server?.system_api_key_configured ? t('serverDialog.keepSystemApiKey') : undefined}
+                    />
+                  </Form.Item>
+                  <Alert type="info" showIcon message={t('serverDialog.systemApiKeyHelp')} />
+                </>
+              ) : (
+                <Alert type="info" showIcon message={t('serverDialog.usersEnterOwnKeyConnections')} />
+              )}
             </>
           ) : getFieldValue('auth_mode') === 'oauth' ? (
             <>

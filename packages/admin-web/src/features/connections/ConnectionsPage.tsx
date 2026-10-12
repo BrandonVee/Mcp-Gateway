@@ -286,11 +286,13 @@ export function ConnectionsPage({
                   <div className="connection-bottom">
                     <span>
                       {t(
-                        server.auth_mode === 'api_key'
-                          ? 'connections.modeApiKey'
-                          : server.auth_mode === 'oauth'
-                            ? 'connections.modeOAuth'
-                            : 'connections.modePlatform',
+                        server.auth_mode === 'system_api_key'
+                          ? 'serverDialog.systemApiKey'
+                          : server.auth_mode === 'api_key'
+                            ? 'connections.modeApiKey'
+                            : server.auth_mode === 'oauth'
+                              ? 'connections.modeOAuth'
+                              : 'connections.modePlatform',
                       )}
                     </span>
                     <Button icon={<CopyOutlined />} onClick={() => copyMcpConfig([server])}>
