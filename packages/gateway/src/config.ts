@@ -67,7 +67,8 @@ export async function refreshServerConfigs(): Promise<void> {
       system_settings?: SystemSettings;
       servers?: Array<{
         name: string;
-        authMode?: 'none' | 'api_key' | 'system_api_key' | 'oauth';
+        authMode?: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
+        upstreams?: McpServerConfig['upstreams'];
         instances: Array<{ id: string; url: string }>;
       }>;
     };
@@ -91,9 +92,20 @@ export async function refreshServerConfigs(): Promise<void> {
         return url ? [url] : [];
       });
       if (!instances.length) continue;
-      if (server.authMode && !['none', 'api_key', 'system_api_key', 'oauth'].includes(server.authMode))
+      if (server.authMode && !['none', 'api_key', 'system_api_key', 'oauth', 'system_oauth'].includes(server.authMode))
         throw new Error(`invalid auth mode for ${server.name}`);
-      next.set(server.name, { name: server.name, authMode: server.authMode ?? 'none', instances });
+      const upstreams = server.upstreams?.flatMap((upstream) => {
+        const url = normalizeUpstreamEndpoint(upstream.url);
+        if (!upstream.id || !['none', 'api_key', 'system_api_key', 'oauth', 'system_oauth'].includes(upstream.authMode))
+          throw new Error('invalid upstream');
+        return url ? [{ ...upstream, url }] : [];
+      });
+      next.set(server.name, {
+        name: server.name,
+        authMode: server.authMode ?? 'none',
+        instances,
+        ...(upstreams ? { upstreams } : {}),
+      });
     }
     serverConfigs.clear();
     for (const [name, server] of next) serverConfigs.set(name, server);

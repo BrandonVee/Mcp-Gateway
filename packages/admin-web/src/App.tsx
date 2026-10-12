@@ -342,6 +342,14 @@ function ControlPlane({
               onEdit={(server) => setDialog({ type: 'edit-server', server })}
               onEditInstance={(server, instance) => setDialog({ type: 'edit-instance', server, instance })}
               onAddInstance={(server) => setDialog({ type: 'add-instance', server })}
+              onSystemOAuth={(instance) => {
+                void controlPlane.api
+                  .startOAuth(instance.id)
+                  .then((result) => window.location.assign(result.authorization_url))
+                  .catch((error) =>
+                    message.error(error instanceof Error ? error.message : t('common.operationFailed')),
+                  );
+              }}
               onConfigureAuth={(server) => setDialog({ type: 'configure-server-auth', server })}
               onConfigureUsers={(server) => setDialog({ type: 'configure-server-users', server })}
               onToggle={(server) =>
@@ -408,7 +416,7 @@ function ControlPlane({
                   onOk: () =>
                     confirmResult(
                       execute(
-                        () => controlPlane.api.revokeConnection(user.id, server.name),
+                        () => controlPlane.api.revokeConnection(user.id, server.name, server.upstream_id),
                         t('app.connectionRevoked'),
                       ),
                     ),

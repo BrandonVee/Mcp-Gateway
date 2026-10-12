@@ -123,6 +123,10 @@ jobs:
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-auth-lifecycle.ts
       - name: Verify admin workflows and shared system API keys
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-admin-business.ts
+      - name: Verify grouped upstream authentication, aggregation and migration
+        run: |
+          DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-upstream-groups.ts
+          DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp pnpm exec tsx scripts/smoke-upstream-migration.ts
       - name: Verify upstream OAuth lifecycle and revocation races
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-oauth-lifecycle.ts
       # The broader smoke test deliberately exhausts /register's shared IP

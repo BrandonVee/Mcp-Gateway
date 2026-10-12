@@ -15,6 +15,7 @@ import {
   refreshTokens,
   signupEmailCodes,
   userServerAccess,
+  upstreamOAuthStates,
   users,
 } from './schema.js';
 import * as schema from './schema.js';
@@ -64,6 +65,7 @@ export async function revokeUserAuthentication(tx: AuthTransaction, userId: numb
   await tx.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
   await tx.delete(authCodes).where(eq(authCodes.userId, userId));
   await tx.delete(oauthConnectionStates).where(eq(oauthConnectionStates.userId, userId));
+  await tx.delete(upstreamOAuthStates).where(eq(upstreamOAuthStates.userId, userId));
 }
 
 /** Apply checked-in Drizzle migrations before serving traffic. */

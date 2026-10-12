@@ -106,12 +106,16 @@ export const loginSessions = pgTable('login_sessions', {
 });
 
 export const mcpServers = pgTable('mcp_servers', {
+  routingMode: text('routing_mode').$type<'pool' | 'aggregate'>().notNull().default('aggregate'),
   name: text('name').primaryKey(),
   displayName: text('display_name').notNull(),
   description: text('description').notNull().default(''),
   enabled: boolean('enabled').notNull().default(true),
   signupAccess: boolean('signup_access').notNull().default(false),
-  authMode: text('auth_mode').$type<'none' | 'api_key' | 'system_api_key' | 'oauth'>().notNull().default('none'),
+  authMode: text('auth_mode')
+    .$type<'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth'>()
+    .notNull()
+    .default('none'),
   authRevision: bigint('auth_revision', { mode: 'number' }).notNull().default(0),
   apiKeyHeader: text('api_key_header').notNull().default('authorization'),
   apiKeyPrefix: text('api_key_prefix').notNull().default('Bearer '),
@@ -174,6 +178,26 @@ export const mcpServerInstances = pgTable(
       .notNull()
       .references(() => mcpServers.name, { onDelete: 'cascade', onUpdate: 'cascade' }),
     url: text('url').notNull(),
+    displayName: text('display_name').notNull().default(''),
+    authMode: text('auth_mode')
+      .$type<'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth'>()
+      .notNull()
+      .default('none'),
+    authRevision: bigint('auth_revision', { mode: 'number' }).notNull().default(0),
+    apiKeyHeader: text('api_key_header').notNull().default('authorization'),
+    apiKeyPrefix: text('api_key_prefix').notNull().default('Bearer '),
+    systemApiKey: text('system_api_key'),
+    oauthAuthorizeUrl: text('oauth_authorize_url'),
+    oauthTokenUrl: text('oauth_token_url'),
+    oauthClientId: text('oauth_client_id'),
+    oauthClientSecret: text('oauth_client_secret'),
+    oauthScopes: text('oauth_scopes'),
+    oauthResource: text('oauth_resource'),
+    oauthIssuer: text('oauth_issuer'),
+    oauthClientAuthMethod: text('oauth_client_auth_method')
+      .$type<'none' | 'client_secret_basic' | 'client_secret_post'>()
+      .notNull()
+      .default('none'),
     enabled: boolean('enabled').notNull().default(true),
     createdAt: epoch('created_at'),
     updatedAt: epoch('updated_at'),
@@ -182,6 +206,43 @@ export const mcpServerInstances = pgTable(
     index('idx_mcp_instance_server').on(table.serverName),
     uniqueIndex('uq_mcp_instance_server_url').on(table.serverName, table.url),
   ],
+);
+
+/** Credentials belong to a concrete upstream, never to the endpoint group. */
+export const upstreamCredentials = pgTable(
+  'upstream_credentials',
+  {
+    instanceId: text('instance_id')
+      .notNull()
+      .references(() => mcpServerInstances.id, { onDelete: 'cascade' }),
+    owner: text('owner').notNull(), // "system" or "user:<id>"
+    userId: bigint('user_id', { mode: 'number' }).references(() => users.id, { onDelete: 'cascade' }),
+    mode: text('mode').$type<'api_key' | 'oauth'>().notNull(),
+    secret: text('secret').notNull(),
+    refreshSecret: text('refresh_secret'),
+    expiresAt: bigint('expires_at', { mode: 'number' }),
+    updatedAt: epoch('updated_at'),
+  },
+  (table) => [primaryKey({ columns: [table.instanceId, table.owner] })],
+);
+
+export const upstreamOAuthStates = pgTable(
+  'upstream_oauth_states',
+  {
+    state: text('state').primaryKey(),
+    instanceId: text('instance_id')
+      .notNull()
+      .references(() => mcpServerInstances.id, { onDelete: 'cascade' }),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    system: boolean('system').notNull().default(false),
+    exchanging: boolean('exchanging').notNull().default(false),
+    verifier: text('verifier').notNull(),
+    authRevision: bigint('auth_revision', { mode: 'number' }).notNull(),
+    expiresAt: epoch('expires_at'),
+  },
+  (table) => [index('idx_upstream_oauth_state_expiry').on(table.expiresAt)],
 );
 
 export const userServerAccess = pgTable(

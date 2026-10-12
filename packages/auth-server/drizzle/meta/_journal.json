@@ -134,6 +134,20 @@
       "when": 1791816836277,
       "tag": "0018_dizzy_luminals",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791820470483,
+      "tag": "0019_quiet_shadowcat",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791820684620,
+      "tag": "0020_white_steel_serpent",
+      "breakpoints": true
     }
   ]
 }

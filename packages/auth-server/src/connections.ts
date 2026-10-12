@@ -1,3 +1,4 @@
+import { createUpstreamConnectionsRouter } from './upstream-connections.js';
 import { listMonitoringCalls } from './monitoring-api.js';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
@@ -45,7 +46,7 @@ type User = {
   emailVerified: boolean;
 };
 
-async function currentUser(c: Context): Promise<User | null> {
+export async function currentUser(c: Context): Promise<User | null> {
   const token = getCookie(c, cookieName);
   const session = token ? await getSessionUser(token) : null;
   if (!session) return null;
@@ -95,7 +96,7 @@ async function accessibleServer(
   return grant ? server : null;
 }
 
-function internalTokenMatches(header: string | undefined): boolean {
+export function internalTokenMatches(header: string | undefined): boolean {
   if (!header?.startsWith('Bearer ')) return false;
   if (!process.env.CREDENTIAL_BROKER_TOKEN) return false;
   const actual = Buffer.from(header.slice(7).trim());
@@ -691,5 +692,6 @@ export function createConnectionsRouter(): Hono {
     return credential ? c.json(credential) : c.json({ error: 'connection_required' }, 409);
   });
 
+  router.route('/', createUpstreamConnectionsRouter());
   return router;
 }

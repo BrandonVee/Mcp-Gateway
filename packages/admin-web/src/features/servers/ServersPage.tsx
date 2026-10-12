@@ -47,6 +47,7 @@ interface ServersPageProps {
   onEditInstance: (server: McpServer, instance: McpInstance) => void;
   onAddInstance: (server: McpServer) => void;
   onConfigureAuth: (server: McpServer) => void;
+  onSystemOAuth: (instance: McpInstance) => void;
   onConfigureUsers: (server: McpServer) => void;
   onToggle: (server: McpServer) => void;
   onToggleInstance: (server: McpServer, instance: McpInstance) => void;
@@ -159,25 +160,6 @@ export function ServersPage(props: ServersPageProps) {
                   )}
                 <div className="server-policy">
                   <div>
-                    <small>{t('users.userSign')}</small>
-                    <strong>
-                      {server.auth_mode === 'none'
-                        ? t('servers.platformSign')
-                        : server.auth_mode === 'system_api_key'
-                          ? t('servers.platformSignSystemApiKey')
-                          : server.auth_mode === 'api_key'
-                            ? t('servers.platformSignApiKey')
-                            : t('servers.platformSignOauth')}
-                    </strong>
-                  </div>
-                  <Button
-                    disabled={props.busy}
-                    icon={<SafetyCertificateOutlined />}
-                    onClick={() => props.onConfigureAuth(server)}
-                  >
-                    {t('servers.configureAuth')}
-                  </Button>
-                  <div>
                     <small>{t('servers.accessGrants')}</small>
                     <strong>{t('servers.countUsers', { count: server.user_count })}</strong>
                     {server.signup_access && <Tag color="blue">{t('servers.signupAccess')}</Tag>}
@@ -196,7 +178,7 @@ export function ServersPage(props: ServersPageProps) {
                           <div className="instance-copy">
                             <Flex align="center" gap={8}>
                               <Badge status={!instance.enabled ? 'default' : blockedHost ? 'warning' : 'success'} />
-                              <strong title={instance.id}>{instance.id}</strong>
+                              <strong title={instance.id}>{instance.display_name || instance.id}</strong>
                               <Tag bordered={false} color={blockedHost && instance.enabled ? 'warning' : undefined}>
                                 {t(
                                   !instance.enabled
@@ -208,6 +190,28 @@ export function ServersPage(props: ServersPageProps) {
                               </Tag>
                             </Flex>
                             <Typography.Text>{instance.url}</Typography.Text>
+                            <Tag>
+                              {t(
+                                instance.auth_mode === 'system_api_key'
+                                  ? 'serverDialog.systemApiKey'
+                                  : instance.auth_mode === 'system_oauth'
+                                    ? 'serverDialog.systemOauth'
+                                    : instance.auth_mode === 'api_key'
+                                      ? 'serverDialog.userApiKey'
+                                      : instance.auth_mode === 'oauth'
+                                        ? 'serverDialog.userOauth'
+                                        : 'serverDialog.noAdditionalAuth',
+                              )}
+                            </Tag>
+                            {instance.auth_mode === 'system_oauth' && (
+                              <Button type="link" onClick={() => props.onSystemOAuth(instance)}>
+                                {t(
+                                  instance.system_oauth_connected
+                                    ? 'connections.reauthorize'
+                                    : 'connections.connectAccount',
+                                )}
+                              </Button>
+                            )}
                             {blockedHost && (
                               <div>
                                 <Typography.Text type="warning">

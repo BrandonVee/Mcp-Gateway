@@ -13,6 +13,7 @@ import type {
   AuthHealth,
   ConnectionServer,
   CreateServerInput,
+  AddInstanceInput,
   GatewayHealth,
   McpServer,
   ServerAuthInput,
@@ -46,7 +47,7 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     'display_name must be a non-empty string': 'serverDialog.enterDisplayName',
     'display_name must be a string': 'serverDialog.enterDisplayName',
     'system_api_key is required': 'serverDialog.enterSystemApiKey',
-    'auth_mode must be none, api_key, system_api_key or oauth': 'api.invalidAuthMode',
+    'auth_mode must be none, api_key, system_api_key, oauth or system_oauth': 'api.invalidAuthMode',
     'api_key_header must be authorization or an x-* header': 'api.invalidKeyHeader',
     'invalid api_key_prefix': 'api.invalidKeyPrefix',
     'valid OAuth authorize and token URLs are required': 'api.invalidOAuthUrl',
@@ -58,6 +59,7 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     'invalid oauth_scopes': 'api.invalidOAuthScopes',
     'invalid oauth_resource': 'api.invalidOAuthResource',
     'invalid oauth_issuer': 'api.invalidOAuthIssuer',
+    upstream_auth_required: 'api.upstreamAuthRequired',
     invalid_api_key: 'api.invalidApiKey',
     server_does_not_use_api_key: 'api.serverAuthChanged',
     oauth_not_configured: 'api.oauthNotConfigured',
@@ -261,8 +263,13 @@ export function apiForSession(session?: PlatformSession) {
         body: JSON.stringify({ servers }),
       }),
     adminConnections: () => request<{ connections: AdminConnection[] }>('/api/admin/connections'),
-    revokeConnection: (userId: number, serverName: string) =>
-      request(`/api/admin/connections/${userId}/${encodeURIComponent(serverName)}`, { method: 'DELETE' }),
+    revokeConnection: (userId: number, serverName: string, upstreamId?: string) =>
+      request(
+        upstreamId
+          ? `/api/admin/upstream-connections/${userId}/${encodeURIComponent(upstreamId)}`
+          : `/api/admin/connections/${userId}/${encodeURIComponent(serverName)}`,
+        { method: 'DELETE' },
+      ),
     servers: () => request<{ servers: McpServer[] }>('/api/admin/servers'),
     testUpstream: (url: string, signal?: AbortSignal) =>
       request<UpstreamTestResult>('/api/admin/servers/test-connection', {
@@ -278,7 +285,14 @@ export function apiForSession(session?: PlatformSession) {
     updateServer: (
       name: string,
       body:
-        | { name?: string; display_name?: string; description?: string; enabled?: boolean; signup_access?: boolean }
+        | {
+            name?: string;
+            display_name?: string;
+            description?: string;
+            enabled?: boolean;
+            signup_access?: boolean;
+            routing_mode?: 'pool' | 'aggregate';
+          }
         | ServerAuthInput,
     ) =>
       request(`/api/admin/servers/${encodeURIComponent(name)}`, {
@@ -294,12 +308,12 @@ export function apiForSession(session?: PlatformSession) {
         method: 'PUT',
         body: JSON.stringify({ user_ids: userIds, signup_access: signupAccess }),
       }),
-    addInstance: (name: string, body: { id?: string; url: string }) =>
+    addInstance: (name: string, body: AddInstanceInput) =>
       request(`/api/admin/servers/${encodeURIComponent(name)}/instances`, {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    updateInstance: (name: string, id: string, body: { url?: string; enabled?: boolean }) =>
+    updateInstance: (name: string, id: string, body: Partial<AddInstanceInput> & { enabled?: boolean }) =>
       request(`/api/admin/servers/${encodeURIComponent(name)}/instances/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: JSON.stringify(body),
@@ -341,16 +355,25 @@ export function apiForSession(session?: PlatformSession) {
       }),
     signupSendCode: (email: string) =>
       request<{ ok: boolean }>('/api/me/signup/send-code', { method: 'POST', body: JSON.stringify({ email }) }),
-    myServers: () => request<{ servers: ConnectionServer[] }>('/api/me/servers'),
+    myServers: () => request<{ servers: ConnectionServer[] }>('/api/me/upstreams'),
     saveApiKey: (name: string, apiKey: string) =>
-      request(`/api/me/servers/${encodeURIComponent(name)}/credential`, {
-        method: 'PUT',
-        body: JSON.stringify({ api_key: apiKey }),
-      }),
+      request(
+        `${name.startsWith('endpoint:') ? '/api/me/servers/' + encodeURIComponent(name.slice(9)) : '/api/me/upstreams/' + encodeURIComponent(name)}/credential`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ api_key: apiKey }),
+        },
+      ),
     removeCredential: (name: string) =>
-      request(`/api/me/servers/${encodeURIComponent(name)}/credential`, { method: 'DELETE' }),
+      request(
+        `${name.startsWith('endpoint:') ? '/api/me/servers/' + encodeURIComponent(name.slice(9)) : '/api/me/upstreams/' + encodeURIComponent(name)}/credential`,
+        { method: 'DELETE' },
+      ),
     startOAuth: (name: string) =>
-      request<{ authorization_url: string }>(`/api/me/servers/${encodeURIComponent(name)}/oauth`, { method: 'POST' }),
+      request<{ authorization_url: string }>(
+        `${name.startsWith('endpoint:') ? '/api/me/servers/' + encodeURIComponent(name.slice(9)) : '/api/me/upstreams/' + encodeURIComponent(name)}/oauth`,
+        { method: 'POST' },
+      ),
   };
 }
 

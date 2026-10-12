@@ -44,14 +44,31 @@ export function ConnectionsAdminPage({ users, servers, connections, busy, onRevo
   const [filter, setFilter] = useState<'all' | ConnectionStatus>('all');
 
   const rows = useMemo(() => {
-    const byKey = new Map(connections.map((item) => [`${item.user_id}:${item.server_name}`, item]));
+    const byKey = new Map(connections.map((item) => [`${item.user_id}:${item.upstream_id ?? item.server_name}`, item]));
     const result: ConnectionRow[] = [];
     for (const user of users) {
-      for (const server of servers) {
-        const key = `${user.id}:${server.name}`;
+      const targets = servers.flatMap((parent) =>
+        parent.routing_mode === 'aggregate'
+          ? parent.instances.map((instance) => ({
+              ...parent,
+              upstream_id: instance.id,
+              display_name: `${parent.display_name} / ${instance.display_name || instance.id}`,
+              auth_mode: instance.auth_mode ?? ('none' as const),
+              enabled: parent.enabled && instance.enabled,
+            }))
+          : [parent],
+      );
+      for (const server of targets) {
+        const key = `${user.id}:${server.upstream_id ?? server.name}`;
         const credential = byKey.get(key);
         const hasAccess = user.role === 'admin' || user.servers.includes('*') || user.servers.includes(server.name);
-        if ((!hasAccess || server.auth_mode === 'none' || server.auth_mode === 'system_api_key') && !credential)
+        if (
+          (!hasAccess ||
+            server.auth_mode === 'none' ||
+            server.auth_mode === 'system_api_key' ||
+            server.auth_mode === 'system_oauth') &&
+          !credential
+        )
           continue;
         let status: ConnectionStatus;
         if (user.disabled) status = 'disabled';

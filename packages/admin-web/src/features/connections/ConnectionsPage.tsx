@@ -268,6 +268,9 @@ export function ConnectionsPage({
                     </Tag>
                   </div>
                   <h2>{server.display_name}</h2>
+                  {server.endpoint_display_name && (
+                    <Typography.Text type="secondary">{server.endpoint_display_name}</Typography.Text>
+                  )}
                   <dl className="connection-details">
                     <div>
                       <dt>{t('connections.serverName')}</dt>
@@ -278,7 +281,11 @@ export function ConnectionsPage({
                     <div>
                       <dt>{t('connections.mcpUrl')}</dt>
                       <dd>
-                        <code>{resource ? mcpServerUrl(server.name, resource) : t('connections.urlUnavailable')}</code>
+                        <code>
+                          {resource
+                            ? mcpServerUrl(server.endpoint_name ?? server.name, resource)
+                            : t('connections.urlUnavailable')}
+                        </code>
                       </dd>
                     </div>
                   </dl>
@@ -286,13 +293,15 @@ export function ConnectionsPage({
                   <div className="connection-bottom">
                     <span>
                       {t(
-                        server.auth_mode === 'system_api_key'
-                          ? 'serverDialog.systemApiKey'
-                          : server.auth_mode === 'api_key'
-                            ? 'connections.modeApiKey'
-                            : server.auth_mode === 'oauth'
-                              ? 'connections.modeOAuth'
-                              : 'connections.modePlatform',
+                        server.auth_mode === 'system_oauth'
+                          ? 'serverDialog.systemOauth'
+                          : server.auth_mode === 'system_api_key'
+                            ? 'serverDialog.systemApiKey'
+                            : server.auth_mode === 'api_key'
+                              ? 'connections.modeApiKey'
+                              : server.auth_mode === 'oauth'
+                                ? 'connections.modeOAuth'
+                                : 'connections.modePlatform',
                       )}
                     </span>
                     <Button icon={<CopyOutlined />} onClick={() => copyMcpConfig([server])}>
@@ -315,7 +324,7 @@ export function ConnectionsPage({
                         )}
                       </Button>
                     )}
-                    {server.auth_mode === 'oauth' && (
+                    {(server.auth_mode === 'oauth' || (server.auth_mode === 'system_oauth' && isAdmin)) && (
                       <Button
                         type="primary"
                         icon={<LinkOutlined />}
@@ -329,17 +338,21 @@ export function ConnectionsPage({
                         )}
                       </Button>
                     )}
-                    {server.connection_status !== 'not_required' && server.connection_status !== 'not_connected' && (
-                      <Button
-                        disabled={busy}
-                        danger
-                        type="text"
-                        icon={<DisconnectOutlined />}
-                        onClick={() => disconnect(server)}
-                      >
-                        {t('connections.disconnectAction')}
-                      </Button>
-                    )}
+                    {(server.auth_mode === 'oauth' ||
+                      server.auth_mode === 'api_key' ||
+                      (server.auth_mode === 'system_oauth' && isAdmin)) &&
+                      server.connection_status !== 'not_required' &&
+                      server.connection_status !== 'not_connected' && (
+                        <Button
+                          disabled={busy}
+                          danger
+                          type="text"
+                          icon={<DisconnectOutlined />}
+                          onClick={() => disconnect(server)}
+                        >
+                          {t('connections.disconnectAction')}
+                        </Button>
+                      )}
                   </div>
                 </Card>
               ))}

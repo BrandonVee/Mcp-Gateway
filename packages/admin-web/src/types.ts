@@ -23,19 +23,25 @@ export interface PlatformSession {
   email_verified?: boolean;
 }
 
-export interface McpInstance {
+export interface McpInstance extends Partial<ServerAuthInput> {
+  display_name?: string;
+  system_api_key_configured?: boolean;
+  oauth_client_secret_configured?: boolean;
+  system_oauth_connected?: boolean;
   id: string;
   url: string;
   enabled: boolean;
 }
 
 export interface McpServer {
+  upstream_id?: string;
+  routing_mode?: 'pool' | 'aggregate';
   name: string;
   display_name: string;
   description?: string;
   enabled: boolean;
   signup_access: boolean;
-  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth';
+  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
   api_key_header: string;
   api_key_prefix: string;
   system_api_key_configured?: boolean;
@@ -107,6 +113,7 @@ export interface AuditEventPage {
 export interface AdminConnection {
   user_id: number;
   server_name: string;
+  upstream_id?: string;
   mode: 'api_key' | 'oauth';
   expires_at: number | null;
   has_refresh_token: boolean;
@@ -147,12 +154,13 @@ export interface UpdateUserInput {
 }
 
 export interface CreateServerInput {
+  routing_mode?: 'pool' | 'aggregate';
   name: string;
   display_name: string;
   description?: string;
   signup_access?: boolean;
   instances: Array<{ id?: string; url: string }>;
-  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth';
+  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
   api_key_header?: string;
   api_key_prefix?: string;
   system_api_key?: string;
@@ -169,14 +177,17 @@ export interface CreateServerInput {
 export type ServerAuthInput = Omit<CreateServerInput, 'name' | 'display_name' | 'description' | 'instances'>;
 
 export interface ConnectionServer {
+  endpoint_name?: string;
+  endpoint_display_name?: string;
   name: string;
   display_name: string;
   description?: string;
-  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth';
+  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
   connection_status: 'not_required' | 'not_connected' | 'connected' | 'expired';
 }
 
-export interface AddInstanceInput {
+export interface AddInstanceInput extends Partial<ServerAuthInput> {
+  display_name?: string;
   id?: string;
   url: string;
 }

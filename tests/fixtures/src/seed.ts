@@ -63,6 +63,7 @@ try {
         .values({
           name: server.name,
           displayName: server.displayName,
+          routingMode: 'pool',
           enabled: true,
           createdAt: now,
           updatedAt: now,

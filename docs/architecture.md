@@ -13,7 +13,7 @@
   { "sub": "alice", "mcp_servers": ["search", "knowledge"] }
   ```
 
-- Gateway 先验证 JWT 和令牌内的 Server 范围，再向 Auth Server 复核用户是否启用、当前 Server 授权是否仍有效，最后转发到对应实例池。
+- Gateway 先验证 JWT 和令牌内的 Server 范围，再向 Auth Server 复核用户是否启用、当前 Server 授权是否仍有效，最后按逻辑端点的路由模式聚合独立上游，或进入旧版副本池。
 - `admin` token 使用 `mcp_servers: ["*"]`，可进入全部入口。
 - `/servers` 只返回当前用户有权访问的 server。
 
@@ -40,7 +40,7 @@ pnpm --filter @mcp/auth-server db:migrate
 pnpm --filter @mcp/auth-server db:studio
 ```
 
-## 入口与实例池
+## 逻辑端点与实际上游
 
 逻辑 Server 与实例池保存在 PostgreSQL 的 `mcp_servers`、`mcp_server_instances` 表中。管理 API/界面修改数据库后，Gateway 从 Auth Server 的注册表刷新路由；普通服务启动不会再从配置文件重建或覆盖这些记录。
 
@@ -48,7 +48,11 @@ pnpm --filter @mcp/auth-server db:studio
 
 注册后，客户端使用 `http://localhost:8000/mcp/{SERVER_NAME}` 访问对应服务。上游 MCP Server 由其提供方独立部署和运行。
 
-同一个逻辑 server 可以有多个实例。Gateway 通过 Redis 保存 MCP session 与实例的粘性绑定。
+新逻辑端点是一个分组。`mcp_server_instances` 中的每个记录代表一个实际 MCP Server，分别保存上游地址、认证方式和认证修订号。用户凭据保存到 `upstream_credentials`，以 `(instance_id, owner)` 隔离；系统 OAuth 的 owner 为 `system`，用户连接的 owner 为 `user:<id>`。`upstream_oauth_states` 保存一次性的授权状态。
+
+聚合模式用 Redis 保存每个用户逻辑会话对应的上游 session IDs，工具名与资源 URI 带上游命名空间；每次调用只携带该上游自己的凭据。旧版副本池在迁移后保留，并可在管理界面显式切换到聚合模式。
+
+以下副本池行为仅适用于 `routing_mode=pool`。Gateway 通过 Redis 保存 MCP session 与实例的粘性绑定。
 Gateway 每 15 秒对已注册实例做一次 TCP/TLS 连通性探测，并在连接失败或上游返回 502/503/504 时暂时避开该实例；`/health` 会报告不可用实例数量。尚未建立 session 的 `initialize` 请求可在实例失败时尝试同一逻辑 Server 的其他实例。已有 session 始终发送到原实例，不会错误地切换到不认识该 session 的实例；原实例故障时客户端需重新初始化。探测只验证传输层连通性，不等同于 MCP 工具可用性检查。
 
 Gateway 只读取数据库注册表；注册表在启动时不可用会导致 Gateway 启动失败，不会回退到旧的静态路由。

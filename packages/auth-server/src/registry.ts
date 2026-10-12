@@ -23,7 +23,12 @@ export function createRegistryRouter(): Hono {
     }
 
     const servers = await db
-      .select({ name: mcpServers.name, displayName: mcpServers.displayName, authMode: mcpServers.authMode })
+      .select({
+        name: mcpServers.name,
+        displayName: mcpServers.displayName,
+        authMode: mcpServers.authMode,
+        routingMode: mcpServers.routingMode,
+      })
       .from(mcpServers)
       .where(eq(mcpServers.enabled, true))
       .orderBy(mcpServers.name);
@@ -31,11 +36,11 @@ export function createRegistryRouter(): Hono {
     const result = await Promise.all(
       servers.map(async (server) => {
         const instances = await db
-          .select({ id: mcpServerInstances.id, url: mcpServerInstances.url })
+          .select({ id: mcpServerInstances.id, url: mcpServerInstances.url, authMode: mcpServerInstances.authMode })
           .from(mcpServerInstances)
           .where(and(eq(mcpServerInstances.serverName, server.name), eq(mcpServerInstances.enabled, true)))
           .orderBy(mcpServerInstances.id);
-        return { ...server, instances };
+        return { ...server, instances, ...(server.routingMode === 'aggregate' ? { upstreams: instances } : {}) };
       }),
     );
 

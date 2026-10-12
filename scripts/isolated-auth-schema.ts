@@ -7,7 +7,7 @@ const require = createRequire(new URL('../packages/auth-server/package.json', im
 const { Pool } = require('pg');
 
 /** Every migration and fixture is scoped to a random schema; public tables are untouched. */
-export async function createIsolatedAuthSchema() {
+export async function createIsolatedAuthSchema(options: { through?: number } = {}) {
   const connectionString = process.env.DATABASE_URL ?? loadPlatformConfig().auth.postgres.url;
   const schema = `oauth_test_${randomBytes(12).toString('hex')}`;
   if (!/^[a-z][a-z0-9_]+$/.test(schema)) throw new Error('unsafe schema identifier');
@@ -22,6 +22,7 @@ export async function createIsolatedAuthSchema() {
       await readFile(new URL('../packages/auth-server/drizzle/meta/_journal.json', import.meta.url), 'utf8'),
     );
     for (const entry of journal.entries) {
+      if (options.through !== undefined && entry.idx > options.through) break;
       const sql = await readFile(new URL(`../packages/auth-server/drizzle/${entry.tag}.sql`, import.meta.url), 'utf8');
       // Generated migrations explicitly qualify enums and FKs with "public".
       // Replace that identifier before execution, as search_path cannot redirect it.
@@ -31,6 +32,7 @@ export async function createIsolatedAuthSchema() {
     scopedPool = undefined;
     return {
       databaseUrl: databaseUrl.toString(),
+      schema,
       async cleanup() {
         await adminPool.query(`DROP SCHEMA "${schema}" CASCADE`);
         await adminPool.end();

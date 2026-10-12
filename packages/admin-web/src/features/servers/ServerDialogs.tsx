@@ -38,8 +38,11 @@ interface ServerDialogsProps extends UpstreamAllowlistProps {
   busy: boolean;
   onClose: () => void;
   onCreate: (data: CreateServerInput) => void;
-  onEdit: (server: McpServer, data: { name: string; display_name: string; description: string }) => void;
-  onEditInstance: (server: McpServer, instance: McpInstance, data: { url: string }) => void;
+  onEdit: (
+    server: McpServer,
+    data: { name: string; display_name: string; description: string; routing_mode?: 'pool' | 'aggregate' },
+  ) => void;
+  onEditInstance: (server: McpServer, instance: McpInstance, data: AddInstanceInput) => void;
   onAddInstance: (server: McpServer, data: AddInstanceInput) => void;
   onConfigureAuth: (server: McpServer, data: ServerAuthInput) => void;
   onConfigureUsers: (server: McpServer, userIds: number[], signupAccess: boolean) => void;
@@ -47,12 +50,13 @@ interface ServerDialogsProps extends UpstreamAllowlistProps {
 
 interface ServerFormValues {
   name: string;
+  routing_mode?: 'pool' | 'aggregate';
   displayName?: string;
   description?: string;
   signup_access: boolean;
   instanceId?: string;
   url: string;
-  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth';
+  auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
   api_key_header?: string;
   api_key_prefix?: string;
   system_api_key?: string;
@@ -111,8 +115,9 @@ function CreateServerDialog({
         display_name: values.displayName || values.name,
         description: values.description?.trim() ?? '',
         signup_access: values.signup_access,
-        instances: [{ id: values.instanceId || undefined, url: values.url }],
-        ...authFields(values),
+        instances: [],
+        auth_mode: 'none',
+        routing_mode: 'aggregate',
       }),
     );
   };
@@ -182,26 +187,7 @@ function CreateServerDialog({
         >
           <Switch />
         </Form.Item>
-        <Form.Item
-          name="instanceId"
-          label={t('serverDialog.instanceIdOptional')}
-          rules={[{ max: 256, message: t('api.invalidInstancePayload') }]}
-        >
-          <Input placeholder={t('serverDialog.leaveBlankGenerateUuid')} />
-        </Form.Item>
-        <Form.Item
-          name="url"
-          label={t('serverDialog.mcpEndpointUrl')}
-          rules={[
-            { required: true, message: t('serverDialog.enterEndpointUrl') },
-            endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl')),
-          ]}
-        >
-          <Input prefix={<LinkOutlined />} placeholder="https://mcp.example.com/mcp" />
-        </Form.Item>
-        <UpstreamAllowlistHint {...allowlist} busy={busy} />
-        <UpstreamConnectionTest {...allowlist} busy={busy} />
-        <AuthFormFields />
+        <Alert type="info" showIcon message={t('serverDialog.endpointGroupHelp')} />
       </Form>
     </Modal>
   );
@@ -284,7 +270,12 @@ function EditServerDialog({
   onEdit,
 }: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onEdit'> & { server: McpServer }) {
   const { t } = useI18n();
-  const [form] = Form.useForm<{ name: string; display_name: string; description: string }>();
+  const [form] = Form.useForm<{
+    name: string;
+    display_name: string;
+    description: string;
+    routing_mode?: 'pool' | 'aggregate';
+  }>();
   return (
     <Modal
       open
@@ -303,6 +294,7 @@ function EditServerDialog({
           onEdit(server, {
             name: values.name.trim(),
             display_name: values.display_name.trim(),
+            routing_mode: values.routing_mode,
             description: values.description.trim(),
           }),
         )
@@ -313,7 +305,12 @@ function EditServerDialog({
         disabled={busy}
         layout="vertical"
         requiredMark={false}
-        initialValues={{ name: server.name, display_name: server.display_name, description: server.description ?? '' }}
+        initialValues={{
+          name: server.name,
+          display_name: server.display_name,
+          description: server.description ?? '',
+          routing_mode: server.routing_mode ?? 'aggregate',
+        }}
       >
         <Form.Item
           name="name"
@@ -350,6 +347,14 @@ function EditServerDialog({
           <Input autoFocus />
         </Form.Item>
         <DescriptionField />
+        <Form.Item name="routing_mode" label={t('serverDialog.routingMode')}>
+          <Select
+            options={[
+              { value: 'aggregate', label: t('serverDialog.aggregateMode') },
+              { value: 'pool', label: t('serverDialog.poolMode') },
+            ]}
+          />
+        </Form.Item>
       </Form>
     </Modal>
   );
@@ -365,7 +370,7 @@ function EditInstanceDialog({
 }: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onEditInstance'> &
   UpstreamAllowlistProps & { server: McpServer; instance: McpInstance }) {
   const { t } = useI18n();
-  const [form] = Form.useForm<{ url: string }>();
+  const [form] = Form.useForm<ServerFormValues>();
   return (
     <Modal
       open
@@ -379,9 +384,33 @@ function EditInstanceDialog({
       maskClosable={!busy}
       cancelButtonProps={{ disabled: busy }}
       onCancel={onClose}
-      onOk={() => submitDialog(form, (values) => onEditInstance(server, instance, { url: values.url.trim() }))}
+      onOk={() =>
+        submitDialog(form, (values) =>
+          onEditInstance(server, instance, {
+            url: values.url.trim(),
+            display_name: values.displayName,
+            ...authFields(values),
+          }),
+        )
+      }
     >
-      <Form form={form} disabled={busy} layout="vertical" requiredMark={false} initialValues={{ url: instance.url }}>
+      <Form
+        form={form}
+        disabled={busy}
+        layout="vertical"
+        requiredMark={false}
+        initialValues={{
+          ...instance,
+          url: instance.url,
+          displayName: instance.display_name,
+          auth_mode: instance.auth_mode ?? 'none',
+          api_key_header: instance.api_key_header ?? 'authorization',
+          api_key_prefix: instance.api_key_prefix ?? 'Bearer ',
+        }}
+      >
+        <Form.Item name="displayName" label={t('serverDialog.displayName')}>
+          <Input />
+        </Form.Item>
         <Form.Item label={t('serverDialog.instanceId')}>
           <Input value={instance.id} disabled />
         </Form.Item>
@@ -398,6 +427,7 @@ function EditInstanceDialog({
         </Form.Item>
         <UpstreamAllowlistHint {...allowlist} busy={busy} />
         <UpstreamConnectionTest {...allowlist} busy={busy} />
+        <AuthFormFields server={{ ...server, ...instance } as McpServer} />
       </Form>
     </Modal>
   );
@@ -410,7 +440,7 @@ export function authFields(values: ServerFormValues): ServerAuthInput {
       ? { api_key_header: values.api_key_header, api_key_prefix: values.api_key_prefix }
       : {}),
     ...(values.auth_mode === 'system_api_key' ? { system_api_key: values.system_api_key || undefined } : {}),
-    ...(values.auth_mode === 'oauth'
+    ...(['oauth', 'system_oauth'].includes(values.auth_mode)
       ? {
           oauth_authorize_url: values.oauth_authorize_url?.trim(),
           oauth_token_url: values.oauth_token_url?.trim(),
@@ -437,6 +467,7 @@ function AuthFormFields({ server }: { server?: McpServer } = {}) {
             { value: 'api_key', label: t('serverDialog.userApiKey') },
             { value: 'system_api_key', label: t('serverDialog.systemApiKey') },
             { value: 'oauth', label: t('serverDialog.userOauth') },
+            { value: 'system_oauth', label: t('serverDialog.systemOauth') },
           ]}
         />
       </Form.Item>
@@ -492,7 +523,7 @@ function AuthFormFields({ server }: { server?: McpServer } = {}) {
                 <Alert type="info" showIcon message={t('serverDialog.usersEnterOwnKeyConnections')} />
               )}
             </>
-          ) : getFieldValue('auth_mode') === 'oauth' ? (
+          ) : ['oauth', 'system_oauth'].includes(getFieldValue('auth_mode')) ? (
             <>
               <Form.Item
                 name="oauth_authorize_url"
@@ -837,7 +868,7 @@ function AddInstanceDialog({
     server: McpServer;
   }) {
   const { t } = useI18n();
-  const [form] = Form.useForm<AddInstanceInput>();
+  const [form] = Form.useForm<ServerFormValues & { id?: string }>();
 
   return (
     <Modal
@@ -862,11 +893,22 @@ function AddInstanceDialog({
           onAddInstance(server, {
             id: values.id || undefined,
             url: values.url,
+            display_name: values.displayName,
+            ...authFields(values),
           }),
         )
       }
     >
-      <Form form={form} disabled={busy} layout="vertical" requiredMark={false}>
+      <Form
+        form={form}
+        disabled={busy}
+        layout="vertical"
+        requiredMark={false}
+        initialValues={{ auth_mode: 'none', api_key_header: 'authorization', api_key_prefix: 'Bearer ' }}
+      >
+        <Form.Item name="displayName" label={t('serverDialog.displayName')}>
+          <Input />
+        </Form.Item>
         <Form.Item
           name="id"
           label={t('serverDialog.instanceIdOptional')}
@@ -886,6 +928,7 @@ function AddInstanceDialog({
         </Form.Item>
         <UpstreamAllowlistHint {...allowlist} busy={busy} />
         <UpstreamConnectionTest {...allowlist} busy={busy} />
+        <AuthFormFields />
       </Form>
     </Modal>
   );

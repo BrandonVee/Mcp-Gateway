@@ -8,7 +8,12 @@ export { upstreamTestResultSchema, unavailableUpstreamTest, type UpstreamTestRes
 export interface McpServerConfig {
   name: string;
   instances: string[];
-  authMode: 'none' | 'api_key' | 'system_api_key' | 'oauth';
+  authMode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
+  upstreams?: Array<{
+    id: string;
+    url: string;
+    authMode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
+  }>;
 }
 
 /** Explicit host allowlist shared by the control plane and every Gateway replica. */

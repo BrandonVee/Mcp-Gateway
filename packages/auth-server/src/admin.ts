@@ -1,3 +1,4 @@
+import { convertEndpointToGroup } from './endpoint-groups.js';
 import { canReuseSmtpPassword, smtpTestConfigSchema } from './smtp-config.js';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
@@ -22,6 +23,8 @@ import {
   mcpServers,
   oauthConnectionStates,
   userMcpCredentials,
+  upstreamCredentials,
+  upstreamOAuthStates,
   userServerAccess,
   users,
 } from './schema.js';
@@ -82,17 +85,24 @@ const instanceId = z
   .string({ invalid_type_error: 'invalid_instance_payload' })
   .trim()
   .max(256, 'invalid_instance_payload');
-const instanceCreateSchema = z.object({
-  id: instanceId.optional(),
-  url: z.string({ required_error: 'invalid_upstream_endpoint', invalid_type_error: 'invalid_upstream_endpoint' }),
-});
-const instancePatchSchema = z.object({
-  url: z.string({ invalid_type_error: 'invalid_upstream_endpoint' }).optional(),
-  enabled: z.boolean({ invalid_type_error: 'invalid_instance_payload' }).optional(),
-});
+const instanceCreateSchema = z
+  .object({
+    display_name: z.string().trim().max(256).optional(),
+    id: instanceId.optional(),
+    url: z.string({ required_error: 'invalid_upstream_endpoint', invalid_type_error: 'invalid_upstream_endpoint' }),
+  })
+  .passthrough();
+const instancePatchSchema = z
+  .object({
+    display_name: z.string().trim().max(256).optional(),
+    url: z.string({ invalid_type_error: 'invalid_upstream_endpoint' }).optional(),
+    enabled: z.boolean({ invalid_type_error: 'invalid_instance_payload' }).optional(),
+  })
+  .passthrough();
 const serverCreateSchema = z
   .object({
     name: serverName,
+    routing_mode: z.enum(['pool', 'aggregate']).optional(),
     display_name: z.string({ invalid_type_error: 'display_name must be a string' }).optional(),
     description: serverDescription.optional(),
     signup_access: signupAccess.optional(),
@@ -102,6 +112,7 @@ const serverCreateSchema = z
 const serverPatchSchema = z
   .object({
     name: serverName.optional(),
+    routing_mode: z.enum(['pool', 'aggregate']).optional(),
     display_name: z
       .string({ invalid_type_error: 'display_name must be a non-empty string' })
       .trim()
@@ -128,19 +139,19 @@ function validOAuthUrl(value: unknown): value is string {
   }
 }
 
-function authSettings(
+export function authSettings(
   body: Record<string, unknown>,
   existing?: typeof mcpServers.$inferSelect,
 ): { values?: Partial<typeof mcpServers.$inferInsert>; error?: string } {
   const mode = body.auth_mode ?? 'none';
-  if (mode !== 'none' && mode !== 'api_key' && mode !== 'system_api_key' && mode !== 'oauth')
-    return { error: 'auth_mode must be none, api_key, system_api_key or oauth' };
+  if (mode !== 'none' && mode !== 'api_key' && mode !== 'system_api_key' && mode !== 'oauth' && mode !== 'system_oauth')
+    return { error: 'auth_mode must be none, api_key, system_api_key, oauth or system_oauth' };
   const values: Partial<typeof mcpServers.$inferInsert> = { authMode: mode };
   if (mode !== 'api_key' && mode !== 'system_api_key') {
     values.apiKeyHeader = 'authorization';
     values.apiKeyPrefix = 'Bearer ';
   }
-  if (mode !== 'oauth') {
+  if (mode !== 'oauth' && mode !== 'system_oauth') {
     values.oauthAuthorizeUrl = null;
     values.oauthTokenUrl = null;
     values.oauthClientId = null;
@@ -179,7 +190,7 @@ function authSettings(
   } else {
     values.systemApiKey = null;
   }
-  if (mode === 'oauth') {
+  if (mode === 'oauth' || mode === 'system_oauth') {
     const authorizeUrl = body.oauth_authorize_url ?? existing?.oauthAuthorizeUrl;
     const tokenUrl = body.oauth_token_url ?? existing?.oauthTokenUrl;
     const clientId = body.oauth_client_id ?? existing?.oauthClientId;
@@ -219,7 +230,8 @@ function authSettings(
         ? null
         : body.oauth_client_secret
           ? encryptCredential(body.oauth_client_secret)
-          : body.oauth_client_secret === undefined && existing?.authMode === 'oauth'
+          : body.oauth_client_secret === undefined &&
+              (existing?.authMode === 'oauth' || existing?.authMode === 'system_oauth')
             ? existing.oauthClientSecret
             : null;
     values.oauthScopes =
@@ -951,15 +963,42 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         updatedAt: userMcpCredentials.updatedAt,
       })
       .from(userMcpCredentials);
+    const upstreamRows = await db
+      .select({
+        userId: upstreamCredentials.userId,
+        instanceId: upstreamCredentials.instanceId,
+        serverName: mcpServerInstances.serverName,
+        mode: upstreamCredentials.mode,
+        expiresAt: upstreamCredentials.expiresAt,
+        refreshSecret: upstreamCredentials.refreshSecret,
+        updatedAt: upstreamCredentials.updatedAt,
+      })
+      .from(upstreamCredentials)
+      .innerJoin(mcpServerInstances, eq(mcpServerInstances.id, upstreamCredentials.instanceId))
+      .innerJoin(mcpServers, eq(mcpServers.name, mcpServerInstances.serverName))
+      .where(eq(mcpServers.routingMode, 'aggregate'));
     return c.json({
-      connections: rows.map((row) => ({
-        user_id: row.userId,
-        server_name: row.serverName,
-        mode: row.mode,
-        expires_at: row.expiresAt,
-        has_refresh_token: Boolean(row.refreshSecret),
-        updated_at: row.updatedAt,
-      })),
+      connections: [
+        ...upstreamRows
+          .filter((row) => row.userId !== null)
+          .map((row) => ({
+            user_id: row.userId!,
+            server_name: row.serverName,
+            upstream_id: row.instanceId,
+            mode: row.mode,
+            expires_at: row.expiresAt,
+            has_refresh_token: Boolean(row.refreshSecret),
+            updated_at: row.updatedAt,
+          })),
+        ...rows.map((row) => ({
+          user_id: row.userId,
+          server_name: row.serverName,
+          mode: row.mode,
+          expires_at: row.expiresAt,
+          has_refresh_token: Boolean(row.refreshSecret),
+          updated_at: row.updatedAt,
+        })),
+      ],
     });
   });
 
@@ -972,6 +1011,32 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     return c.json({ ok: true });
   });
 
+  router.delete('/admin/upstream-connections/:userId/:id', async (c) => {
+    const userId = Number(c.req.param('userId')),
+      id = c.req.param('id');
+    if (!Number.isSafeInteger(userId) || userId <= 0) return jsonError(c, 'invalid connection identifier');
+    await db.transaction(async (tx) => {
+      const [s] = await tx.select().from(mcpServerInstances).where(eq(mcpServerInstances.id, id));
+      if (!s) return;
+      await tx.select().from(mcpServers).where(eq(mcpServers.name, s.serverName)).for('share');
+      await tx.select().from(mcpServerInstances).where(eq(mcpServerInstances.id, id)).for('share');
+      await tx.execute(sql`select pg_advisory_xact_lock(80448, hashtext(${`${id}:user:${userId}`}))`);
+      await tx
+        .delete(upstreamCredentials)
+        .where(and(eq(upstreamCredentials.instanceId, id), eq(upstreamCredentials.owner, `user:${userId}`)));
+      await tx
+        .delete(upstreamOAuthStates)
+        .where(
+          and(
+            eq(upstreamOAuthStates.instanceId, id),
+            eq(upstreamOAuthStates.userId, userId),
+            eq(upstreamOAuthStates.system, false),
+          ),
+        );
+    });
+    return c.json({ ok: true });
+  });
+
   router.get('/admin/servers', async (c) => {
     const [{ value: wildcardUserCount }] = await db
       .select({ value: count() })
@@ -980,6 +1045,7 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const rows = await db
       .select({
         name: mcpServers.name,
+        routingMode: mcpServers.routingMode,
         displayName: mcpServers.displayName,
         description: mcpServers.description,
         enabled: mcpServers.enabled,
@@ -1006,12 +1072,17 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const serverDtos = await Promise.all(
       rows.map(async (row) => {
         const instances = await db
-          .select({ id: mcpServerInstances.id, url: mcpServerInstances.url, enabled: mcpServerInstances.enabled })
+          .select()
           .from(mcpServerInstances)
           .where(eq(mcpServerInstances.serverName, row.name))
           .orderBy(mcpServerInstances.id);
+        const systemConnections = await db
+          .select({ instanceId: upstreamCredentials.instanceId })
+          .from(upstreamCredentials)
+          .where(eq(upstreamCredentials.owner, 'system'));
         return {
           name: row.name,
+          routing_mode: row.routingMode,
           display_name: row.displayName,
           description: row.description,
           enabled: row.enabled,
@@ -1030,7 +1101,25 @@ export function createAdminRouter(deps: AdminDeps): Hono {
           oauth_client_secret_configured: row.oauthClientSecretConfigured,
           user_count: Number(row.userCount) + Number(wildcardUserCount),
           created_at: row.createdAt,
-          instances,
+          instances: instances.map((instance) => ({
+            id: instance.id,
+            url: instance.url,
+            enabled: instance.enabled,
+            display_name: instance.displayName,
+            auth_mode: instance.authMode,
+            api_key_header: instance.apiKeyHeader,
+            api_key_prefix: instance.apiKeyPrefix,
+            system_api_key_configured: Boolean(instance.systemApiKey),
+            oauth_authorize_url: instance.oauthAuthorizeUrl,
+            oauth_token_url: instance.oauthTokenUrl,
+            oauth_client_id: instance.oauthClientId,
+            oauth_client_secret_configured: Boolean(instance.oauthClientSecret),
+            oauth_scopes: instance.oauthScopes,
+            oauth_resource: instance.oauthResource,
+            oauth_issuer: instance.oauthIssuer,
+            oauth_client_auth_method: instance.oauthClientAuthMethod,
+            system_oauth_connected: systemConnections.some((c) => c.instanceId === instance.id),
+          })),
         };
       }),
     );
@@ -1062,6 +1151,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     if (existing) return jsonError(c, 'server already exists', 409);
     const displayName = body.display_name?.trim() || name;
     const description = body.description?.trim() ?? '';
+    if (body.routing_mode === 'aggregate' && body.auth_mode !== undefined && body.auth_mode !== 'none')
+      return jsonError(c, 'upstream_auth_required');
     const auth = authSettings(body as Record<string, unknown>);
     if (auth.error) return jsonError(c, auth.error);
     const now = Date.now();
@@ -1077,6 +1168,9 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         await tx.insert(mcpServers).values({
           name,
           displayName,
+          routingMode:
+            body.routing_mode ??
+            (requestedInstances.length || (body.auth_mode && body.auth_mode !== 'none') ? 'pool' : 'aggregate'),
           description,
           enabled: true,
           signupAccess: body.signup_access ?? false,
@@ -1089,6 +1183,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
             normalizedInstances.map((instance) => ({
               ...instance,
               serverName: name,
+              displayName: instance.id,
+              ...auth.values,
               enabled: true,
               createdAt: now,
               updatedAt: now,
@@ -1136,37 +1232,89 @@ export function createAdminRouter(deps: AdminDeps): Hono {
     const endpoint = validateMcpEndpoint(body.url);
     if (endpoint.error) return c.json(endpoint, 400);
     const url = endpoint.url;
+    const auth = authSettings(body);
+    if (auth.error) return jsonError(c, auth.error);
     const id = body.id?.trim() || randomUUID();
     const now = Date.now();
     const inserted = await db
-      .insert(mcpServerInstances)
-      .values({ id, serverName, url, enabled: true, createdAt: now, updatedAt: now })
-      .onConflictDoNothing()
-      .returning({ id: mcpServerInstances.id });
+      .transaction(async (tx) => {
+        const [parent] = await tx.select().from(mcpServers).where(eq(mcpServers.name, serverName)).for('update');
+        if (!parent) return [];
+        if (body.auth_mode !== undefined) await convertEndpointToGroup(tx, parent);
+        const result = await tx
+          .insert(mcpServerInstances)
+          .values({
+            id,
+            serverName,
+            url,
+            displayName: body.display_name || id,
+            ...auth.values,
+            enabled: true,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoNothing()
+          .returning({ id: mcpServerInstances.id });
+        if (!result.length) throw new Error('instance_already_exists');
+        return result;
+      })
+      .catch((error) => {
+        if (error instanceof Error && error.message === 'instance_already_exists') return [];
+        throw error;
+      });
     if (!inserted.length) return jsonError(c, 'instance_already_exists', 409);
     return c.json({ id, server_name: serverName, url, enabled: true }, 201);
   });
 
   router.patch('/admin/servers/:name/instances/:id', async (c) => {
     const { name, id } = c.req.param();
-    const [instance] = await db
-      .select()
-      .from(mcpServerInstances)
-      .where(and(eq(mcpServerInstances.id, id), eq(mcpServerInstances.serverName, name)))
-      .limit(1);
-    if (!instance) return jsonError(c, 'server instance not found', 404);
     const parsed = instancePatchSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return jsonError(c, parsed.error.issues[0]?.message ?? 'invalid_instance_payload');
     const body = parsed.data;
-    const changes: Partial<typeof mcpServerInstances.$inferInsert> = { updatedAt: Date.now() };
-    if (body.url !== undefined) {
-      const endpoint = validateMcpEndpoint(body.url);
-      if (endpoint.error) return c.json(endpoint, 400);
-      changes.url = endpoint.url;
-    }
-    if (body.enabled !== undefined) changes.enabled = body.enabled;
-    await db.update(mcpServerInstances).set(changes).where(eq(mcpServerInstances.id, id));
-    return c.json({ ok: true });
+    const result = await db.transaction(async (tx) => {
+      // Use the same parent -> upstream -> credential lock order as the broker.
+      const [parent] = await tx.select().from(mcpServers).where(eq(mcpServers.name, name)).for('update');
+      const [instance] = await tx
+        .select()
+        .from(mcpServerInstances)
+        .where(and(eq(mcpServerInstances.id, id), eq(mcpServerInstances.serverName, name)))
+        .for('update')
+        .limit(1);
+      if (!instance) return { error: 'server instance not found', status: 404 as const };
+      const changes: Partial<typeof mcpServerInstances.$inferInsert> = { updatedAt: Date.now() };
+      if (body.url !== undefined) {
+        const endpoint = validateMcpEndpoint(body.url);
+        if (endpoint.error) return { error: endpoint.error, status: 400 as const };
+        changes.url = endpoint.url;
+      }
+      if (body.display_name !== undefined) changes.displayName = body.display_name;
+      if (body.enabled !== undefined) changes.enabled = body.enabled;
+      if (body.auth_mode !== undefined) {
+        const auth = authSettings(body, {
+          ...(parent?.routingMode === 'pool' ? parent : instance),
+          name,
+          routingMode: 'aggregate',
+          description: '',
+          signupAccess: false,
+        });
+        if (auth.error) return { error: auth.error, status: 400 as const };
+        Object.assign(changes, auth.values);
+      }
+      const authChanged = Object.keys(changes).some(
+        (key) =>
+          !['updatedAt', 'displayName'].includes(key) &&
+          changes[key as keyof typeof changes] !== instance[key as keyof typeof instance],
+      );
+      if (parent && body.auth_mode !== undefined) await convertEndpointToGroup(tx, parent);
+      if (authChanged) {
+        changes.authRevision = instance.authRevision + 1;
+        await tx.delete(upstreamOAuthStates).where(eq(upstreamOAuthStates.instanceId, id));
+        await tx.delete(upstreamCredentials).where(eq(upstreamCredentials.instanceId, id));
+      }
+      await tx.update(mcpServerInstances).set(changes).where(eq(mcpServerInstances.id, id));
+      return { status: 200 as const };
+    });
+    return 'error' in result ? jsonError(c, result.error!, result.status as 400 | 404) : c.json({ ok: true });
   });
 
   router.delete('/admin/servers/:name/instances/:id', async (c) => {
@@ -1200,6 +1348,8 @@ export function createAdminRouter(deps: AdminDeps): Hono {
         const changes: Partial<typeof mcpServers.$inferInsert> = { name: nextName, updatedAt: Date.now() };
         let credentialsChanged = false;
         if (body.auth_mode !== undefined) {
+          if (existing.routingMode === 'aggregate' && body.auth_mode !== 'none')
+            return { error: 'upstream_auth_required', status: 400 as const };
           const auth = authSettings(body as Record<string, unknown>, existing);
           if (auth.error) return { error: auth.error, status: 400 as const };
           credentialsChanged = Boolean(
@@ -1221,6 +1371,11 @@ export function createAdminRouter(deps: AdminDeps): Hono {
           );
           Object.assign(changes, auth.values);
         }
+        if (body.routing_mode === 'aggregate' && existing.routingMode === 'pool') {
+          await convertEndpointToGroup(tx, existing);
+          changes.authRevision = existing.authRevision + 1;
+        }
+        if (body.routing_mode !== undefined) changes.routingMode = body.routing_mode;
         if (body.display_name !== undefined) changes.displayName = body.display_name.trim();
         if (body.description !== undefined) changes.description = body.description.trim();
         if (body.enabled !== undefined) changes.enabled = body.enabled;

@@ -1,3 +1,4 @@
+import { aggregateRequest } from './aggregate.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { request } from 'undici';
 import { Readable } from 'node:stream';
@@ -53,6 +54,11 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
   const authVersion = tokenAuthVersion(req.mcpAuth);
   if (authVersion === null) {
     await unauthorized(reply, 'invalid_token', 'invalid auth_version claim', serverName);
+    return;
+  }
+
+  if (cfg.upstreams) {
+    await aggregateRequest(req, reply, cfg);
     return;
   }
 

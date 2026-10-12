@@ -13,10 +13,10 @@ export function mcpServerUrl(name: string, resource: string): string {
 export function mcpConfig(servers: ConnectionServer[], resource: string): string {
   const mcpServers = Object.fromEntries(
     servers.map((server) => [
-      server.name,
+      server.endpoint_name ?? server.name,
       {
         type: 'streamableHttp',
-        url: mcpServerUrl(server.name, resource),
+        url: mcpServerUrl(server.endpoint_name ?? server.name, resource),
       },
     ]),
   );
