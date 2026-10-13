@@ -559,7 +559,7 @@ export const messages = {
   'connections.login.submit': '登录连接中心',
   'connections.letEveryToolWorkYou': '让每个工具用你的身份工作。',
   'connections.credentialsUsedRelevantServicePlatform':
-    '你的密钥仅用于对应服务的请求；平台登录凭据不会转发给外部服务。',
+    '同一逻辑端点内，分别为需要用户认证的 MCP Server 填写 API Key 或完成 OAuth 授权；系统认证由管理员配置。客户端只需连接逻辑端点。',
   'connections.refreshStatus': '刷新状态',
   'connections.copyAllMcpConfig': '复制全部 MCP 配置',
   'connections.copyMcpConfig': '复制 MCP 配置',

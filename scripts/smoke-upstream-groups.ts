@@ -24,7 +24,6 @@ async function main() {
   const { env, serverConfigs } = await import('@/gateway/config.js');
   const { redis } = await import('@/gateway/lb.js');
   const { registerMcpRoutes } = await import('@/gateway/routes/mcp.js');
-  const { upstreamNamespace } = await import('@/gateway/aggregate.js');
   const Fastify = createRequire(new URL('../packages/gateway/package.json', import.meta.url))('fastify');
   const group = `group-${randomUUID()}`;
   const upstreamCalls: Array<{ path: string; authorization?: string; key?: string; session?: string; method: string }> =
@@ -158,7 +157,7 @@ async function main() {
       'aggregate groups cannot own upstream credentials',
     );
     const add = (id: string, path: string, auth: object) =>
-      api(`/admin/servers/${group}/instances`, 'POST', { id, display_name: id, url: base + path, ...auth });
+      api(`/admin/servers/${group}/instances`, 'POST', { id, display_name: path.slice(1), url: base + path, ...auth });
     const a = `a-${group}`,
       b = `b-${group}`,
       personal = `personal-${group}`,
@@ -262,8 +261,15 @@ async function main() {
     const listed = await rpc(gateways[1], 'tools/list');
     assert.equal(listed.statusCode, 200, listed.body);
     assert.equal(listed.json().result.tools.length, 4);
+    const toolNames = new Map([
+      [a, 'a__search'],
+      [b, 'b__search'],
+      [personal, 'personal__search'],
+      [oauth, 'oauth__search'],
+    ]);
+    assert.deepEqual(new Set(listed.json().result.tools.map((tool: any) => tool.name)), new Set(toolNames.values()));
     for (const id of [a, b, personal, oauth]) {
-      const called = await rpc(gateways[1], 'tools/call', { name: `${upstreamNamespace(id)}__search`, arguments: {} });
+      const called = await rpc(gateways[1], 'tools/call', { name: toolNames.get(id)!, arguments: {} });
       assert.equal(called.statusCode, 200, called.body);
     }
     assert.ok(upstreamCalls.filter((c) => c.path === '/a').every((c) => c.key === 'key-a' && !c.authorization));
@@ -276,7 +282,7 @@ async function main() {
     const transport = new StreamableHTTPClientTransport(new URL(`/mcp/${group}`, gateways[0].listeningOrigin));
     await sdk.connect(transport);
     assert.equal((await sdk.listTools()).tools.length, 4);
-    const sdkResult = await sdk.callTool({ name: `${upstreamNamespace(a)}__search`, arguments: {} });
+    const sdkResult = await sdk.callTool({ name: 'a__search', arguments: {} });
     assert.deepEqual(sdkResult.content, [{ type: 'text', text: '/a' }]);
     await transport.terminateSession();
     await sdk.close();
@@ -287,10 +293,7 @@ async function main() {
       system_api_key: 'new-key-a',
       url: base + '/a-new',
     });
-    assert.equal(
-      (await rpc(gateways[0], 'tools/call', { name: `${upstreamNamespace(a)}__search`, arguments: {} })).statusCode,
-      503,
-    );
+    assert.equal((await rpc(gateways[0], 'tools/call', { name: 'a__search', arguments: {} })).statusCode, 503);
     assert.equal(upstreamCalls.length, callCount, 'credential URL binding blocks every stale upstream request');
     await api(`/admin/servers/${group}/instances/${a}`, 'PATCH', {
       ...keyAuth,
@@ -383,7 +386,7 @@ async function main() {
       'conversion copies the current legacy credentials, not a stale migration snapshot',
     );
     console.log(
-      'PASS: independent keys, personal connections, admin-only shared OAuth, refresh serialization, replay and disconnect races, grouped RPC aggregation across Gateway replicas, namespace routing and live grant revocation',
+      'PASS: independent keys, personal connections, admin-only shared OAuth, refresh serialization, replay and disconnect races, grouped RPC aggregation across Gateway replicas, readable tool routing and live grant revocation',
     );
   } finally {
     globalThis.fetch = originalFetch;

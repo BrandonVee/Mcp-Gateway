@@ -1,3 +1,4 @@
+import { mergeToolCatalog, type ToolRoute } from '@/gateway/tool-catalog.js';
 import { upstreamRequestTimeout } from '@/gateway/transport-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { McpServerConfig } from '@mcp/shared';
@@ -5,8 +6,19 @@ import type { McpServerConfig } from '@mcp/shared';
 export type Upstream = NonNullable<McpServerConfig['upstreams']>[number];
 type Rpc = { jsonrpc: '2.0'; id?: string | number | null; method: string; params?: Record<string, any> };
 export type Header = { header: string; value: string } | null;
-type Member = { sessionId?: string; protocolVersion: string; revision: number; capabilities: Record<string, any> };
-export type AggregateSession = { owner: number; authVersion: number; members: Record<string, Member> };
+type Member = {
+  sessionId?: string;
+  protocolVersion: string;
+  revision: number;
+  capabilities: Record<string, any>;
+  toolNames?: string[];
+};
+export type AggregateSession = {
+  owner: number;
+  authVersion: number;
+  members: Record<string, Member>;
+  toolRoutes?: Record<string, ToolRoute>;
+};
 export class AggregateError extends Error {
   constructor(
     readonly code: string,
@@ -100,7 +112,10 @@ export class AggregateConnection {
     const results = await Promise.allSettled(
       this.upstreams.map(async (u) => {
         const { member } = await this.prepare(u);
-        if (!member.capabilities[capability]) return [];
+        if (!member.capabilities[capability]) {
+          if (field === 'tools') member.toolNames = [];
+          return [];
+        }
         const values: any[] = [];
         let cursor: string | undefined;
         const seen = new Set<string>();
@@ -109,12 +124,15 @@ export class AggregateConnection {
           if (response.error) throw new AggregateError('upstream_list_failed', 502, u.id);
           if (!Array.isArray(response.result?.[field]))
             throw new AggregateError('invalid_upstream_response', 502, u.id);
+          if (
+            field === 'tools' &&
+            response.result[field].some((item: any) => !item || typeof item.name !== 'string' || !item.name)
+          )
+            throw new AggregateError('invalid_upstream_response', 502, u.id);
           values.push(
             ...response.result[field].map((item: any) => ({
               ...item,
-              ...(typeof item.name === 'string' && (field === 'tools' || field === 'prompts')
-                ? { name: nameFor(u, item.name) }
-                : {}),
+              ...(typeof item.name === 'string' && field === 'prompts' ? { name: nameFor(u, item.name) } : {}),
               ...(typeof item.uri === 'string' ? { uri: uriFor(u, item.uri) } : {}),
               ...(typeof item.uriTemplate === 'string'
                 ? { uriTemplate: uriFor(u, item.uriTemplate).replace(/%7B/gi, '{').replace(/%7D/gi, '}') }
@@ -122,7 +140,14 @@ export class AggregateConnection {
             })),
           );
           cursor = response.result.nextCursor;
-          if (!cursor) return values;
+          if (!cursor) {
+            if (field === 'tools') {
+              const names = values.map((item) => item.name);
+              if (new Set(names).size !== names.length) throw new AggregateError('duplicate_upstream_tool', 502, u.id);
+              member.toolNames = names;
+            }
+            return values;
+          }
           if (typeof cursor !== 'string' || seen.has(cursor))
             throw new AggregateError('invalid_upstream_cursor', 502, u.id);
           seen.add(cursor);
@@ -132,7 +157,16 @@ export class AggregateConnection {
     );
     if (results.every((r) => r.status === 'rejected')) throw new AggregateError('upstream_unavailable', 502);
     return {
-      [field]: results.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])),
+      [field]:
+        field === 'tools'
+          ? mergeToolCatalog(
+              this.upstreams,
+              this.session,
+              results.flatMap((result, index) =>
+                result.status === 'fulfilled' ? [{ upstream: this.upstreams[index], tools: result.value }] : [],
+              ),
+            )
+          : results.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])),
       _meta: {
         unavailable_upstreams: results.flatMap((r, i) =>
           r.status === 'rejected'
@@ -159,7 +193,17 @@ export class AggregateConnection {
     if (listField) return { result: await this.list(message.method, listField) };
     const params = { ...message.params };
     let u: Upstream | undefined;
-    if (message.method === 'tools/call' || message.method === 'prompts/get') {
+    if (message.method === 'tools/call') {
+      if (typeof params.name !== 'string') return { error: { code: -32602, message: 'Unknown upstream tool' } };
+      if (!this.session.toolRoutes) await this.list('tools/list', 'tools');
+      const route = Object.hasOwn(this.session.toolRoutes!, params.name)
+        ? this.session.toolRoutes![params.name]
+        : undefined;
+      if (route) {
+        u = this.upstreams.find((upstream) => upstream.id === route.upstreamId);
+        params.name = route.name;
+      }
+    } else if (message.method === 'prompts/get') {
       u = this.upstreams.find(
         (s) => typeof params.name === 'string' && params.name.startsWith(upstreamNamespace(s.id) + '__'),
       );

@@ -50,7 +50,7 @@ pnpm --filter @mcp/auth-server db:studio
 
 新逻辑端点是一个分组。`mcp_server_instances` 中的每个记录代表一个实际 MCP Server，分别保存上游地址、认证方式和认证修订号。用户凭据保存到 `upstream_credentials`，以 `(instance_id, owner)` 隔离；系统 OAuth 的 owner 为 `system`，用户连接的 owner 为 `user:<id>`。`upstream_oauth_states` 保存一次性的授权状态。
 
-聚合模式用 Redis 保存每个用户逻辑会话对应的上游 session IDs，工具名与资源 URI 带上游命名空间；每次调用只携带该上游自己的凭据。旧版副本池在迁移后保留，并可在管理界面显式切换到聚合模式。
+聚合模式用 Redis 保存每个用户逻辑会话对应的上游 session IDs，工具名保留原名，仅重名工具加可读 Server 前缀，展示名与实际上游的映射按用户会话保存；资源 URI 带上游命名空间；每次调用只携带该上游自己的凭据。旧版副本池在迁移后保留，并可在管理界面显式切换到聚合模式。
 
 以下副本池行为仅适用于 `routing_mode=pool`。Gateway 通过 Redis 保存 MCP session 与实例的粘性绑定。
 Gateway 每 15 秒对已注册实例做一次 TCP/TLS 连通性探测，并在连接失败或上游返回 502/503/504 时暂时避开该实例；`/health` 会报告不可用实例数量。尚未建立 session 的 `initialize` 请求可在实例失败时尝试同一逻辑 Server 的其他实例。已有 session 始终发送到原实例，不会错误地切换到不认识该 session 的实例；原实例故障时客户端需重新初始化。探测只验证传输层连通性，不等同于 MCP 工具可用性检查。

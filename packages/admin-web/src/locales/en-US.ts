@@ -608,7 +608,7 @@ export const messages = {
   'connections.login.submit': 'Sign in to connections',
   'connections.letEveryToolWorkYou': 'Let every tool work as you.',
   'connections.credentialsUsedRelevantServicePlatform':
-    'Your credentials are used only for the relevant service; your platform sign-in is never forwarded upstream.',
+    'For each MCP Server in an endpoint, enter your API key or complete OAuth when user authentication is required. Administrators configure system authentication. Your client connects to the single logical endpoint.',
   'connections.refreshStatus': 'Refresh status',
   'connections.copyAllMcpConfig': 'Copy all MCP config',
   'connections.copyMcpConfig': 'Copy MCP config',

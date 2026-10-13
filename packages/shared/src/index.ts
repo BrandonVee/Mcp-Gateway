@@ -19,6 +19,7 @@ export interface McpServerConfig {
   authMode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
   upstreams?: Array<{
     id: string;
+    displayName?: string;
     url: string;
     authMode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
   }>;
