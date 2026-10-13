@@ -1,7 +1,10 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
   'mcpTest.action': 'Test MCP connection',
-  'mcpTest.help': 'Test MCP initialization and tool discovery from the gateway using an anonymous connection.',
+  'mcpTest.credentialRequired': 'Configure a key, or save this upstream and authorize its account first.',
+  'mcpTest.saveBeforeTest': 'The address changed. Save the configuration before testing a saved connection.',
+  'mcpTest.help':
+    'Test MCP initialization and tool discovery from the gateway using this upstream’s authentication configuration.',
   'mcpTest.success': 'MCP connection test passed',
   'mcpTest.failed': 'MCP connection test failed',
   'mcpTest.dns':
@@ -17,7 +20,7 @@ export const messages = {
   'mcpTest.methodNotAllowed':
     'The upstream does not accept MCP POST requests. Check that this is a Streamable HTTP MCP endpoint.',
   'mcpTest.authRequired':
-    'The upstream requires authentication or denies anonymous access. Check its requirements, configure authentication, then add credentials in your connections and verify with a client.',
+    'The upstream returned HTTP 401. Check this upstream’s key, authentication header and authorization status.',
   'mcpTest.accessDenied':
     'The upstream returned HTTP 403. Check upstream access policies, allowed Host / Origin values, and credential requirements.',
   'mcpTest.redirect':

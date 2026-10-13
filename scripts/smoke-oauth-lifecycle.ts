@@ -22,13 +22,15 @@ async function main() {
   process.env.NODE_ENV = 'test';
   process.env.CREDENTIAL_ENCRYPT_KEY = '65'.repeat(32);
   process.env.CREDENTIAL_BROKER_TOKEN = 'isolated-oauth-broker';
-  const { db, pool, createLoginSession } = await import('../packages/auth-server/src/db.js');
+  const { db, pool } = await import('../packages/auth-server/src/infrastructure/database/client.js');
+  const { createLoginSession } = await import('../packages/auth-server/src/modules/identity/sessions.js');
   const { mcpServers, oauthConnectionStates, userMcpCredentials, users } =
-    await import('../packages/auth-server/src/schema.js');
-  const { decryptCredential } = await import('../packages/auth-server/src/credential-crypto.js');
-  const { createConnectionsRouter } = await import('../packages/auth-server/src/connections.js');
-  const { createAdminRouter } = await import('../packages/auth-server/src/admin.js');
-  const { scryptHash } = await import('../packages/auth-server/src/users.js');
+    await import('../packages/auth-server/src/infrastructure/database/schema.js');
+  const { decryptCredential } =
+    await import('../packages/auth-server/src/infrastructure/security/credential-crypto.js');
+  const { createConnectionsRouter } = await import('../packages/auth-server/src/modules/connections/router.js');
+  const { createAdminRouter } = await import('../packages/auth-server/src/modules/admin/router.js');
+  const { scryptHash } = await import('../packages/auth-server/src/infrastructure/security/password.js');
   const { authIssuer } = await import('../packages/shared/src/index.js');
   type Mode = 'success' | 'short' | 'limited' | 'timeout' | 'network' | 'invalid' | 'blocked';
   let mode: Mode = 'success';

@@ -12,14 +12,16 @@ async function main() {
   process.env.SYSTEM_CONFIG_MODE = 'database';
   process.env.CREDENTIAL_ENCRYPT_KEY = 'a'.repeat(64);
   process.env.CREDENTIAL_BROKER_TOKEN = 'group-test-broker';
-  const { db, pool, createLoginSession } = await import('../packages/auth-server/src/db.js');
-  const { users, upstreamCredentials } = await import('../packages/auth-server/src/schema.js');
-  const { createAdminRouter } = await import('../packages/auth-server/src/admin.js');
-  const { createConnectionsRouter } = await import('../packages/auth-server/src/connections.js');
-  const { createRegistryRouter } = await import('../packages/auth-server/src/registry.js');
-  const { loadSigningKeys } = await import('../packages/auth-server/src/keys.js');
-  const { saveSystemSettings } = await import('../packages/auth-server/src/system-settings.js');
-  const { resolveUpstreamCredential } = await import('../packages/auth-server/src/upstream-connections.js');
+  const { db, pool } = await import('../packages/auth-server/src/infrastructure/database/client.js');
+  const { createLoginSession } = await import('../packages/auth-server/src/modules/identity/sessions.js');
+  const { users, upstreamCredentials } = await import('../packages/auth-server/src/infrastructure/database/schema.js');
+  const { createAdminRouter } = await import('../packages/auth-server/src/modules/admin/router.js');
+  const { createConnectionsRouter } = await import('../packages/auth-server/src/modules/connections/router.js');
+  const { createRegistryRouter } = await import('../packages/auth-server/src/modules/upstreams/registry.js');
+  const { loadSigningKeys } = await import('../packages/auth-server/src/modules/oauth/keys.js');
+  const { saveSystemSettings } = await import('../packages/auth-server/src/modules/system/settings.js');
+  const { resolveUpstreamCredential } =
+    await import('../packages/auth-server/src/modules/upstreams/connection-service.js');
   const { env, serverConfigs } = await import('../packages/gateway/src/config.js');
   const { redis } = await import('../packages/gateway/src/lb.js');
   const { registerMcpRoutes } = await import('../packages/gateway/src/routes/mcp.js');

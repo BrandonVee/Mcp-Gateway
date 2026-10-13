@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 const { Hono } = createRequire(new URL('../packages/auth-server/package.json', import.meta.url))(
   'hono',
 ) as typeof import('../packages/auth-server/node_modules/hono');
-import { callLogQuery } from '../packages/auth-server/src/monitoring-query.js';
+import { callLogQuery } from '../packages/auth-server/src/modules/monitoring/query.js';
 
 async function query(search: string, userId?: number) {
   const app = new Hono();

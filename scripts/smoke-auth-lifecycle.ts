@@ -81,13 +81,16 @@ async function main() {
       'migration preserves user accounts',
     );
 
-    const database = await import('../packages/auth-server/src/db.js');
-    applicationPool = database.pool;
-    const { createAdminRouter } = await import('../packages/auth-server/src/admin.js');
-    const { createConnectionsRouter } = await import('../packages/auth-server/src/connections.js');
-    const { createTokenRouter } = await import('../packages/auth-server/src/token.js');
-    const { createRegistryRouter } = await import('../packages/auth-server/src/registry.js');
-    const stores = await import('../packages/auth-server/src/stores.js');
+    const databaseClient = await import('../packages/auth-server/src/infrastructure/database/client.js');
+    const databaseAuthentication = await import('../packages/auth-server/src/modules/identity/authentication.js');
+    const databaseSessions = await import('../packages/auth-server/src/modules/identity/sessions.js');
+    const databaseBootstrap = await import('../packages/auth-server/src/modules/identity/bootstrap.js');
+    applicationPool = databaseClient.pool;
+    const { createAdminRouter } = await import('../packages/auth-server/src/modules/admin/router.js');
+    const { createConnectionsRouter } = await import('../packages/auth-server/src/modules/connections/router.js');
+    const { createTokenRouter } = await import('../packages/auth-server/src/modules/oauth/token.js');
+    const { createRegistryRouter } = await import('../packages/auth-server/src/modules/upstreams/registry.js');
+    const stores = await import('../packages/auth-server/src/modules/oauth/stores.js');
     const pair = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const issuer = 'http://localhost:9001';
     const keys = {
@@ -101,14 +104,14 @@ async function main() {
     app.route('/', createTokenRouter({ keys, issuer, accessTokenTtlSeconds: 3600, defaultAudience: 'mcp-gateway' }));
     app.route('/', createRegistryRouter());
     const createUser = (username: string, role: 'admin' | 'user' = 'user') =>
-      database.createUserRow(username, 'lifecycle-user-password-123456', role);
+      databaseAuthentication.createUserRow(username, 'lifecycle-user-password-123456', role);
     const identity = async (id: number) => {
       const [user] = (await fixturePool!.query('SELECT id,username,auth_version FROM users WHERE id=$1', [id])).rows;
       return { userId: Number(user.id), sub: user.username as string, userAuthVersion: user.auth_version as number };
     };
     const session = async (id: number) => {
       const user = await identity(id);
-      return 'auth_session=' + (await database.createLoginSession(id, user.userAuthVersion));
+      return 'auth_session=' + (await databaseSessions.createLoginSession(id, user.userAuthVersion));
     };
     const request = async (
       path: string,
@@ -201,7 +204,7 @@ async function main() {
     assert.equal((await request('/admin/session', { bearer: oldJwt })).status, 401);
     assert.equal((await exchangeRefresh(oldRefresh)).status, 400);
     assert.equal((await exchangeCode(oldCode)).status, 400);
-    await assert.rejects(database.createLoginSession(deletedId, capturedIdentity.userAuthVersion));
+    await assert.rejects(databaseSessions.createLoginSession(deletedId, capturedIdentity.userAuthVersion));
     await assert.rejects(stores.saveRefreshToken({ ...capturedIdentity, client_id: clientId, scope: 'mcp' }));
     assert.equal((await request('/admin/session', { cookie: await session(replacementId) })).status, 200);
     // Both browser entry points share one cookie. Stale tabs must not act as the switched account.
@@ -417,7 +420,7 @@ async function main() {
     assert.equal((await exchangeCode(resetCode)).status, 400);
     assert.equal((await liveAccess()).status, 403, 'password reset rejects pre-upgrade JWTs immediately');
     assert.equal((await liveAccess(1)).status, 200, 'new authentication version retains assigned service access');
-    await assert.rejects(database.createLoginSession(targetId, beforeReset.userAuthVersion));
+    await assert.rejects(databaseSessions.createLoginSession(targetId, beforeReset.userAuthVersion));
     await assert.rejects(
       stores.saveAuthCode({
         ...beforeReset,
@@ -451,7 +454,7 @@ async function main() {
     const currentAuthVersion = await identity(targetId);
     assert.equal(reissuedClaims.auth_version, currentAuthVersion.userAuthVersion);
     await assert.rejects(
-      database.createLoginSession(targetId, 1),
+      databaseSessions.createLoginSession(targetId, 1),
       're-enabling cannot revive credentials captured before disable',
     );
 
@@ -466,7 +469,7 @@ async function main() {
     const release = new Promise<void>((resolve) => {
       releaseIssuer = resolve;
     });
-    const pendingIssue = database.withAuthenticatedUser(lockedIdentity, async (tx) => {
+    const pendingIssue = databaseAuthentication.withAuthenticatedUser(lockedIdentity, async (tx) => {
       issuerLocked();
       await release;
       return stores.saveRefreshToken({ ...lockedIdentity, client_id: clientId, scope: 'mcp' }, tx);
@@ -489,21 +492,21 @@ async function main() {
     // A legacy lockout never automatically re-enables an explicitly disabled user.
     await fixturePool.query("UPDATE users SET disabled=true WHERE role='admin'");
     await createUser(process.env.ADMIN_USERNAME, 'user');
-    await assert.rejects(database.bootstrapAdmin(), /ADMIN_BOOTSTRAP_RECOVERY/);
+    await assert.rejects(databaseBootstrap.bootstrapAdmin(), /ADMIN_BOOTSTRAP_RECOVERY/);
     assert.equal(
       (await fixturePool.query("SELECT count(*)::int AS n FROM users WHERE role='admin' AND disabled=false")).rows[0].n,
       0,
     );
     process.env.ADMIN_BOOTSTRAP_RECOVERY = 'true';
-    await database.bootstrapAdmin();
-    const recovered = await database.verifyUser(process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD);
+    await databaseBootstrap.bootstrapAdmin();
+    const recovered = await databaseAuthentication.verifyUser(process.env.ADMIN_USERNAME, process.env.ADMIN_PASSWORD);
     assert.equal(recovered?.role, 'admin');
     assert.equal(
       (await fixturePool.query("SELECT count(*)::int AS n FROM users WHERE role='admin' AND disabled=false")).rows[0].n,
       1,
     );
     delete process.env.ADMIN_BOOTSTRAP_RECOVERY;
-    await database.bootstrapAdmin();
+    await databaseBootstrap.bootstrapAdmin();
     assert.equal(
       (await identity(recovered!.id)).userAuthVersion,
       1,

@@ -7,13 +7,14 @@ async function main() {
   process.env.DATABASE_URL = isolated.databaseUrl;
   process.env.SYSTEM_CONFIG_MODE = 'database';
   process.env.NODE_ENV = 'development';
-  const { db, pool, createLoginSession } = await import('../packages/auth-server/src/db.js');
+  const { db, pool } = await import('../packages/auth-server/src/infrastructure/database/client.js');
+  const { createLoginSession } = await import('../packages/auth-server/src/modules/identity/sessions.js');
   try {
-    const { users } = await import('../packages/auth-server/src/schema.js');
+    const { users } = await import('../packages/auth-server/src/infrastructure/database/schema.js');
     const { saveSystemSettings, refreshSystemSettings } =
-      await import('../packages/auth-server/src/system-settings.js');
-    const { createAdminRouter } = await import('../packages/auth-server/src/admin.js');
-    const { loadSigningKeys } = await import('../packages/auth-server/src/keys.js');
+      await import('../packages/auth-server/src/modules/system/settings.js');
+    const { createAdminRouter } = await import('../packages/auth-server/src/modules/admin/router.js');
+    const { loadSigningKeys } = await import('../packages/auth-server/src/modules/oauth/keys.js');
     const settings = {
       public_url: 'https://gateway.example.test',
       upstream_allowlist_enabled: true,

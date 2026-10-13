@@ -1,7 +1,9 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
   'mcpTest.action': '测试 MCP 连接',
-  'mcpTest.help': '从网关测试 MCP 初始化和工具列表，使用匿名连接。',
+  'mcpTest.credentialRequired': '请先配置密钥，或保存并完成此上游的账号授权。',
+  'mcpTest.saveBeforeTest': '地址已修改，请先保存配置再测试已有连接。',
+  'mcpTest.help': '从网关测试 MCP 初始化和工具列表，使用此 MCP Server 的认证配置。',
   'mcpTest.success': 'MCP 连接测试通过',
   'mcpTest.failed': 'MCP 连接测试未通过',
   'mcpTest.dns':
@@ -13,8 +15,7 @@ export const messages = {
   'mcpTest.http': '上游返回 HTTP {status}。请检查服务状态、反向代理和 MCP 地址。',
   'mcpTest.notFound': '上游返回 HTTP 404。请填写完整 MCP 路径，例如 fx 默认使用 /mcp/fx。',
   'mcpTest.methodNotAllowed': '上游不接受 MCP POST 请求。请确认地址提供 Streamable HTTP MCP 服务。',
-  'mcpTest.authRequired':
-    '上游要求认证或拒绝匿名访问。请核对认证要求，在服务中配置认证方式，并在个人连接中心提供凭据后验证调用。',
+  'mcpTest.authRequired': '上游返回 HTTP 401。请核对当前上游的密钥、认证请求头和授权状态。',
   'mcpTest.accessDenied': '上游返回 HTTP 403。请检查上游访问策略、允许的 Host / Origin 和凭据要求。',
   'mcpTest.redirect': 'MCP 地址返回重定向。请填写可直接接收 MCP 请求的最终地址。',
   'mcpTest.invalidMcp': '地址可访问，但未返回有效的 MCP 初始化结果。请检查完整路径及 Streamable HTTP 协议支持。',

@@ -30,9 +30,11 @@ interface FixtureServer {
 const fixture = JSON.parse(readFileSync(new URL('../servers.json', import.meta.url), 'utf8')) as {
   servers: FixtureServer[];
 };
-const { createUserRow, db, initializeDatabase, pool } = await import('../../../packages/auth-server/src/db.js');
+const { createUserRow } = await import('../../../packages/auth-server/src/modules/identity/authentication.js');
+const { db, pool } = await import('../../../packages/auth-server/src/infrastructure/database/client.js');
+const { initializeDatabase } = await import('../../../packages/auth-server/src/infrastructure/database/lifecycle.js');
 const { clients, mcpServerInstances, mcpServers, userServerAccess, users } =
-  await import('../../../packages/auth-server/src/schema.js');
+  await import('../../../packages/auth-server/src/infrastructure/database/schema.js');
 
 try {
   await initializeDatabase();

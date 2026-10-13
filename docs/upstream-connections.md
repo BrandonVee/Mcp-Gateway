@@ -28,7 +28,7 @@ http://localhost:8000/mcp/external-search
 ```
 
 外部地址支持 HTTP/HTTPS 和自定义路径；如果只填写主机根地址，系统会自动补全 `/mcp`。
-注册服务、添加实例或修改实例地址时，可点击 **测试 MCP 连接**。测试由实际 Gateway 发起 MCP 初始化；上游声明支持工具时，还会读取一页工具列表。支持 JSON 和 SSE 响应，测试使用匿名连接，不执行业务工具。需要上游认证时会明确提示，后续须配置系统密钥或在个人连接中心配置用户凭据，并通过客户端验证。
+注册服务、添加实例或修改实例地址时，可点击 **测试 MCP 连接**。测试由实际 Gateway 发起 MCP 初始化；上游声明支持工具时，还会读取一页工具列表。支持 JSON 和 SSE 响应，测试使用当前上游的认证配置，不执行业务工具。系统 API Key 可使用表单中的密钥，留空时由后端读取已保存密钥；OAuth 和用户 API Key 使用当前管理员的已有连接，尚未连接时需先保存并完成授权。密钥不会出现在测试结果中。
 测试结果区分 DNS 解析失败、连接拒绝、超时、TLS、HTTP 状态、错误路径与 MCP 协议异常；地址改变后会清除旧结果。测试沿用上游白名单，需先加入可信主机；成功测试会清除该地址的临时不可用状态。MCP 测试最长 8 秒，单个响应限制为 1 MiB，网关最多同时执行 4 个测试；会话在测试完成后关闭。
 Docker 部署中的 `127.0.0.1` / `localhost` 指网关容器自身。容器名称需要可解析的 Docker 网络；跨网络接入可使用网关能访问的宿主机地址与映射端口，宿主机只绑定回环地址的端口不能这样访问。
 统一应用镜像和本地开发自动通过回环地址连接 Gateway。Auth / Gateway 分离部署时，在 Auth 配置 `GATEWAY_INTERNAL_URL=http://gateway:8000`（按实际内部地址调整）；仓库的分离部署 Compose 已配置该值。浏览器只访问管理员接口，内部测试入口仍由内部 Token 保护，不经公网 Nginx 暴露。
@@ -104,3 +104,5 @@ export CREDENTIAL_BROKER_TOKEN="$(openssl rand -hex 32)"
 系统授权完成后 Access/Refresh Token 加密保存在系统凭据记录中。Gateway 检查调用用户对逻辑端点的权限后使用该系统 Token，普通用户不能发起、覆盖或撤销系统 OAuth。刷新在数据库锁中串行执行，保留轮换的 Refresh Token。系统连接解除、账号禁用、权限撤销、认证变更或重复回调均经过复核，未完成回调不能复活已撤销连接。
 
 上游用户连接接口为 `GET /me/upstreams`、`PUT/DELETE /me/upstreams/:id/credential` 和 `POST /me/upstreams/:id/oauth`；后两个 OAuth 操作遇到系统模式时仅允许管理员。旧 `/me/servers` 接口仅用于兼容旧副本池。
+
+业务工具调用采用独立的等待时间，默认最多 10 分钟，可通过 Gateway 环境变量 `UPSTREAM_TOOL_TIMEOUT_MS` 配置（1000–3600000 毫秒）。初始化和工具发现仍使用短超时。长时间论文检索建议使用上游的 `submit_search`、`get_search_status` 和 `get_search_result`。

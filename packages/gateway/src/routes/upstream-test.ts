@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { UpstreamEndpointValidation } from '@mcp/shared';
-import { unavailableUpstreamTest } from '@mcp/shared';
+import { unavailableUpstreamTest, upstreamTestCredentialSchema } from '@mcp/shared';
 import { testUpstreamMcp } from '../upstream-test.js';
 import { upstreamHealth } from '../upstream-health.js';
 
@@ -40,7 +40,14 @@ export function registerUpstreamTestRoute(
       }
       const endpoint = options.validate(body && typeof body === 'object' ? (body as { url?: unknown }).url : undefined);
       if (endpoint.error) return reply.code(400).send(endpoint);
-      const result = await (options.probe ?? testUpstreamMcp)(endpoint.url);
+      const rawCredential =
+        body && typeof body === 'object' ? (body as { credential?: unknown }).credential : undefined;
+      const credential =
+        rawCredential === undefined ? undefined : upstreamTestCredentialSchema.safeParse(rawCredential);
+      if (credential && !credential.success) return reply.code(400).send({ error: 'invalid_probe_credentials' });
+      const result = credential?.success
+        ? await (options.probe ?? testUpstreamMcp)(endpoint.url, 8_000, credential.data)
+        : await (options.probe ?? testUpstreamMcp)(endpoint.url);
       if (result.ok) upstreamHealth.recordSuccess(endpoint.url);
       return result;
     } catch {

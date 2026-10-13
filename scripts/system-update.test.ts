@@ -6,12 +6,9 @@ import {
   buildUpdaterSpec,
   mountedSource,
   updaterGroups,
-  dockerSocket,
-  parsePullProgress,
-  selfId,
-  updateEnabled,
-  updateTargetImage,
-} from '../packages/auth-server/src/system-update';
+} from '../packages/auth-server/src/modules/system/update-spec';
+import { dockerSocket, parsePullProgress } from '../packages/auth-server/src/infrastructure/docker/client';
+import { selfId, updateEnabled, updateTargetImage } from '../packages/auth-server/src/modules/system/update-identity';
 
 const inspect = {
   Id: 'old-container-id',

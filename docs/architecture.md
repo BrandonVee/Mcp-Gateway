@@ -21,7 +21,7 @@
 
 - PostgreSQL 持久化用户、OAuth 客户端、授权码、Refresh Token、登录会话、签名密钥、MCP Server 和用户授权关系。
 - Redis 保存 MCP Session 到后端实例的粘性路由，数据只需要保留到 Session TTL 结束。
-- 数据访问统一使用 Drizzle ORM，表结构定义在 `packages/auth-server/src/schema.ts`。
+- 数据访问统一使用 Drizzle ORM，领域表定义在 `packages/auth-server/src/infrastructure/database/schema/`，由同级 `schema.ts` 汇总。
 - Auth Server 启动时自动执行 `packages/auth-server/drizzle/` 中的版本化迁移。
 - PostgreSQL 使用连接池；`DATABASE_URL` 和 `PG_POOL_MAX` 可用于覆盖配置文件中的敏感部署参数。
 
@@ -80,3 +80,7 @@ Gateway 只读取数据库注册表；注册表在启动时不可用会导致 Ga
 - 系统设置可单独关闭调用明细而继续汇总统计，或关闭全部新调用采集。默认明细保留 14 天、分钟汇总保留 365 天，每 10 分钟清理过期数据；去重记录保留 7 天。当前告警在最近 5 分钟至少 20 次已知结果时检查错误率（默认超过 5%），至少 20 次有耗时时检查 P95 分桶上界（默认超过 2000ms），同时显示采集故障及不可用上游。这些是页面当前告警，尚无历史告警、确认流程或外部通知。
 - 管理操作审计支持独立筛选和翻页。运行日志仍需从标准输出或容器日志采集。
 - Auth Server 与 Gateway 的 `/live` 用于进程存活探测；`/health` 用于就绪探测，依赖不可用时返回 HTTP 503。Gateway 会同时检查 Redis 与动态注册表是否及时同步。
+
+## Auth Server 模块组织
+
+Auth Server 的职责分为 `application`（启动与 HTTP 装配）、`modules`（业务领域）、`infrastructure`（数据库、Docker、缓存、邮件和加密）与 `shared`（公共 HTTP 和校验工具）。根目录只保留 `index.ts` 执行入口；脚本与配置直接引用对应模块，不保留旧路径转发文件。具体职责、依赖规则和安全约束见 [源代码目录规范](../packages/auth-server/src/README.md)。

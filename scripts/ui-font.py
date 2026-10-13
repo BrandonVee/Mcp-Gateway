@@ -13,7 +13,7 @@ TARGET = ROOT / "packages/admin-web/src/assets/fonts/ResourceHanRoundedCN-UI.wof
 def ui_characters():
     sources = list((ROOT / "packages/admin-web/src").rglob("*.ts"))
     sources += list((ROOT / "packages/admin-web/src").rglob("*.tsx"))
-    sources.append(ROOT / "packages/auth-server/src/authorize-pages.ts")
+    sources.append(ROOT / "packages/auth-server/src/modules/oauth/pages.ts")
     return {
         ord(char)
         for source in sources

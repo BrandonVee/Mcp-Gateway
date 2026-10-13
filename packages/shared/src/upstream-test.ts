@@ -45,3 +45,31 @@ export function unavailableUpstreamTest(reason: 'gateway_unavailable' | 'busy'):
     tools_count: null,
   };
 }
+
+/** Only the credential header is sent to the gateway; it never appears in probe results. */
+export const upstreamTestCredentialSchema = z.object({
+  header: z.string().regex(/^(authorization|x-[a-z0-9-]{1,60})$/i),
+  value: z
+    .string()
+    .min(1)
+    .max(4196)
+    .refine((value) => !/[\x00-\x1f\x7f]/.test(value)),
+});
+export type UpstreamTestCredential = z.infer<typeof upstreamTestCredentialSchema>;
+
+/** Optional draft configuration; existing OAuth/user credentials are resolved server-side. */
+export const upstreamTestAuthInputSchema = z.object({
+  instance_id: z.string().min(1).max(256).optional(),
+  auth_mode: z.enum(['none', 'api_key', 'system_api_key', 'oauth', 'system_oauth']).optional(),
+  system_api_key: z.string().max(4096).optional(),
+  api_key_header: z
+    .string()
+    .regex(/^(authorization|x-[a-z0-9-]{1,60})$/i)
+    .optional(),
+  api_key_prefix: z
+    .string()
+    .max(100)
+    .refine((value) => !/[\x00-\x1f\x7f]/.test(value))
+    .optional(),
+});
+export type UpstreamTestAuthInput = z.infer<typeof upstreamTestAuthInputSchema>;

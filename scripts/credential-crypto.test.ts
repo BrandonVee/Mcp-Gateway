@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { decryptCredential, encryptCredential } from '../packages/auth-server/src/credential-crypto.js';
+import {
+  decryptCredential,
+  encryptCredential,
+} from '../packages/auth-server/src/infrastructure/security/credential-crypto.js';
 
 test('credential encryption is randomized and authenticated', () => {
   process.env.CREDENTIAL_ENCRYPT_KEY = '0123456789abcdef'.repeat(4);

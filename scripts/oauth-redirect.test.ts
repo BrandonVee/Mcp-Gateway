@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isValidRedirectUri } from '../packages/auth-server/src/oauth-redirect.js';
+import { isValidRedirectUri } from '../packages/auth-server/src/modules/oauth/redirect.js';
 
 test('public OAuth redirect validation accepts only intended native and web callbacks', () => {
   assert.equal(isValidRedirectUri('workbuddy://workbuddy/mcp/connector%3Amy-server/oauth/callback'), true);

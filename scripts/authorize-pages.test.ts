@@ -1,5 +1,5 @@
 import { applySystemSettings, currentSystemSettings, normalizeSystemSettings } from '../packages/shared/src/index.js';
-import { hashSignupCode, matchesSignupCode } from '../packages/auth-server/src/registration.js';
+import { hashSignupCode, matchesSignupCode } from '../packages/auth-server/src/modules/identity/registration.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
@@ -9,8 +9,8 @@ import {
   loginPage,
   pageLanguage,
   signupPage,
-} from '../packages/auth-server/src/authorize-pages.js';
-import { validateSignup } from '../packages/auth-server/src/registration.js';
+} from '../packages/auth-server/src/modules/oauth/pages.js';
+import { validateSignup } from '../packages/auth-server/src/modules/identity/registration.js';
 
 const q = {
   response_type: 'code',

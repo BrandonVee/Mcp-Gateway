@@ -9,13 +9,15 @@ async function main() {
   process.env.SYSTEM_CONFIG_MODE = 'database';
   process.env.NODE_ENV = 'development';
   process.env.CREDENTIAL_ENCRYPT_KEY = 'a'.repeat(64);
-  const { db, pool, createLoginSession } = await import('../packages/auth-server/src/db.js');
+  const { db, pool } = await import('../packages/auth-server/src/infrastructure/database/client.js');
+  const { createLoginSession } = await import('../packages/auth-server/src/modules/identity/sessions.js');
   try {
-    const { users, mcpServers, userMcpCredentials } = await import('../packages/auth-server/src/schema.js');
-    const { saveSystemSettings } = await import('../packages/auth-server/src/system-settings.js');
-    const { createAdminRouter } = await import('../packages/auth-server/src/admin.js');
-    const { createConnectionsRouter } = await import('../packages/auth-server/src/connections.js');
-    const { loadSigningKeys } = await import('../packages/auth-server/src/keys.js');
+    const { users, mcpServers, userMcpCredentials } =
+      await import('../packages/auth-server/src/infrastructure/database/schema.js');
+    const { saveSystemSettings } = await import('../packages/auth-server/src/modules/system/settings.js');
+    const { createAdminRouter } = await import('../packages/auth-server/src/modules/admin/router.js');
+    const { createConnectionsRouter } = await import('../packages/auth-server/src/modules/connections/router.js');
+    const { loadSigningKeys } = await import('../packages/auth-server/src/modules/oauth/keys.js');
     await saveSystemSettings({
       public_url: 'https://gateway.example.test',
       upstream_allowlist_enabled: false,

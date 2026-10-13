@@ -1,10 +1,12 @@
 /** Run against a disposable mcp_signup_test_* database only. */
 import assert from 'node:assert/strict';
 import { applySystemSettings } from '../packages/shared/src/index.js';
-import { createRegisteredUser, hashSignupCode } from '../packages/auth-server/src/registration.js';
-import { db, initializeDatabase, pool, verifyUser } from '../packages/auth-server/src/db.js';
-import { signupEmailCodes, users } from '../packages/auth-server/src/schema.js';
-import { scryptHash } from '../packages/auth-server/src/users.js';
+import { createRegisteredUser, hashSignupCode } from '../packages/auth-server/src/modules/identity/registration.js';
+import { db, pool } from '../packages/auth-server/src/infrastructure/database/client.js';
+import { initializeDatabase } from '../packages/auth-server/src/infrastructure/database/lifecycle.js';
+import { verifyUser } from '../packages/auth-server/src/modules/identity/authentication.js';
+import { signupEmailCodes, users } from '../packages/auth-server/src/infrastructure/database/schema.js';
+import { scryptHash } from '../packages/auth-server/src/infrastructure/security/password.js';
 
 const url = new URL(process.env.DATABASE_URL ?? 'postgres://localhost/invalid');
 assert.match(url.pathname, /^\/mcp_signup_test_[a-z0-9_]+$/, 'Use an isolated regression database');

@@ -1,4 +1,4 @@
-export type { UpstreamTestResult } from '../../shared/src/upstream-test';
+export type { UpstreamTestResult, UpstreamTestAuthInput } from '../../shared/src/upstream-test';
 
 export interface AdminUser {
   id: number;

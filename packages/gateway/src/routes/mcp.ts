@@ -1,3 +1,4 @@
+import { upstreamRequestTimeout, rpcMethod } from '../transport-policy.js';
 import { aggregateRequest } from './aggregate.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { request } from 'undici';
@@ -230,7 +231,7 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
         method: req.method as 'POST', // fastify gives the uppercase verb; widened by undici at runtime
         headers,
         body: hasBody ? (req.body as Buffer | undefined) : undefined,
-        headersTimeout: 15_000,
+        headersTimeout: upstreamRequestTimeout(rpcMethod(req.body), 15_000),
         bodyTimeout: 0, // Streamable HTTP and SSE may keep the body open indefinitely.
       }).catch((error: unknown) => {
         if (req.monitoring) req.monitoring.error = 'upstream_transport_error';

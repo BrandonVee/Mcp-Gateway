@@ -21,6 +21,7 @@ import type {
   TopologySnapshot,
   UpdateUserInput,
   UpstreamTestResult,
+  UpstreamTestAuthInput,
 } from './types';
 import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from './i18n';
 
@@ -59,6 +60,9 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     'invalid oauth_scopes': 'api.invalidOAuthScopes',
     'invalid oauth_resource': 'api.invalidOAuthResource',
     'invalid oauth_issuer': 'api.invalidOAuthIssuer',
+    invalid_probe_credentials: 'mcpTest.credentialRequired',
+    upstream_changed_before_probe: 'mcpTest.saveBeforeTest',
+    connection_required: 'mcpTest.credentialRequired',
     upstream_auth_required: 'api.upstreamAuthRequired',
     invalid_api_key: 'api.invalidApiKey',
     server_does_not_use_api_key: 'api.serverAuthChanged',
@@ -271,10 +275,10 @@ export function apiForSession(session?: PlatformSession) {
         { method: 'DELETE' },
       ),
     servers: () => request<{ servers: McpServer[] }>('/api/admin/servers'),
-    testUpstream: (url: string, signal?: AbortSignal) =>
+    testUpstream: (url: string, signal?: AbortSignal, authentication?: UpstreamTestAuthInput) =>
       request<UpstreamTestResult>('/api/admin/servers/test-connection', {
         method: 'POST',
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, ...authentication }),
         signal,
       }),
     createServer: (body: CreateServerInput) =>

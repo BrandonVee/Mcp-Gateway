@@ -103,7 +103,7 @@ async function pull() {
   throw new Error('pull failed');
 }
 
-/** Mirrors buildCreateSpec() in packages/auth-server/src/system-update.ts. */
+/** Mirrors buildCreateSpec() in packages/auth-server/src/modules/system/update-spec.ts. */
 function createSpec(inspect, imageId) {
   const hostConfig = { ...(inspect.HostConfig ?? {}) };
   delete hostConfig.NetworkMode;

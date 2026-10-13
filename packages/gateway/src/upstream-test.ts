@@ -1,6 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { UpstreamTestResult } from '@mcp/shared';
+import type { UpstreamTestResult, UpstreamTestCredential } from '@mcp/shared';
 
 class ProbeError extends Error {
   constructor(readonly reason: UpstreamTestResult['reason']) {
@@ -32,7 +32,11 @@ export function upstreamTestFailure(error: unknown): UpstreamTestResult['reason'
 }
 
 /** Run a real MCP handshake and tools/list from the gateway's network namespace. */
-export async function testUpstreamMcp(endpoint: string, timeoutMs = 8_000): Promise<UpstreamTestResult> {
+export async function testUpstreamMcp(
+  endpoint: string,
+  timeoutMs = 8_000,
+  credential?: UpstreamTestCredential,
+): Promise<UpstreamTestResult> {
   const started = performance.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -42,6 +46,7 @@ export async function testUpstreamMcp(endpoint: string, timeoutMs = 8_000): Prom
   let cleanup = false;
   const client = new Client({ name: 'mcp-gateway-connection-test', version: '1' });
   const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
+    ...(credential ? { requestInit: { headers: { [credential.header]: credential.value } } } : {}),
     reconnectionOptions: {
       maxRetries: 0,
       initialReconnectionDelay: 0,

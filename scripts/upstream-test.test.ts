@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { test, type TestContext } from 'node:test';
 import { testUpstreamMcp, upstreamTestFailure } from '../packages/gateway/src/upstream-test.js';
 import { registerUpstreamTestRoute } from '../packages/gateway/src/routes/upstream-test.js';
-import { requestUpstreamTest } from '../packages/auth-server/src/upstream-test.js';
+import { requestUpstreamTest } from '../packages/auth-server/src/modules/upstreams/connection-test.js';
 import { validateUpstreamEndpoint } from '../packages/shared/src/index.js';
 import { loopbackUpstreamEndpoint } from '../packages/admin-web/src/features/servers/UpstreamConnectionTest';
 

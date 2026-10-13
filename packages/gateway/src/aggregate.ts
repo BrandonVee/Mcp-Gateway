@@ -1,3 +1,4 @@
+import { upstreamRequestTimeout } from './transport-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { McpServerConfig } from '@mcp/shared';
 
@@ -206,7 +207,7 @@ export async function upstreamRpc(
     headers,
     body: JSON.stringify(message),
     redirect: 'error',
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(upstreamRequestTimeout(message.method, 30_000)),
   });
   if (!response.ok) {
     await response.body?.cancel();

@@ -20,6 +20,7 @@ import type {
   ServerAuthInput,
   SystemSettings,
   UpstreamTestResult,
+  UpstreamTestAuthInput,
 } from '../../types';
 import { submitDialog } from '../../utils/operations';
 import { isEndpointUrl, isOAuthUrl, validationRule } from '../../utils/validation';
@@ -29,7 +30,11 @@ import { UpstreamConnectionTest } from './UpstreamConnectionTest';
 interface UpstreamAllowlistProps {
   settings: SystemSettings | null;
   onAddUpstreamHost: (host: string) => Promise<void>;
-  onTestUpstream: (url: string, signal?: AbortSignal) => Promise<UpstreamTestResult>;
+  onTestUpstream: (
+    url: string,
+    signal?: AbortSignal,
+    authentication?: UpstreamTestAuthInput,
+  ) => Promise<UpstreamTestResult>;
 }
 
 interface ServerDialogsProps extends UpstreamAllowlistProps {
@@ -426,7 +431,7 @@ function EditInstanceDialog({
           <Input prefix={<LinkOutlined />} autoFocus />
         </Form.Item>
         <UpstreamAllowlistHint {...allowlist} busy={busy} />
-        <UpstreamConnectionTest {...allowlist} busy={busy} />
+        <UpstreamConnectionTest {...allowlist} busy={busy} instanceId={instance.id} />
         <AuthFormFields server={{ ...server, ...instance } as McpServer} />
       </Form>
     </Modal>

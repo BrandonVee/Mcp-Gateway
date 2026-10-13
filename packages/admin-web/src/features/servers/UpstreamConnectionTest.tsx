@@ -2,7 +2,7 @@ import { ApiOutlined } from '@ant-design/icons';
 import { Alert, Button, Form, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n, type MessageKey } from '../../i18n';
-import type { SystemSettings, UpstreamTestResult } from '../../types';
+import type { SystemSettings, UpstreamTestResult, UpstreamTestAuthInput } from '../../types';
 import { isEndpointUrl } from '../../utils/validation';
 import { untrustedUpstreamHost } from './upstream-allowlist';
 
@@ -39,13 +39,23 @@ export function UpstreamConnectionTest({
   settings,
   onTestUpstream,
   busy,
+  instanceId,
 }: {
   settings: SystemSettings | null;
-  onTestUpstream: (url: string, signal?: AbortSignal) => Promise<UpstreamTestResult>;
+  onTestUpstream: (
+    url: string,
+    signal?: AbortSignal,
+    authentication?: UpstreamTestAuthInput,
+  ) => Promise<UpstreamTestResult>;
   busy: boolean;
+  instanceId?: string;
 }) {
   const { t } = useI18n();
   const value = Form.useWatch('url');
+  const authMode = Form.useWatch('auth_mode') as UpstreamTestAuthInput['auth_mode'];
+  const systemKey = Form.useWatch('system_api_key');
+  const keyHeader = Form.useWatch('api_key_header');
+  const keyPrefix = Form.useWatch('api_key_prefix');
   const url = typeof value === 'string' ? value.trim() : '';
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<UpstreamTestResult | null>(null);
@@ -65,7 +75,7 @@ export function UpstreamConnectionTest({
       attempt.current++;
       abort.current?.abort();
     };
-  }, [url]);
+  }, [url, authMode, systemKey, keyHeader, keyPrefix, instanceId]);
 
   const test = async () => {
     const id = ++attempt.current;
@@ -76,7 +86,13 @@ export function UpstreamConnectionTest({
     setResult(null);
     setError(null);
     try {
-      const response = await onTestUpstream(url, controller.signal);
+      const response = await onTestUpstream(url, controller.signal, {
+        instance_id: instanceId,
+        auth_mode: authMode,
+        ...(authMode === 'system_api_key'
+          ? { system_api_key: systemKey || undefined, api_key_header: keyHeader, api_key_prefix: keyPrefix }
+          : {}),
+      });
       if (attempt.current === id && currentUrl.current === url) setResult(response);
     } catch (failure) {
       if (attempt.current === id && currentUrl.current === url)
