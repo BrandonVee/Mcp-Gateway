@@ -1,10 +1,8 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
   'mcpTest.action': 'Test MCP connection',
-  'mcpTest.credentialRequired': 'Configure a key, or save this upstream and authorize its account first.',
-  'mcpTest.saveBeforeTest': 'The address changed. Save the configuration before testing a saved connection.',
-  'mcpTest.help':
-    'Test MCP initialization and tool discovery from the gateway using this upstream’s authentication configuration.',
+  'mcpTest.credentialRequired': 'Enter a key for this probe, or authorize this upstream account.',
+  'mcpTest.help': 'Test the current form values without saving or replacing the production configuration.',
   'mcpTest.success': 'MCP connection test passed',
   'mcpTest.failed': 'MCP connection test failed',
   'mcpTest.dns':

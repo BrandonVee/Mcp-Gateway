@@ -61,7 +61,6 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
     'invalid oauth_resource': 'api.invalidOAuthResource',
     'invalid oauth_issuer': 'api.invalidOAuthIssuer',
     invalid_probe_credentials: 'mcpTest.credentialRequired',
-    upstream_changed_before_probe: 'mcpTest.saveBeforeTest',
     connection_required: 'mcpTest.credentialRequired',
     upstream_auth_required: 'api.upstreamAuthRequired',
     invalid_api_key: 'api.invalidApiKey',

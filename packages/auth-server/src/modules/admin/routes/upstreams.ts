@@ -26,15 +26,9 @@ export function registerUpstreamsRoutes(router: AdminRouter) {
     if (endpoint.error) return c.json(endpoint, 400);
     const parsedAuthentication = upstreamTestAuthInputSchema.safeParse(body);
     if (!parsedAuthentication.success) return jsonError(c, 'invalid_probe_credentials');
-    const authentication = await resolveProbeCredential(parsedAuthentication.data, endpoint.url, c.get('adminActor'));
+    const authentication = await resolveProbeCredential(parsedAuthentication.data, c.get('adminActor'));
     if ('error' in authentication)
-      return jsonError(
-        c,
-        authentication.error,
-        authentication.error === 'connection_required' || authentication.error === 'upstream_changed_before_probe'
-          ? 409
-          : 400,
-      );
+      return jsonError(c, authentication.error, authentication.error === 'connection_required' ? 409 : 400);
     const result = await requestUpstreamTest(endpoint.url, undefined, authentication.credential);
     if ('error' in result) return c.json(result, 400);
     return c.json(result);

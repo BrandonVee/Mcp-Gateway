@@ -1,9 +1,8 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
   'mcpTest.action': '测试 MCP 连接',
-  'mcpTest.credentialRequired': '请先配置密钥，或保存并完成此上游的账号授权。',
-  'mcpTest.saveBeforeTest': '地址已修改，请先保存配置再测试已有连接。',
-  'mcpTest.help': '从网关测试 MCP 初始化和工具列表，使用此 MCP Server 的认证配置。',
+  'mcpTest.credentialRequired': '请填写测试用的密钥，或完成此上游的账号授权。',
+  'mcpTest.help': '使用当前表单配置测试连接，不会保存或替换正式配置。',
   'mcpTest.success': 'MCP 连接测试通过',
   'mcpTest.failed': 'MCP 连接测试未通过',
   'mcpTest.dns':

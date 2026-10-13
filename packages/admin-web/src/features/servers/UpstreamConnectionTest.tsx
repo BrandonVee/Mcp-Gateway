@@ -1,3 +1,4 @@
+import { upstreamProbeDraft, sameUpstreamProbeDraft, type UpstreamProbeDraft } from './upstream-probe-draft';
 import { ApiOutlined } from '@ant-design/icons';
 import { Alert, Button, Form, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
@@ -51,6 +52,7 @@ export function UpstreamConnectionTest({
   instanceId?: string;
 }) {
   const { t } = useI18n();
+  const form = Form.useFormInstance();
   const value = Form.useWatch('url');
   const authMode = Form.useWatch('auth_mode') as UpstreamTestAuthInput['auth_mode'];
   const systemKey = Form.useWatch('system_api_key');
@@ -62,23 +64,32 @@ export function UpstreamConnectionTest({
   const [error, setError] = useState<string | null>(null);
   const attempt = useRef(0);
   const abort = useRef<AbortController | null>(null);
-  const currentUrl = useRef(url);
-  currentUrl.current = url;
+  const activeDraft = useRef<UpstreamProbeDraft | null>(null);
 
   useEffect(() => {
+    const current = upstreamProbeDraft(form.getFieldsValue(true), instanceId);
+    // A delayed useWatch render must not cancel a probe already using those exact values.
+    if (activeDraft.current && sameUpstreamProbeDraft(activeDraft.current, current)) return;
+    activeDraft.current = null;
     attempt.current++;
     abort.current?.abort();
     setTesting(false);
     setResult(null);
     setError(null);
-    return () => {
+  }, [url, authMode, systemKey, keyHeader, keyPrefix, instanceId, form]);
+
+  useEffect(
+    () => () => {
       attempt.current++;
       abort.current?.abort();
-    };
-  }, [url, authMode, systemKey, keyHeader, keyPrefix, instanceId]);
+    },
+    [],
+  );
 
   const test = async () => {
     const id = ++attempt.current;
+    const draft = upstreamProbeDraft(form.getFieldsValue(true), instanceId);
+    activeDraft.current = draft;
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
@@ -86,16 +97,17 @@ export function UpstreamConnectionTest({
     setResult(null);
     setError(null);
     try {
-      const response = await onTestUpstream(url, controller.signal, {
-        instance_id: instanceId,
-        auth_mode: authMode,
-        ...(authMode === 'system_api_key'
-          ? { system_api_key: systemKey || undefined, api_key_header: keyHeader, api_key_prefix: keyPrefix }
-          : {}),
-      });
-      if (attempt.current === id && currentUrl.current === url) setResult(response);
+      const response = await onTestUpstream(draft.url, controller.signal, draft.authentication);
+      if (
+        attempt.current === id &&
+        sameUpstreamProbeDraft(draft, upstreamProbeDraft(form.getFieldsValue(true), instanceId))
+      )
+        setResult(response);
     } catch (failure) {
-      if (attempt.current === id && currentUrl.current === url)
+      if (
+        attempt.current === id &&
+        sameUpstreamProbeDraft(draft, upstreamProbeDraft(form.getFieldsValue(true), instanceId))
+      )
         setError(failure instanceof Error ? failure.message : t('common.operationFailed'));
     } finally {
       if (attempt.current === id) setTesting(false);
