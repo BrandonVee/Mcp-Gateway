@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, delimiter } from 'node:path';
 import { test } from 'node:test';
 import { createServer } from 'node:net';
-import { readDeploymentEnvironment } from './deploy-env.js';
+import { readDeploymentEnvironment } from '@/scripts/deploy-env.js';
 
 const script = resolve('scripts/deploy.sh');
 const environmentKeys = [

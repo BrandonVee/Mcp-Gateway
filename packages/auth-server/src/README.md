@@ -22,7 +22,7 @@
 ## 依赖与扩展规则
 
 - 路由负责解析请求、调用业务服务及生成 HTTP 响应；身份、凭据、锁和 DTO 查询能力放在对应服务或工具中。
-- 跨模块调用引用具体能力，禁止业务服务反向导入路由装配器；公共工具不依赖业务路由。
+- 源码引用使用 `@/auth/` 与 `@/shared/`，映射继承根 `tsconfig.base.json`；跨模块调用引用具体能力，禁止业务服务反向导入路由装配器；公共工具不依赖业务路由。
 - 管理路由使用 `AdminRouter`，审计身份通过类型化上下文传递，不能使用强制类型转换绕过身份检查。
 - 新管理资源添加到 `modules/admin/routes/`，由管理装配器注册；公共浏览器写请求由连接中间件统一保护。
 - 表模型按身份、OAuth、上游、可观测性和系统划分。数据库表名、约束与迁移历史是持久化契约，重命名代码文件不意味着重建表。
@@ -41,3 +41,9 @@
 - 连接探测使用点击时的表单草稿：当前地址、请求头和值前缀优先，新填密钥优先；密钥留空时沿用已保存密钥。探测只读取现有凭据，不保存配置、不刷新或改写正式令牌。只有手动保存才改变正式调用。
 
 本包启用 TypeScript strict、`noUnusedLocals` 和 `noUnusedParameters`。这些是静态约束，不替代运行验证。
+
+## 实例池与独立上游
+
+`modules/connections/pool/service.ts` 和 `pool/routes.ts` 是仍在使用的实例池认证实现，分别处理凭据解析和浏览器连接操作。保留旧 HTTP 路径与 OAuth 回调地址，不保留旧 TypeScript 导入入口。独立 MCP Server 继续由 `modules/upstreams/` 管理。
+
+两种模式复用 `shared/security/pkce.ts` 和 `modules/connections/redirects.ts`；跨包 API Key、凭据请求头和 OAuth URL 校验统一位于 `packages/shared/src/security/`，直接调用 Zod 或标准库。

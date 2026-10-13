@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { test } from 'node:test';
-import { registerDevelopmentOAuthRoutes } from '../packages/gateway/src/routes/oauth.js';
+import { registerDevelopmentOAuthRoutes } from '@/gateway/routes/oauth.js';
 
 const Fastify = createRequire(new URL('../packages/gateway/package.json', import.meta.url))('fastify');
 

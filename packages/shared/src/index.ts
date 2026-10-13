@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-export * from './alerts.js';
+export * from '@/shared/alerts.js';
 export {
   upstreamTestResultSchema,
   unavailableUpstreamTest,
@@ -10,7 +10,7 @@ export {
   upstreamTestAuthInputSchema,
   type UpstreamTestCredential,
   type UpstreamTestAuthInput,
-} from './upstream-test.js';
+} from '@/shared/upstream-test.js';
 
 /** A backend MCP server: one logical name mapped to N instance URLs. */
 export interface McpServerConfig {
@@ -213,7 +213,7 @@ export function validateProductionRuntime(
   if (!['redis:', 'rediss:'].includes(redisUrl.protocol) || !redisUrl.hostname) fail('REDIS_URL must be a Redis URL');
 }
 
-export * from './monitoring.js';
+export * from '@/shared/monitoring.js';
 
 export interface SystemSettings {
   public_url: string | null;

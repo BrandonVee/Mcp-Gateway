@@ -1,21 +1,7 @@
-import { mcpServerInstances } from '../../infrastructure/database/schema.js';
-import { encryptCredential } from '../../infrastructure/security/credential-crypto.js';
-import { API_KEY_HEADER, isValidApiKey } from '../../shared/security/credentials.js';
-
-export function validOAuthUrl(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
-  try {
-    const url = new URL(value);
-    return (
-      !url.username &&
-      !url.password &&
-      !url.hash &&
-      (url.protocol === 'https:' || (url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)))
-    );
-  } catch {
-    return false;
-  }
-}
+import { isOAuthUrl } from '@/shared/security/urls.js';
+import { mcpServerInstances } from '@/auth/infrastructure/database/schema.js';
+import { encryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
+import { API_KEY_HEADER, isValidApiKey, isValidApiKeyPrefix } from '@/shared/security/credentials.js';
 
 export type UpstreamAuthConfig = Pick<
   typeof mcpServerInstances.$inferSelect,
@@ -67,8 +53,7 @@ export function authSettings(
       (existing?.authMode === 'api_key' || existing?.authMode === 'system_api_key' ? existing.apiKeyPrefix : 'Bearer ');
     if (typeof header !== 'string' || !API_KEY_HEADER.test(header))
       return { error: 'api_key_header must be authorization or an x-* header' };
-    if (typeof prefix !== 'string' || prefix.length > 100 || /[\x00-\x1f\x7f]/.test(prefix))
-      return { error: 'invalid api_key_prefix' };
+    if (!isValidApiKeyPrefix(prefix)) return { error: 'invalid api_key_prefix' };
     values.apiKeyHeader = header.toLowerCase();
     values.apiKeyPrefix = prefix;
   }
@@ -85,7 +70,7 @@ export function authSettings(
     const authorizeUrl = body.oauth_authorize_url ?? existing?.oauthAuthorizeUrl;
     const tokenUrl = body.oauth_token_url ?? existing?.oauthTokenUrl;
     const clientId = body.oauth_client_id ?? existing?.oauthClientId;
-    if (!validOAuthUrl(authorizeUrl) || !validOAuthUrl(tokenUrl))
+    if (!isOAuthUrl(authorizeUrl) || !isOAuthUrl(tokenUrl))
       return { error: 'valid OAuth authorize and token URLs are required' };
     if (typeof clientId !== 'string' || !clientId.trim()) return { error: 'oauth_client_id is required' };
     if (
@@ -109,9 +94,9 @@ export function authSettings(
       return { error: 'oauth_client_secret requires a client authentication method' };
     if (body.oauth_scopes !== undefined && (typeof body.oauth_scopes !== 'string' || body.oauth_scopes.length > 1000))
       return { error: 'invalid oauth_scopes' };
-    if (body.oauth_resource !== undefined && body.oauth_resource !== '' && !validOAuthUrl(body.oauth_resource))
+    if (body.oauth_resource !== undefined && body.oauth_resource !== '' && !isOAuthUrl(body.oauth_resource))
       return { error: 'invalid oauth_resource' };
-    if (body.oauth_issuer !== undefined && body.oauth_issuer !== '' && !validOAuthUrl(body.oauth_issuer))
+    if (body.oauth_issuer !== undefined && body.oauth_issuer !== '' && !isOAuthUrl(body.oauth_issuer))
       return { error: 'invalid oauth_issuer' };
     values.oauthAuthorizeUrl = authorizeUrl;
     values.oauthTokenUrl = tokenUrl;

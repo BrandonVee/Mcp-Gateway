@@ -1,21 +1,22 @@
+import { poolCallbackUrl, connectionPortalUrl } from '@/auth/modules/connections/redirects.js';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { createHash, randomBytes } from 'node:crypto';
-import { db } from '../../../infrastructure/database/client.js';
+import { createPkceAuthorization } from '@/auth/shared/security/pkce.js';
+import { db } from '@/auth/infrastructure/database/client.js';
 import {
   mcpServers,
   oauthConnectionStates,
   userMcpCredentials,
   userServerAccess,
-} from '../../../infrastructure/database/schema.js';
-import { encryptCredential } from '../../../infrastructure/security/credential-crypto.js';
-import { isValidApiKey } from '../../../shared/security/credentials.js';
-import { currentUser } from '../../identity/session-user.js';
-import { exchangeOAuthToken, tokenExpiry } from '../../upstreams/token-exchange.js';
-import { accessibleServer, callbackUrl, portalUrl } from '../legacy-service.js';
-import { lockAccessibleConnection, revokeUserConnection } from '../lifecycle.js';
-/** Registers legacy browser routes; write protection is applied by the parent router. */
-export function registerLegacyRoutes(router: Hono) {
+} from '@/auth/infrastructure/database/schema.js';
+import { encryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
+import { isValidApiKey } from '@/shared/security/credentials.js';
+import { currentUser } from '@/auth/modules/identity/session-user.js';
+import { exchangeOAuthToken, tokenExpiry } from '@/auth/modules/upstreams/token-exchange.js';
+import { accessibleServer } from '@/auth/modules/connections/pool/service.js';
+import { lockAccessibleConnection, revokeUserConnection } from '@/auth/modules/connections/lifecycle.js';
+/** Pool-mode connection routes; parent middleware protects browser writes. */
+export function registerPoolConnectionRoutes(router: Hono) {
   router.get('/me/servers', async (c) => {
     const user = await currentUser(c);
     if (!user) return c.json({ error: 'unauthorized' }, 401);
@@ -120,9 +121,7 @@ export function registerLegacyRoutes(router: Hono) {
     if (server.authMode !== 'oauth' || !server.oauthAuthorizeUrl || !server.oauthClientId)
       return c.json({ error: 'oauth_not_configured' }, 400);
     // PKCE: the verifier stays in the database and never reaches the browser.
-    const state = randomBytes(32).toString('base64url');
-    const verifier = randomBytes(32).toString('base64url');
-    const challenge = createHash('sha256').update(verifier).digest('base64url');
+    const { state, verifier, challenge } = createPkceAuthorization();
     const started = await db.transaction(async (tx) => {
       const locked = await lockAccessibleConnection(tx, user.id, server.name, server.authRevision, user.authVersion);
       if (!locked || locked.authMode !== 'oauth') return false;
@@ -145,7 +144,7 @@ export function registerLegacyRoutes(router: Hono) {
     const url = new URL(server.oauthAuthorizeUrl);
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('client_id', server.oauthClientId);
-    url.searchParams.set('redirect_uri', callbackUrl(server.name));
+    url.searchParams.set('redirect_uri', poolCallbackUrl(server.name));
     url.searchParams.set('state', state);
     url.searchParams.set('code_challenge', challenge);
     url.searchParams.set('code_challenge_method', 'S256');
@@ -162,29 +161,29 @@ export function registerLegacyRoutes(router: Hono) {
       ? await db.select().from(oauthConnectionStates).where(eq(oauthConnectionStates.state, state)).limit(1)
       : [];
     if (!saved || saved.expiresAt < Date.now() || saved.serverName !== c.req.param('name'))
-      return c.redirect(portalUrl('invalid_state', c.req.param('name')));
+      return c.redirect(connectionPortalUrl('invalid_state', c.req.param('name')));
     const user = await currentUser(c);
-    if (!user || user.id !== saved.userId) return c.redirect(portalUrl('session_expired', saved.serverName));
+    if (!user || user.id !== saved.userId) return c.redirect(connectionPortalUrl('session_expired', saved.serverName));
     const code = c.req.query('code');
     if (!code || c.req.query('error')) {
       await db.delete(oauthConnectionStates).where(eq(oauthConnectionStates.state, saved.state));
-      return c.redirect(portalUrl('cancelled', saved.serverName));
+      return c.redirect(connectionPortalUrl('cancelled', saved.serverName));
     }
     const server = await accessibleServer(user, saved.serverName);
     if (!server || server.authMode !== 'oauth' || server.authRevision !== saved.authRevision)
-      return c.redirect(portalUrl('unavailable', saved.serverName));
+      return c.redirect(connectionPortalUrl('unavailable', saved.serverName));
     if (server.oauthIssuer && c.req.query('iss') !== server.oauthIssuer)
-      return c.redirect(portalUrl('issuer_mismatch', saved.serverName));
+      return c.redirect(connectionPortalUrl('issuer_mismatch', saved.serverName));
     const body = await exchangeOAuthToken(
       server,
       new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: callbackUrl(server.name),
+        redirect_uri: poolCallbackUrl(server.name),
         code_verifier: saved.verifier,
       }),
     ).catch(() => null);
-    if (!body) return c.redirect(portalUrl('token_error', server.name));
+    if (!body) return c.redirect(connectionPortalUrl('token_error', server.name));
     const refresh =
       typeof body.refresh_token === 'string' && body.refresh_token ? encryptCredential(body.refresh_token) : null;
     const now = Date.now();
@@ -231,7 +230,7 @@ export function registerLegacyRoutes(router: Hono) {
         });
       return true;
     });
-    if (!connected) return c.redirect(portalUrl('invalid_state', server.name));
-    return c.redirect(portalUrl('connected', server.name));
+    if (!connected) return c.redirect(connectionPortalUrl('invalid_state', server.name));
+    return c.redirect(connectionPortalUrl('connected', server.name));
   });
 }

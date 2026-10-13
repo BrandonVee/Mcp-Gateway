@@ -11,7 +11,7 @@ import {
   loadPlatformConfig,
   normalizeSystemSettings,
   validateProductionRuntime,
-} from '../packages/shared/src/index.js';
+} from '@/shared/index.js';
 
 test('development keeps the Vite browser origin after system settings have been saved', () => {
   const previous = currentSystemSettings();

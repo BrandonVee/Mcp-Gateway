@@ -15,12 +15,12 @@ import {
   SendOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { useI18n } from '../../i18n';
-import type { SmtpSettingsInput, SystemSettings, SystemSettingsInput, SystemUpdateStatus } from '../../types';
-import './settings.css';
-import { isPublicOrigin, upstreamHosts, validUpstreamHosts, validationRule } from '../../utils/validation';
-import { validWebhookUrl } from '../../utils/validation.alert';
-import { mergeDraft } from '../../utils/operations';
+import { useI18n } from '@/web/i18n';
+import type { SmtpSettingsInput, SystemSettings, SystemSettingsInput, SystemUpdateStatus } from '@/web/types';
+import '@/web/features/settings/settings.css';
+import { isPublicOrigin, upstreamHosts, validUpstreamHosts, validationRule } from '@/web/utils/validation';
+import { validWebhookUrl } from '@/web/utils/validation.alert';
+import { mergeDraft } from '@/web/utils/operations';
 
 type SettingsFormValues = Omit<SystemSettingsInput, 'upstream_hosts'> & { upstream_hosts: string };
 type ToggleName =

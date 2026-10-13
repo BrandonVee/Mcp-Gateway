@@ -1,12 +1,12 @@
 import type { UpstreamTestAuthInput, UpstreamTestCredential } from '@mcp/shared';
 import { upstreamTestCredentialSchema } from '@mcp/shared';
 import { and, eq } from 'drizzle-orm';
-import { db } from '../../infrastructure/database/client.js';
-import { mcpServerInstances, upstreamCredentials, users } from '../../infrastructure/database/schema.js';
-import { decryptCredential } from '../../infrastructure/security/credential-crypto.js';
-import { isValidApiKey } from '../../shared/security/credentials.js';
-import { ownerFor } from './connection-service.js';
-import { accessTokenValid } from './token-exchange.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { mcpServerInstances, upstreamCredentials, users } from '@/auth/infrastructure/database/schema.js';
+import { decryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
+import { isValidApiKey } from '@/shared/security/credentials.js';
+import { ownerFor } from '@/auth/modules/upstreams/connection-service.js';
+import { accessTokenValid } from '@/auth/modules/upstreams/token-exchange.js';
 
 type ProbeCredentialResult =
   | { credential: UpstreamTestCredential | null }

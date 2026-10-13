@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mcpConfig, mcpServerUrl } from '../packages/admin-web/src/features/connections/mcp-config.js';
-import type { ConnectionServer } from '../packages/admin-web/src/types.js';
+import { mcpConfig, mcpServerUrl } from '@/web/features/connections/mcp-config.js';
+import type { ConnectionServer } from '@/web/types.js';
 
 const server = (name: string): ConnectionServer => ({
   name,

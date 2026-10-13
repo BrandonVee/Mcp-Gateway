@@ -1,11 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db } from '../../../infrastructure/database/client.js';
-import { upstreamCredentials, upstreamOAuthStates } from '../../../infrastructure/database/schema.js';
-import { encryptCredential } from '../../../infrastructure/security/credential-crypto.js';
-import { isValidApiKey } from '../../../shared/security/credentials.js';
-import { currentUser } from '../../identity/session-user.js';
-import { lockOwner, lockUpstream, ownerFor } from '../connection-service.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { upstreamCredentials, upstreamOAuthStates } from '@/auth/infrastructure/database/schema.js';
+import { encryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
+import { isValidApiKey } from '@/shared/security/credentials.js';
+import { currentUser } from '@/auth/modules/identity/session-user.js';
+import { lockOwner, lockUpstream, ownerFor } from '@/auth/modules/upstreams/connection-service.js';
 /** Registers credentials operations for concrete upstreams, with per-owner credential isolation. */
 export function registerCredentialsRoutes(router: Hono) {
   router.put('/me/upstreams/:id/credential', async (c) => {

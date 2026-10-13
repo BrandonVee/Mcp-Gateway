@@ -1,8 +1,8 @@
-import { useI18n } from '../../i18n';
+import { useI18n } from '@/web/i18n';
 import { EditOutlined, InfoCircleOutlined, LockOutlined, MailOutlined, UserAddOutlined } from '@ant-design/icons';
 import { Alert, Button, Checkbox, Form, Input, Modal, Radio, Select, Switch } from 'antd';
-import { submitDialog } from '../../utils/operations';
-import type { AdminUser, CreateUserInput, DialogState, McpServer, UpdateUserInput } from '../../types';
+import { submitDialog } from '@/web/utils/operations';
+import type { AdminUser, CreateUserInput, DialogState, McpServer, UpdateUserInput } from '@/web/types';
 
 interface UserDialogsProps {
   state: DialogState;

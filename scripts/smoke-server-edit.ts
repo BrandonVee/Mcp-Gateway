@@ -1,7 +1,7 @@
 /** Verify persisted server edits against a running development Auth service. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { loadPlatformConfig } from '../packages/shared/src/index.js';
+import { loadPlatformConfig } from '@/shared/index.js';
 
 async function main() {
   const config = loadPlatformConfig();

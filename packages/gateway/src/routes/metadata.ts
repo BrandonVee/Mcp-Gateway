@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { databaseSettingsEnabled, systemConfigured } from '@mcp/shared';
-import { env, refreshServerConfigs } from '../config.js';
+import { env, refreshServerConfigs } from '@/gateway/config.js';
 
 /**
  * Protected Resource Metadata (RFC 9728): tells MCP clients which

@@ -10,7 +10,7 @@ import {
   loadSetupEnvironment,
   needsSetup,
   prepareEnvironment,
-} from './setup-server.mjs';
+} from '@/scripts/setup-server.mjs';
 const input = {
   postgres: { host: 'postgres', username: 'mcp', password: 'pg:@#$/密码', database: 'mcp', port: 5432 },
   redis: { host: 'redis', password: 'redis:@#$/密码', database: 0 },

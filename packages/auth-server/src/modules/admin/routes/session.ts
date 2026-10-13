@@ -1,12 +1,12 @@
 import { getCookie } from 'hono/cookie';
-import { enforceLoginAccountLimit } from '../../../shared/http/login-rate-limit.js';
-import { clearSessionCookie, SESSION_COOKIE, setSessionCookie } from '../../../shared/http/session-cookie.js';
-import { recordAudit } from '../../audit/service.js';
-import { verifyUser } from '../../identity/authentication.js';
-import { createLoginSession, deleteLoginSession } from '../../identity/sessions.js';
-import type { AdminDeps, AdminRouter } from '../context.js';
-import { getAdminActor } from '../context.js';
-import { SERVER_NAME_RE } from '../validation.js';
+import { enforceLoginAccountLimit } from '@/auth/shared/http/login-rate-limit.js';
+import { clearSessionCookie, SESSION_COOKIE, setSessionCookie } from '@/auth/shared/http/session-cookie.js';
+import { recordAudit } from '@/auth/modules/audit/service.js';
+import { verifyUser } from '@/auth/modules/identity/authentication.js';
+import { createLoginSession, deleteLoginSession } from '@/auth/modules/identity/sessions.js';
+import type { AdminDeps, AdminRouter } from '@/auth/modules/admin/context.js';
+import { getAdminActor } from '@/auth/modules/admin/context.js';
+import { SERVER_NAME_RE } from '@/auth/modules/admin/validation.js';
 /** Registers session routes under the shared administrator guard. */
 export function registerSessionRoutes(router: AdminRouter, deps: AdminDeps) {
   router.get('/admin/session', async (c) => {

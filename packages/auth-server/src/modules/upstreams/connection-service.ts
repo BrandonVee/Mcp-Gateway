@@ -1,15 +1,22 @@
+import type { CredentialHeader } from '@/shared/security/credentials.js';
 import { and, eq } from 'drizzle-orm';
-import { db, type AuthTransaction } from '../../infrastructure/database/client.js';
-import { LockNamespace, lockTransaction } from '../../infrastructure/database/locks.js';
+import { db, type AuthTransaction } from '@/auth/infrastructure/database/client.js';
+import { LockNamespace, lockTransaction } from '@/auth/infrastructure/database/locks.js';
 import {
   mcpServerInstances,
   mcpServers,
   upstreamCredentials,
   users,
   userServerAccess,
-} from '../../infrastructure/database/schema.js';
-import { decryptCredential, encryptCredential } from '../../infrastructure/security/credential-crypto.js';
-import { accessTokenValid, exchangeOAuthToken, OAuthTokenError, shouldRefresh, tokenExpiry } from './token-exchange.js';
+} from '@/auth/infrastructure/database/schema.js';
+import { decryptCredential, encryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
+import {
+  accessTokenValid,
+  exchangeOAuthToken,
+  OAuthTokenError,
+  shouldRefresh,
+  tokenExpiry,
+} from '@/auth/modules/upstreams/token-exchange.js';
 
 export type Identity = { id: number; authVersion: number; role: 'admin' | 'user' };
 
@@ -48,7 +55,6 @@ export async function lockOwner(tx: AuthTransaction, id: string, owner: string) 
   await lockTransaction(tx, LockNamespace.UpstreamCredential, `${id}:${owner}`);
 }
 
-export type CredentialHeader = { header: string; value: string };
 export type CredentialResolution =
   | { denied: true }
   | { configChanged: true }

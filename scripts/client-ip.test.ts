@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveClientIp } from '../packages/auth-server/src/shared/http/client-ip.js';
+import { resolveClientIp } from '@/auth/shared/http/client-ip.js';
 
 test('rate limiting ignores spoofed forwarded addresses from an untrusted socket', () => {
   assert.equal(resolveClientIp('198.51.100.12', '203.0.113.4', '198.51.100.10'), '198.51.100.12');

@@ -1,10 +1,10 @@
-import { useI18n, type Language, type MessageKey } from '../../i18n';
+import { useI18n, type Language, type MessageKey } from '@/web/i18n';
 import { DisconnectOutlined, LinkOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { Button, Card, Flex, Input, Select, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
-import { PageToolbar } from '../../components/PageToolbar';
-import type { AdminConnection, AdminUser, McpServer } from '../../types';
+import { PageToolbar } from '@/web/components/PageToolbar';
+import type { AdminConnection, AdminUser, McpServer } from '@/web/types';
 
 type ConnectionStatus = 'connected' | 'pending' | 'expired' | 'disabled' | 'stale' | 'paused';
 

@@ -3,24 +3,16 @@ import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import {
-  normalizeUpstreamEndpoint,
-  validateProductionRuntime,
-  type PlatformConfig,
-} from '../packages/shared/src/index.js';
-import { filterRequestHeaders, filterResponseHeaders } from '../packages/gateway/src/routes/headers.js';
-import { isAllowedMcpOrigin, mcpCorsHeaders } from '../packages/gateway/src/routes/origin.js';
-import {
-  activeUpstreamRequests,
-  maxActiveUpstreamRequests,
-  reserveUpstreamSlot,
-} from '../packages/gateway/src/routes/capacity.js';
+import { normalizeUpstreamEndpoint, validateProductionRuntime, type PlatformConfig } from '@/shared/index.js';
+import { filterRequestHeaders, filterResponseHeaders } from '@/gateway/routes/headers.js';
+import { isAllowedMcpOrigin, mcpCorsHeaders } from '@/gateway/routes/origin.js';
+import { activeUpstreamRequests, maxActiveUpstreamRequests, reserveUpstreamSlot } from '@/gateway/routes/capacity.js';
 import {
   isRetryableInitialize,
   orderedAvailableInstances,
   probeUpstreamTransport,
   UpstreamHealthTracker,
-} from '../packages/gateway/src/upstream-health.js';
+} from '@/gateway/upstream-health.js';
 
 const localConfig = JSON.parse(
   readFileSync(new URL('../config/default.json', import.meta.url), 'utf8'),

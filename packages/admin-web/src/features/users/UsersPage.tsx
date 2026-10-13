@@ -1,4 +1,4 @@
-import { useI18n } from '../../i18n';
+import { useI18n } from '@/web/i18n';
 import {
   DeleteOutlined,
   EditOutlined,
@@ -26,9 +26,9 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
-import { PageToolbar } from '../../components/PageToolbar';
-import type { AdminUser } from '../../types';
-import { initials } from '../../utils/format';
+import { PageToolbar } from '@/web/components/PageToolbar';
+import type { AdminUser } from '@/web/types';
+import { initials } from '@/web/utils/format';
 
 interface UsersPageProps {
   users: AdminUser[];

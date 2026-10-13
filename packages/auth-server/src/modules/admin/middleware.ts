@@ -1,11 +1,11 @@
 import { adminWebUrl } from '@mcp/shared';
 import { getCookie } from 'hono/cookie';
-import { browserOriginAllowed } from '../../shared/http/origin.js';
-import { jsonError } from '../../shared/http/responses.js';
-import { SESSION_COOKIE } from '../../shared/http/session-cookie.js';
-import { recordAudit } from '../audit/service.js';
-import { getSessionUser } from '../identity/sessions.js';
-import { getAdminActor, type AdminDeps, type AdminRouter } from './context.js';
+import { browserOriginAllowed } from '@/auth/shared/http/origin.js';
+import { jsonError } from '@/auth/shared/http/responses.js';
+import { SESSION_COOKIE } from '@/auth/shared/http/session-cookie.js';
+import { recordAudit } from '@/auth/modules/audit/service.js';
+import { getSessionUser } from '@/auth/modules/identity/sessions.js';
+import { getAdminActor, type AdminDeps, type AdminRouter } from '@/auth/modules/admin/context.js';
 
 /** Check origin and immutable identity before resolving the administrator; audit writes afterwards. */
 export function registerAdminMiddleware(router: AdminRouter, deps: AdminDeps) {

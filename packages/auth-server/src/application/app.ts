@@ -1,16 +1,16 @@
 import { authIssuer } from '@mcp/shared';
 import { Hono } from 'hono';
-import { rateLimitHealthy } from '../infrastructure/cache/rate-limit.js';
-import { db } from '../infrastructure/database/client.js';
-import { users } from '../infrastructure/database/schema.js';
-import { createAdminRouter } from '../modules/admin/router.js';
-import { createConnectionsRouter } from '../modules/connections/router.js';
-import { authorizeRouter } from '../modules/oauth/authorize.js';
-import type { SigningKeys } from '../modules/oauth/keys.js';
-import { createMetadataRouter } from '../modules/oauth/metadata.js';
-import { createTokenRouter } from '../modules/oauth/token.js';
-import { createRegistryRouter } from '../modules/upstreams/registry.js';
-import { registerApplicationMiddleware } from './middleware.js';
+import { rateLimitHealthy } from '@/auth/infrastructure/cache/rate-limit.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { users } from '@/auth/infrastructure/database/schema.js';
+import { createAdminRouter } from '@/auth/modules/admin/router.js';
+import { createConnectionsRouter } from '@/auth/modules/connections/router.js';
+import { authorizeRouter } from '@/auth/modules/oauth/authorize.js';
+import type { SigningKeys } from '@/auth/modules/oauth/keys.js';
+import { createMetadataRouter } from '@/auth/modules/oauth/metadata.js';
+import { createTokenRouter } from '@/auth/modules/oauth/token.js';
+import { createRegistryRouter } from '@/auth/modules/upstreams/registry.js';
+import { registerApplicationMiddleware } from '@/auth/application/middleware.js';
 
 export interface AuthAppOptions {
   keys: SigningKeys;

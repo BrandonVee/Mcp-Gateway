@@ -1,4 +1,4 @@
-import type { SystemUpdateStatus } from '../../types';
+import type { SystemUpdateStatus } from '@/web/types';
 
 export type UpdateTaskState = 'running' | 'succeeded' | 'failed' | 'missing' | 'unknown';
 

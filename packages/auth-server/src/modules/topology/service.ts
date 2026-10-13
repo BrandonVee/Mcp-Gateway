@@ -1,8 +1,8 @@
 import { loadPlatformConfig, runtimeSettings } from '@mcp/shared';
 import { Redis } from 'ioredis';
 import { createHash } from 'node:crypto';
-import { db } from '../../infrastructure/database/client.js';
-import { mcpServerInstances, mcpServers, users } from '../../infrastructure/database/schema.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { mcpServerInstances, mcpServers, users } from '@/auth/infrastructure/database/schema.js';
 
 const redis = new Redis(process.env.REDIS_URL ?? loadPlatformConfig().gateway.redisUrl, {
   maxRetriesPerRequest: 1,

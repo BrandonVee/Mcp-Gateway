@@ -1,18 +1,18 @@
 import { adminWebUrl } from '@mcp/shared';
 import { Hono } from 'hono';
-import { registerMonitoringRoutes } from '../monitoring/api.js';
-import { registerTopologyRoutes } from '../topology/api.js';
-import type { AdminDeps, AdminEnvironment } from './context.js';
-import { registerAdminMiddleware } from './middleware.js';
-import { registerAuditRoutes } from './routes/audit.js';
-import { registerConnectionsRoutes } from './routes/connections.js';
-import { registerEndpointsRoutes } from './routes/endpoints.js';
-import { registerGrantsRoutes } from './routes/grants.js';
-import { registerSessionRoutes } from './routes/session.js';
-import { registerSettingsRoutes } from './routes/settings.js';
-import { registerUpdatesRoutes } from './routes/updates.js';
-import { registerUpstreamsRoutes } from './routes/upstreams.js';
-import { registerUsersRoutes } from './routes/users.js';
+import { registerMonitoringRoutes } from '@/auth/modules/monitoring/api.js';
+import { registerTopologyRoutes } from '@/auth/modules/topology/api.js';
+import type { AdminDeps, AdminEnvironment } from '@/auth/modules/admin/context.js';
+import { registerAdminMiddleware } from '@/auth/modules/admin/middleware.js';
+import { registerAuditRoutes } from '@/auth/modules/admin/routes/audit.js';
+import { registerConnectionsRoutes } from '@/auth/modules/admin/routes/connections.js';
+import { registerEndpointsRoutes } from '@/auth/modules/admin/routes/endpoints.js';
+import { registerGrantsRoutes } from '@/auth/modules/admin/routes/grants.js';
+import { registerSessionRoutes } from '@/auth/modules/admin/routes/session.js';
+import { registerSettingsRoutes } from '@/auth/modules/admin/routes/settings.js';
+import { registerUpdatesRoutes } from '@/auth/modules/admin/routes/updates.js';
+import { registerUpstreamsRoutes } from '@/auth/modules/admin/routes/upstreams.js';
+import { registerUsersRoutes } from '@/auth/modules/admin/routes/users.js';
 
 /** Compose administrator routes without owning domain or database logic. */
 export function createAdminRouter(deps: AdminDeps) {

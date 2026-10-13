@@ -1,5 +1,5 @@
-import type { McpServer, SystemSettings } from '../../types';
-import { isEndpointUrl } from '../../utils/validation';
+import type { McpServer, SystemSettings } from '@/web/types';
+import { isEndpointUrl } from '@/shared/security/urls.js';
 
 export function routableInstances(server: McpServer, settings: SystemSettings | null) {
   return server.enabled

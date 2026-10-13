@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs';
 import { posix } from 'node:path';
-import { asRecord } from '../../shared/serialization/record.js';
+import { asRecord } from '@/auth/shared/serialization/record.js';
 
 const UPDATER_SCRIPT = '/app/scripts/update-container.mjs';
 

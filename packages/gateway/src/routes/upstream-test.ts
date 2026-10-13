@@ -1,9 +1,9 @@
-import { timingSafeEqual } from 'node:crypto';
+import { bearerTokenMatches } from '@/shared/security/bearer.js';
 import type { FastifyInstance } from 'fastify';
 import type { UpstreamEndpointValidation } from '@mcp/shared';
 import { unavailableUpstreamTest, upstreamTestCredentialSchema } from '@mcp/shared';
-import { testUpstreamMcp } from '../upstream-test.js';
-import { upstreamHealth } from '../upstream-health.js';
+import { testUpstreamMcp } from '@/gateway/upstream-test.js';
+import { upstreamHealth } from '@/gateway/upstream-health.js';
 
 export function registerUpstreamTestRoute(
   app: FastifyInstance,
@@ -17,14 +17,7 @@ export function registerUpstreamTestRoute(
   let active = 0;
   app.post('/internal/upstream-test', async (req, reply) => {
     reply.header('Cache-Control', 'no-store');
-    const supplied = Buffer.from(req.headers.authorization?.replace(/^Bearer /, '') ?? '');
-    const expected = Buffer.from(options.token);
-    if (
-      !req.headers.authorization?.startsWith('Bearer ') ||
-      !expected.length ||
-      supplied.length !== expected.length ||
-      !timingSafeEqual(supplied, expected)
-    )
+    if (!bearerTokenMatches(req.headers.authorization, options.token))
       return reply.code(401).send({ error: 'invalid_internal_token' });
     if (active >= 4) return unavailableUpstreamTest('busy');
     active++;

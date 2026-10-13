@@ -27,9 +27,9 @@ import {
   TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { api } from '../../api';
-import { useI18n } from '../../i18n';
-import type { AlertEvent, UsageCall, UsageFilters, UsageSummary } from '../../types';
+import { api } from '@/web/api';
+import { useI18n } from '@/web/i18n';
+import type { AlertEvent, UsageCall, UsageFilters, UsageSummary } from '@/web/types';
 
 function Trend({ data, bucket }: { data: UsageSummary['trend']; bucket: number }) {
   const { t, language } = useI18n();

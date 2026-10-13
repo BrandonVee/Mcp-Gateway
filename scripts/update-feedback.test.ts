@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { waitForSystemUpdate, type UpdateTaskState } from '../packages/admin-web/src/features/settings/update-task';
+import { waitForSystemUpdate, type UpdateTaskState } from '@/web/features/settings/update-task';
 
 function poll(sequence: Array<{ id?: string; ready?: boolean; task?: UpdateTaskState; offline?: boolean }>) {
   let reads = 0;

@@ -9,7 +9,7 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { epoch } from './helpers.js';
+import { epoch } from '@/auth/infrastructure/database/schema/helpers.js';
 
 /** Metadata-only admin audit trail. Never store request bodies, tokens or secrets. */
 export const auditEvents = pgTable(

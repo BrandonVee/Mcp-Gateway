@@ -1,8 +1,8 @@
 import { and, desc, eq, lt } from 'drizzle-orm';
-import { db } from '../../../infrastructure/database/client.js';
-import { auditEvents } from '../../../infrastructure/database/schema.js';
-import { jsonError } from '../../../shared/http/responses.js';
-import type { AdminRouter } from '../context.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { auditEvents } from '@/auth/infrastructure/database/schema.js';
+import { jsonError } from '@/auth/shared/http/responses.js';
+import type { AdminRouter } from '@/auth/modules/admin/context.js';
 /** Registers audit routes under the shared administrator guard. */
 export function registerAuditRoutes(router: AdminRouter) {
   /** Paginated, metadata-only admin audit stream. No request bodies or secrets. */

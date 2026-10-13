@@ -1,20 +1,19 @@
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { createHash, randomBytes } from 'node:crypto';
-import { db } from '../../../infrastructure/database/client.js';
-import { upstreamCredentials, upstreamOAuthStates } from '../../../infrastructure/database/schema.js';
-import { encryptCredential } from '../../../infrastructure/security/credential-crypto.js';
-import { currentUser } from '../../identity/session-user.js';
-import { lockOwner, lockUpstream, ownerFor } from '../connection-service.js';
-import { callback, portal } from '../oauth-context.js';
-import { exchangeOAuthToken, tokenExpiry } from '../token-exchange.js';
+import { createPkceAuthorization } from '@/auth/shared/security/pkce.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { upstreamCredentials, upstreamOAuthStates } from '@/auth/infrastructure/database/schema.js';
+import { encryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
+import { currentUser } from '@/auth/modules/identity/session-user.js';
+import { lockOwner, lockUpstream, ownerFor } from '@/auth/modules/upstreams/connection-service.js';
+import { upstreamCallbackUrl, connectionPortalUrl } from '@/auth/modules/connections/redirects.js';
+import { exchangeOAuthToken, tokenExpiry } from '@/auth/modules/upstreams/token-exchange.js';
 /** Registers oauth operations for concrete upstreams, with per-owner credential isolation. */
 export function registerOauthRoutes(router: Hono) {
   router.post('/me/upstreams/:id/oauth', async (c) => {
     const user = await currentUser(c);
     if (!user) return c.json({ error: 'unauthorized' }, 401);
-    const state = randomBytes(32).toString('base64url'),
-      verifier = randomBytes(32).toString('base64url');
+    const { state, verifier, challenge } = createPkceAuthorization();
     const target = await db.transaction(async (tx) => {
       const locked = await lockUpstream(tx, c.req.param('id'), user);
       if (!locked) return null;
@@ -52,9 +51,9 @@ export function registerOauthRoutes(router: Hono) {
     const url = new URL(target.oauthAuthorizeUrl!);
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('client_id', target.oauthClientId!);
-    url.searchParams.set('redirect_uri', callback(target.id));
+    url.searchParams.set('redirect_uri', upstreamCallbackUrl(target.id));
     url.searchParams.set('state', state);
-    url.searchParams.set('code_challenge', createHash('sha256').update(verifier).digest('base64url'));
+    url.searchParams.set('code_challenge', challenge);
     url.searchParams.set('code_challenge_method', 'S256');
     if (target.oauthScopes) url.searchParams.set('scope', target.oauthScopes);
     if (target.oauthResource) url.searchParams.set('resource', target.oauthResource);
@@ -67,10 +66,10 @@ export function registerOauthRoutes(router: Hono) {
       .from(upstreamOAuthStates)
       .where(eq(upstreamOAuthStates.state, c.req.query('state') ?? ''));
     if (!state || state.instanceId !== c.req.param('id') || state.expiresAt <= Date.now())
-      return c.redirect(portal('invalid_state', c.req.param('id')));
+      return c.redirect(connectionPortalUrl('invalid_state', c.req.param('id')));
     const user = await currentUser(c);
     if (!user || user.id !== state.userId || (state.system && user.role !== 'admin'))
-      return c.redirect(portal('session_expired', state.instanceId));
+      return c.redirect(connectionPortalUrl('session_expired', state.instanceId));
     const code = c.req.query('code');
     // Consume the state before exchanging, including on cancellation; replay cannot exchange twice.
     const target = await db.transaction(async (tx) => {
@@ -89,23 +88,23 @@ export function registerOauthRoutes(router: Hono) {
         .returning();
       return consumed.length ? s : null;
     });
-    if (!target) return c.redirect(portal('invalid_state', state.instanceId));
+    if (!target) return c.redirect(connectionPortalUrl('invalid_state', state.instanceId));
     if (!code || c.req.query('error')) {
       await db.delete(upstreamOAuthStates).where(eq(upstreamOAuthStates.state, state.state));
-      return c.redirect(portal('cancelled', state.instanceId));
+      return c.redirect(connectionPortalUrl('cancelled', state.instanceId));
     }
     const body = await exchangeOAuthToken(
       target,
       new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: callback(target.id),
+        redirect_uri: upstreamCallbackUrl(target.id),
         code_verifier: state.verifier,
       }),
     ).catch(() => null);
     if (!body) {
       await db.delete(upstreamOAuthStates).where(eq(upstreamOAuthStates.state, state.state));
-      return c.redirect(portal('token_error', state.instanceId));
+      return c.redirect(connectionPortalUrl('token_error', state.instanceId));
     }
     const saved = await db.transaction(async (tx) => {
       const locked = await lockUpstream(tx, target.id, user, state.authRevision);
@@ -134,6 +133,6 @@ export function registerOauthRoutes(router: Hono) {
         .onConflictDoUpdate({ target: [upstreamCredentials.instanceId, upstreamCredentials.owner], set: values });
       return true;
     });
-    return c.redirect(portal(saved ? 'connected' : 'invalid_state', state.instanceId));
+    return c.redirect(connectionPortalUrl(saved ? 'connected' : 'invalid_state', state.instanceId));
   });
 }

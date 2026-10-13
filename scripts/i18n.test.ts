@@ -3,10 +3,10 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import ts from 'typescript';
-import { apiErrorMessage } from '../packages/admin-web/src/api';
-import { getTranslation } from '../packages/admin-web/src/i18n';
-import { messages as zh } from '../packages/admin-web/src/locales/zh-CN';
-import { messages as en } from '../packages/admin-web/src/locales/en-US';
+import { apiErrorMessage } from '@/web/api';
+import { getTranslation } from '@/web/i18n';
+import { messages as zh } from '@/web/locales/zh-CN';
+import { messages as en } from '@/web/locales/en-US';
 
 test('locale resources use matching semantic keys and parameters', () => {
   const zhKeys = Object.keys(zh).sort();

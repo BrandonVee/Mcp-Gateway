@@ -1,4 +1,4 @@
-import type { SmtpSettingsInput } from './types';
+import type { SmtpSettingsInput } from '@/web/types';
 import type {
   PlatformSession,
   AlertEvent,
@@ -22,8 +22,8 @@ import type {
   UpdateUserInput,
   UpstreamTestResult,
   UpstreamTestAuthInput,
-} from './types';
-import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from './i18n';
+} from '@/web/types';
+import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from '@/web/i18n';
 
 /** Present stable, localized UI errors instead of leaking English backend strings. */
 export function apiErrorMessage(status: number, body: unknown, language: Language): string {

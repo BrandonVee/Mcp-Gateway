@@ -1,5 +1,5 @@
-import type { mcpServers } from '../../infrastructure/database/schema.js';
-import { decryptCredential } from '../../infrastructure/security/credential-crypto.js';
+import type { mcpServers } from '@/auth/infrastructure/database/schema.js';
+import { decryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
 
 type OAuthServer = Pick<
   typeof mcpServers.$inferSelect,

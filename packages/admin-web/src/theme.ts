@@ -1,5 +1,5 @@
 import { theme, type ThemeConfig } from 'antd';
-import type { ColorMode } from './color-mode';
+import type { ColorMode } from '@/web/color-mode';
 
 const darkTheme: ThemeConfig = {
   algorithm: theme.darkAlgorithm,
@@ -19,16 +19,24 @@ const darkTheme: ThemeConfig = {
     borderRadius: 8,
     borderRadiusLG: 12,
     controlHeight: 40,
-    fontSize: 15,
+    fontSize: 14,
     fontSizeSM: 13,
-    lineHeight: 1.55,
+    lineHeight: 1.6,
+    fontWeightStrong: 600,
+    fontSizeHeading1: 32,
+    fontSizeHeading2: 24,
+    fontSizeHeading3: 20,
+    fontSizeHeading4: 16,
+    controlHeightSM: 32,
     wireframe: false,
     fontFamily: 'var(--font-ui)',
     boxShadowSecondary: '0 24px 70px rgba(0, 0, 0, 0.5)',
   },
   components: {
+    Form: { itemMarginBottom: 24, verticalLabelPadding: '0 0 8px', labelFontSize: 14 },
+    Tabs: { horizontalItemGutter: 28 },
     Button: {
-      fontWeight: 600,
+      fontWeight: 500,
       primaryShadow: '0 0 0 1px rgba(80, 170, 255, 0.18), 0 8px 24px rgba(47, 140, 255, 0.22)',
       defaultBg: '#101a2a',
       defaultBorderColor: '#263953',
@@ -96,7 +104,9 @@ const lightTheme: ThemeConfig = {
     boxShadowSecondary: '0 16px 48px rgba(35, 57, 88, 0.14)',
   },
   components: {
-    Button: { fontWeight: 600, primaryShadow: '0 4px 12px rgba(23, 105, 194, 0.18)' },
+    Form: { itemMarginBottom: 24, verticalLabelPadding: '0 0 8px', labelFontSize: 14 },
+    Tabs: { horizontalItemGutter: 28 },
+    Button: { fontWeight: 500, primaryShadow: '0 4px 12px rgba(23, 105, 194, 0.18)' },
     Card: { headerBg: 'transparent', headerFontSize: 16 },
     Menu: {
       itemBg: 'transparent',

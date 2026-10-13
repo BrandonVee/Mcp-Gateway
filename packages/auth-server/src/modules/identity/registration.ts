@@ -1,11 +1,11 @@
 import { normalizeEmail, registrationEmailVerificationEnabled } from '@mcp/shared';
 import { and, eq } from 'drizzle-orm';
 import { timingSafeEqual } from 'node:crypto';
-import { db } from '../../infrastructure/database/client.js';
-import { mcpServers, signupEmailCodes, userServerAccess, users } from '../../infrastructure/database/schema.js';
-import { mailConfigured, sendMail, verificationCodeMail } from '../../infrastructure/mail/mailer.js';
-import { scryptHash } from '../../infrastructure/security/password.js';
-import { generateVerificationCode, hashVerificationCode } from '../../infrastructure/security/verification-code.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { mcpServers, signupEmailCodes, userServerAccess, users } from '@/auth/infrastructure/database/schema.js';
+import { mailConfigured, sendMail, verificationCodeMail } from '@/auth/infrastructure/mail/mailer.js';
+import { scryptHash } from '@/auth/infrastructure/security/password.js';
+import { generateVerificationCode, hashVerificationCode } from '@/auth/infrastructure/security/verification-code.js';
 
 export function validateSignup(
   _username: string,
@@ -105,7 +105,7 @@ export function matchesSignupCode(code: string, hash: string): boolean {
 export async function sendSignupEmailCode(
   email: string,
 ): Promise<'sent' | 'invalid_email' | 'verification_unavailable' | 'rate_limit_exceeded'> {
-  const { consumeRateLimit } = await import('../../infrastructure/cache/rate-limit.js');
+  const { consumeRateLimit } = await import('@/auth/infrastructure/cache/rate-limit.js');
   const normalized = normalizeEmail(email);
   if (!normalized) return 'invalid_email';
   if (!mailConfigured()) return 'verification_unavailable';

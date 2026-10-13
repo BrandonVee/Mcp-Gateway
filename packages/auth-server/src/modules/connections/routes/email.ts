@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
-import { consumeRateLimit } from '../../../infrastructure/cache/rate-limit.js';
-import { sendEmailVerificationCode, verifyEmailCode } from '../../identity/email-verification.js';
-import { currentUser } from '../../identity/session-user.js';
+import { consumeRateLimit } from '@/auth/infrastructure/cache/rate-limit.js';
+import { sendEmailVerificationCode, verifyEmailCode } from '@/auth/modules/identity/email-verification.js';
+import { currentUser } from '@/auth/modules/identity/session-user.js';
 /** Registers email browser routes; write protection is applied by the parent router. */
 export function registerEmailRoutes(router: Hono) {
   /** Sends a fresh verification code to the signed-in user's email address. */

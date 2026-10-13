@@ -1,4 +1,4 @@
-import { useI18n } from '../../i18n';
+import { useI18n } from '@/web/i18n';
 import {
   CheckCircleFilled,
   BarChartOutlined,
@@ -6,45 +6,25 @@ import {
   WarningOutlined,
   DeploymentUnitOutlined,
   SafetyCertificateOutlined,
-  SyncOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import {
-  Alert,
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Col,
-  Empty,
-  Flex,
-  List,
-  Progress,
-  Row,
-  Statistic,
-  Tag,
-  Typography,
-  theme,
-} from 'antd';
+import { Alert, Avatar, Badge, Button, Card, Col, Empty, Flex, List, Row, Statistic, Tag, Typography } from 'antd';
 import { useEffect, useState, type ReactNode } from 'react';
-import type { api as platformApi } from '../../api';
-import type { AdminUser, AuthHealth, GatewayHealth, McpServer, SystemSettings, UsageSummary, View } from '../../types';
-import { routableInstances } from '../servers/upstream-allowlist';
-import { formatTime, initials } from '../../utils/format';
+import type { api as platformApi } from '@/web/api';
+import type { AdminUser, McpServer, SystemSettings, UsageSummary, View } from '@/web/types';
+import { routableInstances } from '@/web/features/servers/upstream-allowlist';
+import { initials } from '@/web/utils/format';
 
 interface OverviewPageProps {
   users: AdminUser[];
   servers: McpServer[];
-  health: GatewayHealth | null;
-  authHealth: AuthHealth | null;
   settings: SystemSettings | null;
   api: Pick<typeof platformApi, 'usageSummary'>;
   onNavigate: (view: View) => void;
 }
 
-export function OverviewPage({ users, servers, health, authHealth, settings, api, onNavigate }: OverviewPageProps) {
+export function OverviewPage({ users, servers, settings, api, onNavigate }: OverviewPageProps) {
   const { t, language } = useI18n();
-  const { token } = theme.useToken();
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [usageError, setUsageError] = useState('');
   useEffect(() => {
@@ -239,40 +219,6 @@ export function OverviewPage({ users, servers, health, authHealth, settings, api
           </Card>
         </Col>
       </Row>
-
-      <Card className="infrastructure-card">
-        <Flex align="center" gap={20} wrap>
-          <div className="infra-heading">
-            <SyncOutlined spin={Boolean(health?.ok)} />
-            <span>
-              <strong>{t('overview.infrastructureStatus')}</strong>
-              <small>{t('overview.infrastructureSubtitle')}</small>
-            </span>
-          </div>
-          <InfraStatus
-            label={t('overview.registrySync')}
-            value={formatTime(health?.registry?.lastSuccessAt, language)}
-            healthy={!health?.registry?.lastError}
-          />
-          <InfraStatus
-            label="Redis"
-            value={health?.redis ? t('status.connected') : t('status.offline')}
-            healthy={health?.redis}
-          />
-          <InfraStatus
-            label="PostgreSQL"
-            value={t(authHealth?.postgres ? 'status.connected' : 'status.offline')}
-            healthy={authHealth?.postgres}
-          />
-          <Progress
-            className="health-progress"
-            percent={health?.ok ? 100 : 68}
-            showInfo={false}
-            strokeColor={token.colorSuccess}
-            trailColor={token.colorFillSecondary}
-          />
-        </Flex>
-      </Card>
     </div>
   );
 }
@@ -319,17 +265,5 @@ function CardTitle({ icon, title, subtitle }: { icon: ReactNode; title: string; 
         <small>{subtitle}</small>
       </span>
     </Flex>
-  );
-}
-
-function InfraStatus({ label, value, healthy }: { label: string; value: string; healthy?: boolean }) {
-  return (
-    <div className="infra-status">
-      <Badge status={healthy ? 'success' : 'error'} />
-      <span>
-        <small>{label}</small>
-        <strong>{value}</strong>
-      </span>
-    </div>
   );
 }

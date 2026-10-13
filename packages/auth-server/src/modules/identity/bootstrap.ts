@@ -1,10 +1,10 @@
 import { loadPlatformConfig } from '@mcp/shared';
 import { and, count, eq, sql } from 'drizzle-orm';
-import { db } from '../../infrastructure/database/client.js';
-import { LockNamespace, lockTransaction } from '../../infrastructure/database/locks.js';
-import { users } from '../../infrastructure/database/schema.js';
-import { randomToken, scryptHash } from '../../infrastructure/security/password.js';
-import { revokeUserAuthentication } from './authentication.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { LockNamespace, lockTransaction } from '@/auth/infrastructure/database/locks.js';
+import { users } from '@/auth/infrastructure/database/schema.js';
+import { randomToken, scryptHash } from '@/auth/infrastructure/security/password.js';
+import { revokeUserAuthentication } from '@/auth/modules/identity/authentication.js';
 const platformConfig = loadPlatformConfig();
 
 /** Create the initial administrator; recovering an existing account requires an explicit operator opt-in. */

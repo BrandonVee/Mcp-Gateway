@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
-import { validWebhookUrl } from '../packages/admin-web/src/utils/validation.alert.js';
-import { validationRule } from '../packages/admin-web/src/utils/validation.js';
-import { normalizeSystemSettings } from '../packages/shared/src/index.js';
-import { canReuseSmtpPassword, smtpTestConfigSchema } from '../packages/auth-server/src/modules/system/smtp-config.js';
-import { sendMailWithSettings } from '../packages/auth-server/src/infrastructure/mail/mailer.js';
+import { validWebhookUrl } from '@/web/utils/validation.alert.js';
+import { validationRule } from '@/web/utils/validation.js';
+import { normalizeSystemSettings } from '@/shared/index.js';
+import { canReuseSmtpPassword, smtpTestConfigSchema } from '@/auth/modules/system/smtp-config.js';
+import { sendMailWithSettings } from '@/auth/infrastructure/mail/mailer.js';
 
 const smtp = {
   smtp_host: 'smtp.example.com',

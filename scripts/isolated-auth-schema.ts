@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { loadPlatformConfig } from '../packages/shared/src/index.js';
+import { loadPlatformConfig } from '@/shared/index.js';
 
 const require = createRequire(new URL('../packages/auth-server/package.json', import.meta.url));
 const { Pool } = require('pg');

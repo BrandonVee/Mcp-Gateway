@@ -1,7 +1,7 @@
 import { bigint, boolean, index, pgTable, primaryKey, text, uniqueIndex } from 'drizzle-orm/pg-core';
-import { epoch } from './helpers.js';
-import { users } from './identity.js';
-import { upstreamAuthColumns } from './upstream-auth.js';
+import { epoch } from '@/auth/infrastructure/database/schema/helpers.js';
+import { users } from '@/auth/infrastructure/database/schema/identity.js';
+import { upstreamAuthColumns } from '@/auth/infrastructure/database/schema/upstream-auth.js';
 
 export const mcpServers = pgTable('mcp_servers', {
   routingMode: text('routing_mode').$type<'pool' | 'aggregate'>().notNull().default('aggregate'),

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { applySystemSettings, currentSystemSettings, normalizeUpstreamEndpoint } from '../packages/shared/src/index.js';
-import { refreshServerConfigs, serverConfigs } from '../packages/gateway/src/config.js';
-import { validateMcpEndpoint } from '../packages/auth-server/src/modules/upstreams/endpoint-validation.js';
-import { normalizeUpstreamHost } from '../packages/shared/src/index.js';
+import { applySystemSettings, currentSystemSettings, normalizeUpstreamEndpoint } from '@/shared/index.js';
+import { refreshServerConfigs, serverConfigs } from '@/gateway/config.js';
+import { validateMcpEndpoint } from '@/auth/modules/upstreams/endpoint-validation.js';
+import { normalizeUpstreamHost } from '@/shared/index.js';
 
 const endpoint = 'http://38.58.57.4:8765/mcp/hscode';
 

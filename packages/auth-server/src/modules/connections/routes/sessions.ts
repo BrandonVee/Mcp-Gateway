@@ -2,14 +2,14 @@ import { authIssuer } from '@mcp/shared';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
-import { db } from '../../../infrastructure/database/client.js';
-import { users } from '../../../infrastructure/database/schema.js';
-import { enforceLoginAccountLimit } from '../../../shared/http/login-rate-limit.js';
-import { clearSessionCookie, cookieName, setSessionCookie } from '../../../shared/http/session-cookie.js';
-import { recordAudit } from '../../audit/service.js';
-import { verifyUser } from '../../identity/authentication.js';
-import { currentUser } from '../../identity/session-user.js';
-import { createLoginSession, deleteLoginSession } from '../../identity/sessions.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { users } from '@/auth/infrastructure/database/schema.js';
+import { enforceLoginAccountLimit } from '@/auth/shared/http/login-rate-limit.js';
+import { clearSessionCookie, cookieName, setSessionCookie } from '@/auth/shared/http/session-cookie.js';
+import { recordAudit } from '@/auth/modules/audit/service.js';
+import { verifyUser } from '@/auth/modules/identity/authentication.js';
+import { currentUser } from '@/auth/modules/identity/session-user.js';
+import { createLoginSession, deleteLoginSession } from '@/auth/modules/identity/sessions.js';
 /** Registers sessions browser routes; write protection is applied by the parent router. */
 export function registerSessionsRoutes(router: Hono) {
   router.get('/me/session', async (c) => {

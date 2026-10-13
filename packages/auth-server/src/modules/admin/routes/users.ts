@@ -1,14 +1,14 @@
 import { normalizeEmail } from '@mcp/shared';
 import { and, count, eq, sql } from 'drizzle-orm';
-import { db } from '../../../infrastructure/database/client.js';
-import { LockNamespace, lockTransaction } from '../../../infrastructure/database/locks.js';
-import { mcpServers, userServerAccess, users } from '../../../infrastructure/database/schema.js';
-import { scryptHash } from '../../../infrastructure/security/password.js';
-import { jsonError } from '../../../shared/http/responses.js';
-import { listServerNamesForUser } from '../../access/grants.js';
-import { revokeUserAuthentication } from '../../identity/authentication.js';
-import type { AdminRouter } from '../context.js';
-import { SERVER_NAME_RE, userCreateSchema } from '../validation.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { LockNamespace, lockTransaction } from '@/auth/infrastructure/database/locks.js';
+import { mcpServers, userServerAccess, users } from '@/auth/infrastructure/database/schema.js';
+import { scryptHash } from '@/auth/infrastructure/security/password.js';
+import { jsonError } from '@/auth/shared/http/responses.js';
+import { listServerNamesForUser } from '@/auth/modules/access/grants.js';
+import { revokeUserAuthentication } from '@/auth/modules/identity/authentication.js';
+import type { AdminRouter } from '@/auth/modules/admin/context.js';
+import { SERVER_NAME_RE, userCreateSchema } from '@/auth/modules/admin/validation.js';
 /** Registers users routes under the shared administrator guard. */
 export function registerUsersRoutes(router: AdminRouter) {
   router.get('/admin/users', async (c) => {

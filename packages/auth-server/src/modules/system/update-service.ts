@@ -1,13 +1,13 @@
 import { existsSync } from 'node:fs';
-import { DockerError, dockerRequest, dockerSocket } from '../../infrastructure/docker/client.js';
-import { asRecord } from '../../shared/serialization/record.js';
+import { DockerError, dockerRequest, dockerSocket } from '@/auth/infrastructure/docker/client.js';
+import { asRecord } from '@/auth/shared/serialization/record.js';
 import {
   compareVersions,
   getUpdateReleases,
   stableVersion,
   type ReleaseCheckFailure,
   type UpdateRelease,
-} from './releases.js';
+} from '@/auth/modules/system/releases.js';
 import {
   imageRepository,
   officialUpdateImage,
@@ -17,8 +17,13 @@ import {
   updateEnabled,
   updateTargetImage,
   type ImageInspect,
-} from './update-identity.js';
-import { buildUpdaterSpec, mountedSource, updaterGroups, type ContainerInspect } from './update-spec.js';
+} from '@/auth/modules/system/update-identity.js';
+import {
+  buildUpdaterSpec,
+  mountedSource,
+  updaterGroups,
+  type ContainerInspect,
+} from '@/auth/modules/system/update-spec.js';
 
 export interface UpdateStatus {
   enabled: boolean;

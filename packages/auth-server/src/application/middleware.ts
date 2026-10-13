@@ -3,8 +3,8 @@ import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { cors } from 'hono/cors';
 import { randomUUID } from 'node:crypto';
-import { limitRequest } from '../infrastructure/cache/rate-limit.js';
-import { refreshSystemSettings } from '../modules/system/settings.js';
+import { limitRequest } from '@/auth/infrastructure/cache/rate-limit.js';
+import { refreshSystemSettings } from '@/auth/modules/system/settings.js';
 
 /** Order is intentional: request IDs -> setup gate -> payload/CORS -> public endpoint limits. */
 export function registerApplicationMiddleware(app: Hono): void {

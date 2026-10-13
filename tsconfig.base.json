@@ -9,6 +9,14 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@/auth/*": ["./packages/auth-server/src/*"],
+      "@/gateway/*": ["./packages/gateway/src/*"],
+      "@/web/*": ["./packages/admin-web/src/*"],
+      "@/shared/*": ["./packages/shared/src/*"],
+      "@/fixtures/*": ["./tests/fixtures/src/*"],
+      "@/scripts/*": ["./scripts/*"]
+    }
   }
 }

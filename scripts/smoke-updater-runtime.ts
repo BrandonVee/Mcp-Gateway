@@ -7,8 +7,8 @@ import {
   mountedSource,
   updaterGroups,
   type ContainerInspect,
-} from '../packages/auth-server/src/modules/system/update-spec';
-import { dockerRequest } from '../packages/auth-server/src/infrastructure/docker/client';
+} from '@/auth/modules/system/update-spec';
+import { dockerRequest } from '@/auth/infrastructure/docker/client';
 
 const docker = (...args: string[]) =>
   execFileSync('docker', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();

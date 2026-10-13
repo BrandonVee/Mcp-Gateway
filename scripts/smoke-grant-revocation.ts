@@ -1,8 +1,8 @@
 /** Verify live Gateway access after granting and revoking a user's service grant. */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { loadPlatformConfig } from '../packages/shared/src/index.js';
-import { getAccessToken } from './oauth-token.js';
+import { loadPlatformConfig } from '@/shared/index.js';
+import { getAccessToken } from '@/scripts/oauth-token.js';
 
 const config = loadPlatformConfig();
 const auth = process.env.AUTH_URL ?? config.auth.issuer;

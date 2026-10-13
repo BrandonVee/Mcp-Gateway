@@ -1,6 +1,6 @@
 import { DownOutlined, GlobalOutlined } from '@ant-design/icons';
 import { Button, Dropdown } from 'antd';
-import { useI18n, type Language } from '../i18n';
+import { useI18n, type Language } from '@/web/i18n';
 
 export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   const { language, setLanguage, t } = useI18n();

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../../infrastructure/database/client.js';
-import { userServerAccess, users } from '../../infrastructure/database/schema.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { userServerAccess, users } from '@/auth/infrastructure/database/schema.js';
 
 export async function listServerNamesForUser(userId: number): Promise<string[]> {
   const rows = await db

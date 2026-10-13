@@ -10,9 +10,9 @@ import {
 import { lt, sql } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import { randomUUID } from 'node:crypto';
-import { db } from '../../infrastructure/database/client.js';
-import { mcpCallEvents, mcpCallMetrics, mcpEventReceipts } from '../../infrastructure/database/schema.js';
-import { currentActiveAlerts, evaluateAlerts } from './alert-history.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { mcpCallEvents, mcpCallMetrics, mcpEventReceipts } from '@/auth/infrastructure/database/schema.js';
+import { currentActiveAlerts, evaluateAlerts } from '@/auth/modules/monitoring/alert-history.js';
 
 const redis = new Redis(process.env.REDIS_URL ?? loadPlatformConfig().gateway.redisUrl, {
   maxRetriesPerRequest: 1,

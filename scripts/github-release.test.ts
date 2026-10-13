@@ -19,7 +19,7 @@ import {
   resolveRelease,
   syncVersion,
   versionCommitForSource,
-} from './github-release.mjs';
+} from '@/scripts/github-release.mjs';
 
 test('automatic releases use stable semantic versions and conventional commit changes', () => {
   assert.equal(nextReleaseTag([], [], ['feat: first version']), 'v0.1.0');

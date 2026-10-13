@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { env, getServerConfig, refreshServerConfigs } from './config.js';
+import { env, getServerConfig, refreshServerConfigs } from '@/gateway/config.js';
 
 export const JWKS = createRemoteJWKSet(new URL(env.authJwksUrl));
 

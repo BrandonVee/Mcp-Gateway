@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { api, apiForSession, ApiError } from '../packages/admin-web/src/api';
-import type { PlatformSession } from '../packages/admin-web/src/types';
+import { api, apiForSession, ApiError } from '@/web/api';
+import type { PlatformSession } from '@/web/types';
 
 test('page API callbacks retain their original identity after another account signs in', async (t) => {
   const sent: Array<{ url: string; init: RequestInit }> = [];

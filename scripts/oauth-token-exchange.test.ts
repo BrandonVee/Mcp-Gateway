@@ -6,7 +6,7 @@ import {
   OAuthTokenError,
   shouldRefresh,
   tokenExpiry,
-} from '../packages/auth-server/src/modules/upstreams/token-exchange.js';
+} from '@/auth/modules/upstreams/token-exchange.js';
 
 const server = {
   oauthTokenUrl: 'https://provider.example/token',

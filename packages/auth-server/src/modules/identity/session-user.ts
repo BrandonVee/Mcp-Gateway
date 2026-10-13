@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { type Context } from 'hono';
 import { getCookie } from 'hono/cookie';
-import { db } from '../../infrastructure/database/client.js';
-import { users } from '../../infrastructure/database/schema.js';
-import { SESSION_COOKIE } from '../../shared/http/session-cookie.js';
-import { getSessionUser } from './sessions.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { users } from '@/auth/infrastructure/database/schema.js';
+import { SESSION_COOKIE } from '@/auth/shared/http/session-cookie.js';
+import { getSessionUser } from '@/auth/modules/identity/sessions.js';
 
 /** 浏览器身份快照来自当前用户行；禁用、账号更名或认证版本变化立即使旧会话失效。 */
 export type User = {

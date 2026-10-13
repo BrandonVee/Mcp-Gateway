@@ -1,9 +1,9 @@
 import { and, eq } from 'drizzle-orm';
-import { db } from '../../infrastructure/database/client.js';
-import { loginSessions, users } from '../../infrastructure/database/schema.js';
-import { randomToken } from '../../infrastructure/security/password.js';
-import { SESSION_TTL_SECONDS } from '../../shared/http/session-cookie.js';
-import { withAuthenticatedUser, type AuthIdentity } from './authentication.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { loginSessions, users } from '@/auth/infrastructure/database/schema.js';
+import { randomToken } from '@/auth/infrastructure/security/password.js';
+import { SESSION_TTL_SECONDS } from '@/auth/shared/http/session-cookie.js';
+import { withAuthenticatedUser, type AuthIdentity } from '@/auth/modules/identity/authentication.js';
 
 export const SESSION_TTL_MS = SESSION_TTL_SECONDS * 1000;
 

@@ -9,13 +9,13 @@ import { eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { consumeRateLimit, limitLoginAccount } from '../../infrastructure/cache/rate-limit.js';
-import { db } from '../../infrastructure/database/client.js';
-import { mcpServers } from '../../infrastructure/database/schema.js';
-import { getUserAuthorization, verifyUser, type AuthIdentity } from '../identity/authentication.js';
-import { createRegisteredUser, sendSignupEmailCode, validateSignup } from '../identity/registration.js';
-import { createLoginSession, getSessionUser } from '../identity/sessions.js';
-import { getClient, isRedirectUriAllowed } from './clients.js';
+import { consumeRateLimit, limitLoginAccount } from '@/auth/infrastructure/cache/rate-limit.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { mcpServers } from '@/auth/infrastructure/database/schema.js';
+import { getUserAuthorization, verifyUser, type AuthIdentity } from '@/auth/modules/identity/authentication.js';
+import { createRegisteredUser, sendSignupEmailCode, validateSignup } from '@/auth/modules/identity/registration.js';
+import { createLoginSession, getSessionUser } from '@/auth/modules/identity/sessions.js';
+import { getClient, isRedirectUriAllowed } from '@/auth/modules/oauth/clients.js';
 import {
   authorizationLink,
   authorizationParams,
@@ -26,8 +26,8 @@ import {
   type AuthPageDetails,
   type AuthPageError,
   type AuthPageLanguage,
-} from './pages.js';
-import { saveAuthCode } from './stores.js';
+} from '@/auth/modules/oauth/pages.js';
+import { saveAuthCode } from '@/auth/modules/oauth/stores.js';
 
 /** Authorization Code + PKCE, with sign-in and self-registration in the same browser flow. */
 export const authorizeRouter = new Hono();

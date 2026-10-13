@@ -14,13 +14,9 @@ import {
   createReleaseDispatcher,
   ReleaseLookupError,
   releaseFailureReason,
-} from '../packages/auth-server/src/modules/system/releases';
-import {
-  getUpdateStatus,
-  getUpdateTaskStatus,
-  startUpdate,
-} from '../packages/auth-server/src/modules/system/update-service';
-import { officialUpdateImage, runningVersion } from '../packages/auth-server/src/modules/system/update-identity';
+} from '@/auth/modules/system/releases';
+import { getUpdateStatus, getUpdateTaskStatus, startUpdate } from '@/auth/modules/system/update-service';
+import { officialUpdateImage, runningVersion } from '@/auth/modules/system/update-identity';
 
 const digest = `sha256:${'a'.repeat(64)}`;
 const oldDigest = `sha256:${'b'.repeat(64)}`;

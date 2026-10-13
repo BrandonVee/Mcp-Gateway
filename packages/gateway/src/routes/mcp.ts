@@ -1,16 +1,17 @@
-import { upstreamRequestTimeout, rpcMethod } from '../transport-policy.js';
-import { aggregateRequest } from './aggregate.js';
+import { credentialHeaderSchema, type CredentialHeader } from '@/shared/security/credentials.js';
+import { upstreamRequestTimeout, rpcMethod } from '@/gateway/transport-policy.js';
+import { aggregateRequest } from '@/gateway/routes/aggregate.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { request } from 'undici';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { env, getServerConfig, refreshServerConfigs } from '../config.js';
-import { pickInstance, bindSession, touchSession, removeSession, sessionOwnedBy } from '../lb.js';
-import { forbidden, hasServerAccess, tokenAuthVersion, unauthorized } from '../auth.js';
-import { filterRequestHeaders, filterResponseHeaders } from './headers.js';
-import { reserveUpstreamSlot } from './capacity.js';
-import { mcpCorsHeaders } from './origin.js';
-import { isRetryableInitialize, orderedAvailableInstances, upstreamHealth } from '../upstream-health.js';
+import { env, getServerConfig, refreshServerConfigs } from '@/gateway/config.js';
+import { pickInstance, bindSession, touchSession, removeSession, sessionOwnedBy } from '@/gateway/lb.js';
+import { forbidden, hasServerAccess, tokenAuthVersion, unauthorized } from '@/gateway/auth.js';
+import { filterRequestHeaders, filterResponseHeaders } from '@/gateway/routes/headers.js';
+import { reserveUpstreamSlot } from '@/gateway/routes/capacity.js';
+import { mcpCorsHeaders } from '@/gateway/routes/origin.js';
+import { isRetryableInitialize, orderedAvailableInstances, upstreamHealth } from '@/gateway/upstream-health.js';
 
 export function registerMcpRoutes(app: FastifyInstance): void {
   app.all('/mcp/:serverName', proxyHandler);
@@ -87,7 +88,7 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
     }
   }
 
-  let upstreamCredential: { header: string; value: string } | undefined;
+  let upstreamCredential: CredentialHeader | undefined;
   if (cfg.authMode !== 'none') {
     if (!env.credentialBrokerToken) {
       await reply.code(503).send({ error: 'credential_service_unavailable' });
@@ -117,17 +118,10 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
         return;
       }
       if (!result.ok) throw new Error(`credential broker HTTP ${result.status}`);
-      const body = (await result.json()) as { header?: unknown; value?: unknown };
-      if (
-        typeof body.header !== 'string' ||
-        !/^(authorization|x-[a-z0-9-]{1,60})$/i.test(body.header) ||
-        typeof body.value !== 'string' ||
-        !body.value ||
-        /[\x00-\x1f\x7f]/.test(body.value)
-      ) {
-        throw new Error('credential broker returned invalid header');
-      }
-      upstreamCredential = { header: body.header.toLowerCase(), value: body.value };
+      const parsed = credentialHeaderSchema.safeParse(await result.json());
+      // Never include schema issues here: validation details can contain credential values.
+      if (!parsed.success) throw new Error('credential broker returned invalid header');
+      upstreamCredential = { header: parsed.data.header.toLowerCase(), value: parsed.data.value };
     } catch (error) {
       req.log.error({ err: error, server: serverName }, 'credential lookup failed');
       await reply.code(503).send({ error: 'credential_service_unavailable' });

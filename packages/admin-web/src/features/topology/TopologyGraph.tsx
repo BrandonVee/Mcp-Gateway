@@ -4,9 +4,9 @@ import { GraphChart } from 'echarts/charts';
 import { TooltipComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { EChartsCoreOption } from 'echarts/core';
-import type { TopologySnapshot, TopologyHealthState } from '../../types';
-import { useColorMode } from '../../color-mode';
-import { useI18n, type MessageKey } from '../../i18n';
+import type { TopologySnapshot, TopologyHealthState } from '@/web/types';
+import { useColorMode } from '@/web/color-mode';
+import { useI18n, type MessageKey } from '@/web/i18n';
 
 echarts.use([GraphChart, TooltipComponent, CanvasRenderer]);
 

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Alert, Descriptions, Drawer, Empty, Segmented, Select, Spin, Table, Tag } from 'antd';
-import { api } from '../../api';
-import { useI18n } from '../../i18n';
-import type { TopologyInstance, TopologyServer, TopologySnapshot } from '../../types';
-import { TopologyGraph, type TopologyDimension, type TopologySelection } from './TopologyGraph';
-import './topology.css';
+import { api } from '@/web/api';
+import { useI18n } from '@/web/i18n';
+import type { TopologyInstance, TopologyServer, TopologySnapshot } from '@/web/types';
+import { TopologyGraph, type TopologyDimension, type TopologySelection } from '@/web/features/topology/TopologyGraph';
+import '@/web/features/topology/topology.css';
 
 const WINDOWS = [1, 5, 15, 30];
 

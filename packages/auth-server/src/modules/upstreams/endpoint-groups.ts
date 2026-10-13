@@ -1,11 +1,11 @@
 import { eq, sql } from 'drizzle-orm';
-import type { AuthTransaction } from '../../infrastructure/database/client.js';
+import type { AuthTransaction } from '@/auth/infrastructure/database/client.js';
 import {
   mcpServerInstances,
   mcpServers,
   oauthConnectionStates,
   upstreamOAuthStates,
-} from '../../infrastructure/database/schema.js';
+} from '@/auth/infrastructure/database/schema.js';
 
 /** Called with the endpoint locked: copy the latest legacy configuration exactly once. */
 export async function convertEndpointToGroup(tx: AuthTransaction, parent: typeof mcpServers.$inferSelect) {

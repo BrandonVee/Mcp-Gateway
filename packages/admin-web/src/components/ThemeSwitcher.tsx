@@ -1,7 +1,7 @@
 import { DesktopOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons';
 import { Button, Dropdown } from 'antd';
-import { useColorMode, type ThemePreference } from '../color-mode';
-import { useI18n } from '../i18n';
+import { useColorMode, type ThemePreference } from '@/web/color-mode';
+import { useI18n } from '@/web/i18n';
 
 export function ThemeSwitcher() {
   const { mode, preference, setPreference } = useColorMode();

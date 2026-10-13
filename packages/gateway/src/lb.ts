@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Redis } from 'ioredis';
 import type { McpServerConfig } from '@mcp/shared';
-import { env } from './config.js';
+import { env } from '@/gateway/config.js';
 
 const redis = new Redis(env.redisUrl, { lazyConnect: false, maxRetriesPerRequest: 2 });
 

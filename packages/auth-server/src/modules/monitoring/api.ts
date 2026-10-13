@@ -1,10 +1,10 @@
 import { histogramP95, runtimeSettings } from '@mcp/shared';
 import type { Context } from 'hono';
-import { pool } from '../../infrastructure/database/client.js';
-import type { AdminRouter } from '../admin/context.js';
-import { acknowledgeAlert, listAlertEvents } from './alert-history.js';
-import { monitoringStatus } from './collector.js';
-import { callLogQuery, monitoringFilters } from './query.js';
+import { pool } from '@/auth/infrastructure/database/client.js';
+import type { AdminRouter } from '@/auth/modules/admin/context.js';
+import { acknowledgeAlert, listAlertEvents } from '@/auth/modules/monitoring/alert-history.js';
+import { monitoringStatus } from '@/auth/modules/monitoring/collector.js';
+import { callLogQuery, monitoringFilters } from '@/auth/modules/monitoring/query.js';
 
 const histogramSql =
   'ARRAY[' + Array.from({ length: 16 }, (_, i) => `COALESCE(sum(histogram[${i + 1}]),0)`).join(',') + ']';

@@ -1,4 +1,4 @@
-import type { MessageKey } from '../../i18n';
+import type { MessageKey } from '@/web/i18n';
 
 export function oauthResultKey(result: string): MessageKey {
   const keys: Record<string, MessageKey> = {

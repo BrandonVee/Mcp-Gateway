@@ -1,15 +1,15 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../../infrastructure/database/client.js';
+import { db } from '@/auth/infrastructure/database/client.js';
 import {
   mcpServerInstances,
   mcpServers,
   upstreamCredentials,
   userMcpCredentials,
   userServerAccess,
-} from '../../infrastructure/database/schema.js';
-import type { User } from '../identity/session-user.js';
-import { ownerFor } from './connection-service.js';
-import { accessTokenValid } from './token-exchange.js';
+} from '@/auth/infrastructure/database/schema.js';
+import type { User } from '@/auth/modules/identity/session-user.js';
+import { ownerFor } from '@/auth/modules/upstreams/connection-service.js';
+import { accessTokenValid } from '@/auth/modules/upstreams/token-exchange.js';
 /** 查询结果只投影业务状态；密钥和令牌不得进入 HTTP DTO。 */
 export async function listUpstreamConnections(user: User) {
   const parents = await db.select().from(mcpServers).where(eq(mcpServers.enabled, true));

@@ -9,11 +9,11 @@ import {
 } from '@ant-design/icons';
 import { Alert, Button, Card, Divider, Form, Input, Space, Typography } from 'antd';
 import { useEffect, useState } from 'react';
-import { api } from '../../api';
-import { useI18n } from '../../i18n';
-import { LanguageSwitcher } from '../../components/LanguageSwitcher';
-import { ThemeSwitcher } from '../../components/ThemeSwitcher';
-import type { PlatformSession } from '../../types';
+import { api } from '@/web/api';
+import { useI18n } from '@/web/i18n';
+import { LanguageSwitcher } from '@/web/components/LanguageSwitcher';
+import { ThemeSwitcher } from '@/web/components/ThemeSwitcher';
+import type { PlatformSession } from '@/web/types';
 
 interface LoginForm {
   username: string;

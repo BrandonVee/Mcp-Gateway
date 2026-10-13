@@ -1,12 +1,12 @@
 import { and, count, eq, sql } from 'drizzle-orm';
-import { db } from '../../infrastructure/database/client.js';
+import { db } from '@/auth/infrastructure/database/client.js';
 import {
   mcpServerInstances,
   mcpServers,
   upstreamCredentials,
   userServerAccess,
   users,
-} from '../../infrastructure/database/schema.js';
+} from '@/auth/infrastructure/database/schema.js';
 
 /** 查询结果只投影业务状态；密钥和令牌不得进入 HTTP DTO。 */
 export async function listEndpointCatalog() {

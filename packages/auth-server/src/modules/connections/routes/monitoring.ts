@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { currentUser } from '../../identity/session-user.js';
-import { listMonitoringCalls } from '../../monitoring/api.js';
+import { currentUser } from '@/auth/modules/identity/session-user.js';
+import { listMonitoringCalls } from '@/auth/modules/monitoring/api.js';
 /** Registers monitoring browser routes; write protection is applied by the parent router. */
 export function registerMonitoringRoutes(router: Hono) {
   router.get('/me/monitoring/calls', async (c) => {

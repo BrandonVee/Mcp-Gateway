@@ -1,17 +1,21 @@
-import { adminWebUrl, authIssuer } from '@mcp/shared';
+/**
+ * Pool-mode endpoints share one authentication configuration across their replicas.
+ * Aggregate endpoints use modules/upstreams and independently scoped credentials.
+ * Keep this path until persisted pools and their OAuth callbacks have been migrated.
+ */
 import { and, eq } from 'drizzle-orm';
-import { db } from '../../infrastructure/database/client.js';
-import { mcpServers, userMcpCredentials, userServerAccess } from '../../infrastructure/database/schema.js';
-import { decryptCredential, encryptCredential } from '../../infrastructure/security/credential-crypto.js';
-import type { User } from '../identity/session-user.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { mcpServers, userMcpCredentials, userServerAccess } from '@/auth/infrastructure/database/schema.js';
+import { decryptCredential, encryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
+import type { User } from '@/auth/modules/identity/session-user.js';
 import {
   accessTokenValid,
   exchangeOAuthToken,
   OAuthTokenError,
   shouldRefresh,
   tokenExpiry,
-} from '../upstreams/token-exchange.js';
-import { lockAccessibleConnection } from './lifecycle.js';
+} from '@/auth/modules/upstreams/token-exchange.js';
+import { lockAccessibleConnection } from '@/auth/modules/connections/lifecycle.js';
 
 export async function accessibleServer(
   user: Pick<User, 'id' | 'username' | 'role' | 'allServers' | 'authVersion'>,
@@ -30,17 +34,6 @@ export async function accessibleServer(
     .where(and(eq(userServerAccess.userId, user.id), eq(userServerAccess.serverName, serverName)))
     .limit(1);
   return grant ? server : null;
-}
-
-export function callbackUrl(serverName: string): string {
-  return `${authIssuer()}/oauth/callback/${encodeURIComponent(serverName)}`;
-}
-
-export function portalUrl(result: string, serverName: string): string {
-  const url = new URL('/connections', adminWebUrl());
-  url.searchParams.set('result', result);
-  url.searchParams.set('server', serverName);
-  return url.toString();
 }
 
 /**

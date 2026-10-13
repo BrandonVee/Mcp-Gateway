@@ -1,10 +1,10 @@
-import { useI18n, type Language } from '../../i18n';
+import { useI18n, type Language } from '@/web/i18n';
 import { Alert, Button, Empty, Input, Select, Spin, Tag } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../../api';
-import type { AuditEvent } from '../../types';
-import './monitoring.css';
+import { api } from '@/web/api';
+import type { AuditEvent } from '@/web/types';
+import '@/web/features/monitoring/monitoring.css';
 
 const PAGE_SIZE = 50;
 const timestamp = (value: number, language: Language) =>

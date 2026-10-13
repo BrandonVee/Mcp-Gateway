@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ApiError, apiForSession } from '../api';
-import { getCurrentLanguage, getTranslation } from '../i18n';
+import { ApiError, apiForSession } from '@/web/api';
+import { getCurrentLanguage, getTranslation } from '@/web/i18n';
 import type {
   PlatformSession,
   SystemSettings,
@@ -11,8 +11,8 @@ import type {
   SystemUpdateStatus,
   SystemSettingsInput,
   AuthHealth,
-} from '../types';
-import { mutateAndRefresh } from '../utils/operations';
+} from '@/web/types';
+import { mutateAndRefresh } from '@/web/utils/operations';
 
 export function useControlPlane(
   session: PlatformSession,

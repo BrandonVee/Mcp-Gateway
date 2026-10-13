@@ -1,17 +1,17 @@
 import Fastify from 'fastify';
-import { registerMonitoring, collectionStatus } from './monitoring.js';
-import { activeUpstreamRequests } from './routes/capacity.js';
+import { registerMonitoring, collectionStatus } from '@/gateway/monitoring.js';
+import { activeUpstreamRequests } from '@/gateway/routes/capacity.js';
 import { databaseSettingsEnabled, systemConfigured, validateUpstreamEndpoint } from '@mcp/shared';
-import { env, refreshServerConfigs, registryStatus, serverConfigs, startRegistryRefresh } from './config.js';
-import { authHook, hasServerAccess } from './auth.js';
-import { registerMcpRoutes } from './routes/mcp.js';
-import { registerMetadataRoutes } from './routes/metadata.js';
-import { registerDevelopmentOAuthRoutes } from './routes/oauth.js';
-import { redisHealthy } from './lb.js';
-import { isAllowedMcpOrigin, mcpCorsHeaders } from './routes/origin.js';
-import { probeRegisteredUpstreams, upstreamHealth } from './upstream-health.js';
-import { publishHealthSnapshot } from './health-report.js';
-import { registerUpstreamTestRoute } from './routes/upstream-test.js';
+import { env, refreshServerConfigs, registryStatus, serverConfigs, startRegistryRefresh } from '@/gateway/config.js';
+import { authHook, hasServerAccess } from '@/gateway/auth.js';
+import { registerMcpRoutes } from '@/gateway/routes/mcp.js';
+import { registerMetadataRoutes } from '@/gateway/routes/metadata.js';
+import { registerDevelopmentOAuthRoutes } from '@/gateway/routes/oauth.js';
+import { redisHealthy } from '@/gateway/lb.js';
+import { isAllowedMcpOrigin, mcpCorsHeaders } from '@/gateway/routes/origin.js';
+import { probeRegisteredUpstreams, upstreamHealth } from '@/gateway/upstream-health.js';
+import { publishHealthSnapshot } from '@/gateway/health-report.js';
+import { registerUpstreamTestRoute } from '@/gateway/routes/upstream-test.js';
 
 const app = Fastify({
   bodyLimit: 1024 * 1024,

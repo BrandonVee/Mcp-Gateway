@@ -1,17 +1,17 @@
 import { and, eq } from 'drizzle-orm';
-import { db } from '../../../infrastructure/database/client.js';
-import { LockNamespace, lockTransaction } from '../../../infrastructure/database/locks.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { LockNamespace, lockTransaction } from '@/auth/infrastructure/database/locks.js';
 import {
   mcpServerInstances,
   mcpServers,
   upstreamCredentials,
   upstreamOAuthStates,
   userMcpCredentials,
-} from '../../../infrastructure/database/schema.js';
-import { jsonError } from '../../../shared/http/responses.js';
-import { revokeUserConnection } from '../../connections/lifecycle.js';
-import type { AdminRouter } from '../context.js';
-import { SERVER_NAME_RE } from '../validation.js';
+} from '@/auth/infrastructure/database/schema.js';
+import { jsonError } from '@/auth/shared/http/responses.js';
+import { revokeUserConnection } from '@/auth/modules/connections/lifecycle.js';
+import type { AdminRouter } from '@/auth/modules/admin/context.js';
+import { SERVER_NAME_RE } from '@/auth/modules/admin/validation.js';
 /** Registers connections routes under the shared administrator guard. */
 export function registerConnectionsRoutes(router: AdminRouter) {
   /** Metadata only: never expose API keys, OAuth access tokens or refresh tokens. */

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { createIsolatedAuthSchema } from './isolated-auth-schema.js';
+import { createIsolatedAuthSchema } from '@/scripts/isolated-auth-schema.js';
 
 async function main() {
   const isolated = await createIsolatedAuthSchema();
@@ -12,20 +12,19 @@ async function main() {
   process.env.SYSTEM_CONFIG_MODE = 'database';
   process.env.CREDENTIAL_ENCRYPT_KEY = 'a'.repeat(64);
   process.env.CREDENTIAL_BROKER_TOKEN = 'group-test-broker';
-  const { db, pool } = await import('../packages/auth-server/src/infrastructure/database/client.js');
-  const { createLoginSession } = await import('../packages/auth-server/src/modules/identity/sessions.js');
-  const { users, upstreamCredentials } = await import('../packages/auth-server/src/infrastructure/database/schema.js');
-  const { createAdminRouter } = await import('../packages/auth-server/src/modules/admin/router.js');
-  const { createConnectionsRouter } = await import('../packages/auth-server/src/modules/connections/router.js');
-  const { createRegistryRouter } = await import('../packages/auth-server/src/modules/upstreams/registry.js');
-  const { loadSigningKeys } = await import('../packages/auth-server/src/modules/oauth/keys.js');
-  const { saveSystemSettings } = await import('../packages/auth-server/src/modules/system/settings.js');
-  const { resolveUpstreamCredential } =
-    await import('../packages/auth-server/src/modules/upstreams/connection-service.js');
-  const { env, serverConfigs } = await import('../packages/gateway/src/config.js');
-  const { redis } = await import('../packages/gateway/src/lb.js');
-  const { registerMcpRoutes } = await import('../packages/gateway/src/routes/mcp.js');
-  const { upstreamNamespace } = await import('../packages/gateway/src/aggregate.js');
+  const { db, pool } = await import('@/auth/infrastructure/database/client.js');
+  const { createLoginSession } = await import('@/auth/modules/identity/sessions.js');
+  const { users, upstreamCredentials } = await import('@/auth/infrastructure/database/schema.js');
+  const { createAdminRouter } = await import('@/auth/modules/admin/router.js');
+  const { createConnectionsRouter } = await import('@/auth/modules/connections/router.js');
+  const { createRegistryRouter } = await import('@/auth/modules/upstreams/registry.js');
+  const { loadSigningKeys } = await import('@/auth/modules/oauth/keys.js');
+  const { saveSystemSettings } = await import('@/auth/modules/system/settings.js');
+  const { resolveUpstreamCredential } = await import('@/auth/modules/upstreams/connection-service.js');
+  const { env, serverConfigs } = await import('@/gateway/config.js');
+  const { redis } = await import('@/gateway/lb.js');
+  const { registerMcpRoutes } = await import('@/gateway/routes/mcp.js');
+  const { upstreamNamespace } = await import('@/gateway/aggregate.js');
   const Fastify = createRequire(new URL('../packages/gateway/package.json', import.meta.url))('fastify');
   const group = `group-${randomUUID()}`;
   const upstreamCalls: Array<{ path: string; authorization?: string; key?: string; session?: string; method: string }> =

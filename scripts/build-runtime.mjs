@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 const shared = resolve('packages/shared/src/index.ts');
 const common = {
   bundle: true,
+  tsconfig: resolve('tsconfig.base.json'),
   platform: 'node',
   target: 'node22',
   format: 'esm',

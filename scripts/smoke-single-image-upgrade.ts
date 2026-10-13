@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { readDeploymentEnvironment } from './deploy-env.js';
+import { readDeploymentEnvironment } from '@/scripts/deploy-env.js';
 
 const directory = process.env.MCP_DEPLOY_DIR;
 if (!directory || !process.env.COMPOSE_PROJECT_NAME?.includes('ci')) throw new Error('Use a disposable CI deployment');

@@ -12,8 +12,8 @@ import {
 } from '@ant-design/icons';
 import { Empty, Input, Modal, Tag } from 'antd';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { View } from '../types';
-import { useI18n, type MessageKey } from '../i18n';
+import type { View } from '@/web/types';
+import { useI18n, type MessageKey } from '@/web/i18n';
 
 const commands: Array<{
   view: View;

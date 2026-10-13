@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
-import { getAccessToken } from './oauth-token.js';
+import { getAccessToken } from '@/scripts/oauth-token.js';
 const require = createRequire(new URL('../packages/auth-server/package.json', import.meta.url));
 const { Redis } = require('ioredis'),
   { Pool } = require('pg');

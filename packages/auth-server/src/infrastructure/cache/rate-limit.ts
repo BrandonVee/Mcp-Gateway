@@ -3,7 +3,7 @@ import { loadPlatformConfig } from '@mcp/shared';
 import type { Context } from 'hono';
 import { Redis } from 'ioredis';
 import { createHash } from 'node:crypto';
-import { resolveClientIp } from '../../shared/http/client-ip.js';
+import { resolveClientIp } from '@/auth/shared/http/client-ip.js';
 
 const redis = new Redis(process.env.REDIS_URL ?? loadPlatformConfig().gateway.redisUrl, {
   maxRetriesPerRequest: 1,

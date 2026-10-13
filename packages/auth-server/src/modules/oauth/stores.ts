@@ -3,9 +3,9 @@
  */
 import { and, eq, gte } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
-import { db, type AuthTransaction } from '../../infrastructure/database/client.js';
-import { authCodes, refreshTokens } from '../../infrastructure/database/schema.js';
-import { withAuthenticatedUser, type AuthIdentity } from '../identity/authentication.js';
+import { db, type AuthTransaction } from '@/auth/infrastructure/database/client.js';
+import { authCodes, refreshTokens } from '@/auth/infrastructure/database/schema.js';
+import { withAuthenticatedUser, type AuthIdentity } from '@/auth/modules/identity/authentication.js';
 
 export interface AuthCodeEntry extends AuthIdentity {
   client_id: string;

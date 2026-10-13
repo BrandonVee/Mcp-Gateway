@@ -1,14 +1,9 @@
 import assert from 'node:assert/strict';
 import { hostname } from 'node:os';
 import { test } from 'node:test';
-import {
-  buildCreateSpec,
-  buildUpdaterSpec,
-  mountedSource,
-  updaterGroups,
-} from '../packages/auth-server/src/modules/system/update-spec';
-import { dockerSocket, parsePullProgress } from '../packages/auth-server/src/infrastructure/docker/client';
-import { selfId, updateEnabled, updateTargetImage } from '../packages/auth-server/src/modules/system/update-identity';
+import { buildCreateSpec, buildUpdaterSpec, mountedSource, updaterGroups } from '@/auth/modules/system/update-spec';
+import { dockerSocket, parsePullProgress } from '@/auth/infrastructure/docker/client';
+import { selfId, updateEnabled, updateTargetImage } from '@/auth/modules/system/update-identity';
 
 const inspect = {
   Id: 'old-container-id',

@@ -1,3 +1,10 @@
+import {
+  API_KEY_HEADER,
+  API_KEY_MAX_LENGTH,
+  API_KEY_PREFIX_MAX_LENGTH,
+  apiKeyPrefixSchema,
+  credentialHeaderSchema,
+} from '@/shared/security/credentials.js';
 import { z } from 'zod';
 
 export const upstreamTestResultSchema = z
@@ -47,13 +54,10 @@ export function unavailableUpstreamTest(reason: 'gateway_unavailable' | 'busy'):
 }
 
 /** Only the credential header is sent to the gateway; it never appears in probe results. */
-export const upstreamTestCredentialSchema = z.object({
-  header: z.string().regex(/^(authorization|x-[a-z0-9-]{1,60})$/i),
-  value: z
-    .string()
-    .min(1)
-    .max(4196)
-    .refine((value) => !/[\x00-\x1f\x7f]/.test(value)),
+export const upstreamTestCredentialSchema = credentialHeaderSchema.extend({
+  value: credentialHeaderSchema.shape.value.refine(
+    (value) => value.length <= API_KEY_MAX_LENGTH + API_KEY_PREFIX_MAX_LENGTH,
+  ),
 });
 export type UpstreamTestCredential = z.infer<typeof upstreamTestCredentialSchema>;
 
@@ -61,15 +65,8 @@ export type UpstreamTestCredential = z.infer<typeof upstreamTestCredentialSchema
 export const upstreamTestAuthInputSchema = z.object({
   instance_id: z.string().min(1).max(256).optional(),
   auth_mode: z.enum(['none', 'api_key', 'system_api_key', 'oauth', 'system_oauth']).optional(),
-  system_api_key: z.string().max(4096).optional(),
-  api_key_header: z
-    .string()
-    .regex(/^(authorization|x-[a-z0-9-]{1,60})$/i)
-    .optional(),
-  api_key_prefix: z
-    .string()
-    .max(100)
-    .refine((value) => !/[\x00-\x1f\x7f]/.test(value))
-    .optional(),
+  system_api_key: z.string().max(API_KEY_MAX_LENGTH).optional(),
+  api_key_header: z.string().regex(API_KEY_HEADER).optional(),
+  api_key_prefix: apiKeyPrefixSchema.optional(),
 });
 export type UpstreamTestAuthInput = z.infer<typeof upstreamTestAuthInputSchema>;

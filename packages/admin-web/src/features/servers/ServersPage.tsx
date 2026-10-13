@@ -1,4 +1,4 @@
-import { useI18n } from '../../i18n';
+import { useI18n } from '@/web/i18n';
 import {
   ApiOutlined,
   CopyOutlined,
@@ -30,10 +30,10 @@ import {
   Typography,
 } from 'antd';
 import { useMemo, useState } from 'react';
-import { ServiceDescription } from '../../components/ServiceDescription';
-import { PageToolbar } from '../../components/PageToolbar';
-import type { AdminUser, McpInstance, McpServer, SystemSettings } from '../../types';
-import { untrustedUpstreamHost } from './upstream-allowlist';
+import { ServiceDescription } from '@/web/components/ServiceDescription';
+import { PageToolbar } from '@/web/components/PageToolbar';
+import type { AdminUser, McpInstance, McpServer, SystemSettings } from '@/web/types';
+import { untrustedUpstreamHost } from '@/web/features/servers/upstream-allowlist';
 
 interface ServersPageProps {
   servers: McpServer[];

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { AuthTransaction } from './client.js';
+import type { AuthTransaction } from '@/auth/infrastructure/database/client.js';
 
 /** Namespace values are stable across replicas and mixed-version rolling upgrades. */
 export const LockNamespace = { Administrator: 762441, LegacyConnection: 80447, UpstreamCredential: 80448 } as const;

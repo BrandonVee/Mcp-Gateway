@@ -1,6 +1,6 @@
 import { currentSystemSettings, smtpConfigured, systemOptionDefaults, type SystemSettings } from '@mcp/shared';
 import nodemailer from 'nodemailer';
-import { decryptCredential } from '../security/credential-crypto.js';
+import { decryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
 
 export function mailConfigured(): boolean {
   return smtpConfigured(currentSystemSettings());

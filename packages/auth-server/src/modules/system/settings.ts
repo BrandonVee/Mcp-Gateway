@@ -1,7 +1,7 @@
 import { applySystemSettings, currentSystemSettings, normalizeSystemSettings, type SystemSettings } from '@mcp/shared';
 import { eq } from 'drizzle-orm';
-import { db } from '../../infrastructure/database/client.js';
-import { meta } from '../../infrastructure/database/schema.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { meta } from '@/auth/infrastructure/database/schema.js';
 
 export async function refreshSystemSettings(): Promise<void> {
   if (process.env.SYSTEM_CONFIG_MODE === 'file') return;

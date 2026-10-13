@@ -1,4 +1,4 @@
-import type { ConnectionServer } from '../../types';
+import type { ConnectionServer } from '@/web/types';
 
 /** Server entries to paste into mcpServers; OAuth is completed by the client. */
 export function mcpServerUrl(name: string, resource: string): string {

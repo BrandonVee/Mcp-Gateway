@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { request } from 'undici';
-import { filterResponseHeaders } from './headers.js';
+import { filterResponseHeaders } from '@/gateway/routes/headers.js';
 
 /** Local clients may discover OAuth on the MCP origin before following RFC 9728. */
 export function registerDevelopmentOAuthRoutes(

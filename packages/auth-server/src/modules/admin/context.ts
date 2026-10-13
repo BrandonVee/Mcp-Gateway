@@ -2,11 +2,11 @@ import { and, eq } from 'drizzle-orm';
 import type { Hono, Context as HonoContext } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { jwtVerify } from 'jose';
-import { db } from '../../infrastructure/database/client.js';
-import { users } from '../../infrastructure/database/schema.js';
-import { trustedAdminBearerClient } from '../../shared/security/admin-bearer.js';
-import { getSessionUser } from '../identity/sessions.js';
-import type { SigningKeys } from '../oauth/keys.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { users } from '@/auth/infrastructure/database/schema.js';
+import { trustedAdminBearerClient } from '@/auth/shared/security/admin-bearer.js';
+import { getSessionUser } from '@/auth/modules/identity/sessions.js';
+import type { SigningKeys } from '@/auth/modules/oauth/keys.js';
 
 export interface AdminDeps {
   keys: SigningKeys;

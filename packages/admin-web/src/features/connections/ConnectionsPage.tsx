@@ -1,4 +1,4 @@
-import { MyCallLogs } from '../monitoring/MyCallLogs';
+import { MyCallLogs } from '@/web/features/monitoring/MyCallLogs';
 import { useEffect, useMemo, useState } from 'react';
 import { App, Button, Card, Empty, Input, Modal, Tag, Typography } from 'antd';
 import {
@@ -11,18 +11,18 @@ import {
   LogoutOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
-import { ApiError, apiForSession } from '../../api';
-import type { ConnectionServer, PlatformSession } from '../../types';
-import { DataLoadError } from '../../components/DataLoadState';
-import { useI18n } from '../../i18n';
-import { ServiceDescription } from '../../components/ServiceDescription';
-import { LanguageSwitcher } from '../../components/LanguageSwitcher';
-import { ThemeSwitcher } from '../../components/ThemeSwitcher';
-import { mcpConfig, mcpServerUrl } from './mcp-config';
-import { mutateAndRefresh } from '../../utils/operations';
-import { validApiKey } from '../../utils/validation';
-import { oauthResultKey } from './oauth-result';
-import './connections.css';
+import { ApiError, apiForSession } from '@/web/api';
+import type { ConnectionServer, PlatformSession } from '@/web/types';
+import { DataLoadError } from '@/web/components/DataLoadState';
+import { useI18n } from '@/web/i18n';
+import { ServiceDescription } from '@/web/components/ServiceDescription';
+import { LanguageSwitcher } from '@/web/components/LanguageSwitcher';
+import { ThemeSwitcher } from '@/web/components/ThemeSwitcher';
+import { mcpConfig, mcpServerUrl } from '@/web/features/connections/mcp-config';
+import { mutateAndRefresh } from '@/web/utils/operations';
+import { isValidApiKey } from '@/shared/security/credentials.js';
+import { oauthResultKey } from '@/web/features/connections/oauth-result';
+import '@/web/features/connections/connections.css';
 
 export function ConnectionsPage({
   session,
@@ -88,7 +88,7 @@ export function ConnectionsPage({
 
   const saveKey = async () => {
     if (!selected || busy) return;
-    if (!validApiKey(key)) {
+    if (!isValidApiKey(key)) {
       message.error(t('api.invalidApiKey'));
       return;
     }
@@ -371,7 +371,7 @@ export function ConnectionsPage({
         title={t('connections.configureApiKeyServer', { server: selected?.display_name ?? '' })}
         open={!!selected}
         okText={t('connections.saveKey')}
-        okButtonProps={{ disabled: !validApiKey(key) || busy, loading: busy }}
+        okButtonProps={{ disabled: !isValidApiKey(key) || busy, loading: busy }}
         cancelButtonProps={{ disabled: busy }}
         closable={!busy}
         keyboard={!busy}
@@ -392,7 +392,7 @@ export function ConnectionsPage({
           maxLength={4096}
           onChange={(event) => setKey(event.target.value)}
         />
-        {key && !validApiKey(key) && <Typography.Text type="danger">{t('api.invalidApiKey')}</Typography.Text>}
+        {key && !isValidApiKey(key) && <Typography.Text type="danger">{t('api.invalidApiKey')}</Typography.Text>}
       </Modal>
       <MyCallLogs session={session} />
     </main>

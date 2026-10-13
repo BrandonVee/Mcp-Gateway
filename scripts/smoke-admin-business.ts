@@ -1,7 +1,7 @@
 /** Verify admin workflows using a disposable database schema. */
 import assert from 'node:assert/strict';
-import { createIsolatedAuthSchema } from './isolated-auth-schema.js';
-import { authFields } from '../packages/admin-web/src/features/servers/ServerDialogs';
+import { createIsolatedAuthSchema } from '@/scripts/isolated-auth-schema.js';
+import { authFields } from '@/web/features/servers/ServerDialogs';
 
 async function main() {
   const isolated = await createIsolatedAuthSchema();
@@ -9,15 +9,14 @@ async function main() {
   process.env.SYSTEM_CONFIG_MODE = 'database';
   process.env.NODE_ENV = 'development';
   process.env.CREDENTIAL_ENCRYPT_KEY = 'a'.repeat(64);
-  const { db, pool } = await import('../packages/auth-server/src/infrastructure/database/client.js');
-  const { createLoginSession } = await import('../packages/auth-server/src/modules/identity/sessions.js');
+  const { db, pool } = await import('@/auth/infrastructure/database/client.js');
+  const { createLoginSession } = await import('@/auth/modules/identity/sessions.js');
   try {
-    const { users, mcpServers, userMcpCredentials } =
-      await import('../packages/auth-server/src/infrastructure/database/schema.js');
-    const { saveSystemSettings } = await import('../packages/auth-server/src/modules/system/settings.js');
-    const { createAdminRouter } = await import('../packages/auth-server/src/modules/admin/router.js');
-    const { createConnectionsRouter } = await import('../packages/auth-server/src/modules/connections/router.js');
-    const { loadSigningKeys } = await import('../packages/auth-server/src/modules/oauth/keys.js');
+    const { users, mcpServers, userMcpCredentials } = await import('@/auth/infrastructure/database/schema.js');
+    const { saveSystemSettings } = await import('@/auth/modules/system/settings.js');
+    const { createAdminRouter } = await import('@/auth/modules/admin/router.js');
+    const { createConnectionsRouter } = await import('@/auth/modules/connections/router.js');
+    const { loadSigningKeys } = await import('@/auth/modules/oauth/keys.js');
     await saveSystemSettings({
       public_url: 'https://gateway.example.test',
       upstream_allowlist_enabled: false,

@@ -1,6 +1,6 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Result, Row, Skeleton } from 'antd';
-import { useI18n } from '../i18n';
+import { useI18n } from '@/web/i18n';
 
 export function PageSkeleton() {
   const { t } = useI18n();

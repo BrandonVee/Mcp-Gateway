@@ -721,7 +721,6 @@ body {
 
 .metric-card,
 .dashboard-card,
-.infrastructure-card,
 .data-card,
 .server-card,
 .empty-card,
@@ -845,19 +844,6 @@ body {
 .user-avatar.admin {
   background: linear-gradient(145deg, #248eda, #194fb9);
   box-shadow: 0 0 18px rgba(47, 140, 255, 0.2);
-}
-
-.infra-heading {
-  border-right-color: #1d2e46;
-}
-
-.infra-heading strong,
-.infra-status strong {
-  color: #c9d9ec;
-}
-
-.health-progress .ant-progress-inner {
-  background: #101c2d;
 }
 
 .page-toolbar-filters,
@@ -1100,7 +1086,6 @@ body {
 .page-eyebrow,
 .section-eyebrow,
 .card-title-copy small,
-.infra-heading small,
 .server-heading small,
 .modal-title small,
 .login-brand small,
@@ -1115,7 +1100,6 @@ body {
 .brand-copy small,
 .sider-section-label,
 .card-title-copy small,
-.infra-heading small,
 .server-heading small,
 .modal-title small,
 .login-brand small,
@@ -1130,7 +1114,6 @@ body {
 .page-eyebrow,
 .section-eyebrow,
 .card-title-copy small,
-.infra-heading small,
 .server-heading small,
 .modal-title small,
 .login-brand small {
@@ -1172,8 +1155,6 @@ body {
 .route-node strong,
 .route-node small,
 .identity-card .ant-list-item-meta-description,
-.infra-status small,
-.infra-status strong,
 .data-card .ant-table-thead > tr > th,
 .identity-copy small,
 .server-heading code,
@@ -1186,7 +1167,6 @@ body {
 }
 
 .identity-card .ant-list-item-meta-title,
-.infra-heading strong,
 .data-card .ant-table-tbody > tr > td,
 .identity-copy strong,
 .permission-grid .ant-checkbox-wrapper > span:last-child,

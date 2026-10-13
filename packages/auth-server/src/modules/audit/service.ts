@@ -1,7 +1,7 @@
 import type { Context as HonoContext } from 'hono';
 import { randomUUID } from 'node:crypto';
-import { db } from '../../infrastructure/database/client.js';
-import { auditEvents } from '../../infrastructure/database/schema.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { auditEvents } from '@/auth/infrastructure/database/schema.js';
 
 export async function recordAudit(c: HonoContext, actor: string, statusCode: number): Promise<void> {
   try {

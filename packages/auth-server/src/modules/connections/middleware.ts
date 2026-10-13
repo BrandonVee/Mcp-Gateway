@@ -1,7 +1,7 @@
 import { adminWebUrl, authIssuer } from '@mcp/shared';
 import type { Hono } from 'hono';
-import { browserOriginAllowed } from '../../shared/http/origin.js';
-import { currentUser } from '../identity/session-user.js';
+import { browserOriginAllowed } from '@/auth/shared/http/origin.js';
+import { currentUser } from '@/auth/modules/identity/session-user.js';
 
 /** Protect browser writes against cross-origin and stale-tab identity changes. */
 export function registerConnectionMiddleware(router: Hono) {

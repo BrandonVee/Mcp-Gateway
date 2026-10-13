@@ -1,4 +1,4 @@
-import type { UpstreamTestAuthInput } from '../../types';
+import type { UpstreamTestAuthInput } from '@/web/types';
 
 export interface UpstreamProbeDraft {
   url: string;

@@ -1,9 +1,9 @@
 import { eq, lt } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { authServerPaths } from '../runtime/paths.js';
-import { db, pool } from './client.js';
-import * as schema from './schema.js';
+import { authServerPaths } from '@/auth/infrastructure/runtime/paths.js';
+import { db, pool } from '@/auth/infrastructure/database/client.js';
+import * as schema from '@/auth/infrastructure/database/schema.js';
 import {
   auditEvents,
   authCodes,
@@ -13,7 +13,7 @@ import {
   refreshTokens,
   signupEmailCodes,
   users,
-} from './schema.js';
+} from '@/auth/infrastructure/database/schema.js';
 
 /** Apply checked-in Drizzle migrations before serving traffic. */
 export async function initializeDatabase(): Promise<void> {

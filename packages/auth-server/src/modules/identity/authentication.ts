@@ -1,6 +1,6 @@
 import { normalizeEmail } from '@mcp/shared';
 import { and, eq } from 'drizzle-orm';
-import { db, type AuthTransaction } from '../../infrastructure/database/client.js';
+import { db, type AuthTransaction } from '@/auth/infrastructure/database/client.js';
 import {
   authCodes,
   loginSessions,
@@ -10,8 +10,8 @@ import {
   upstreamOAuthStates,
   users,
   userServerAccess,
-} from '../../infrastructure/database/schema.js';
-import { scryptHash, scryptVerify } from '../../infrastructure/security/password.js';
+} from '@/auth/infrastructure/database/schema.js';
+import { scryptHash, scryptVerify } from '@/auth/infrastructure/security/password.js';
 
 export type AuthIdentity = { userId: number; userAuthVersion: number; sub: string };
 

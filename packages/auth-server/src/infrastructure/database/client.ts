@@ -1,7 +1,7 @@
 import { loadPlatformConfig } from '@mcp/shared';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import * as schema from './schema.js';
+import * as schema from '@/auth/infrastructure/database/schema.js';
 
 const platformConfig = loadPlatformConfig();
 

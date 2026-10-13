@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, statSync, rmSync, mkdirSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
-import { readDeploymentEnvironment } from './deploy-env.js';
+import { readDeploymentEnvironment } from '@/scripts/deploy-env.js';
 const directory = process.env.MCP_DEPLOY_DIR;
 if (!directory || !process.env.COMPOSE_PROJECT_NAME?.includes('ci')) throw new Error('Use a disposable CI deployment');
 const envFile = resolve(directory, 'runtime.env'),

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, api, apiForSession } from '../../api';
-import type { PlatformSession } from '../../types';
+import { ApiError, api, apiForSession } from '@/web/api';
+import type { PlatformSession } from '@/web/types';
 
 /** One browser identity for both the administration and personal portal. */
 export function usePlatformSession() {

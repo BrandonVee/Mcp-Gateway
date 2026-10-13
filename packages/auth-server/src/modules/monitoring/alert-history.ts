@@ -1,9 +1,9 @@
 import { alertFingerprint, histogramP95, runtimeSettings, type ActiveAlert, type AlertEvent } from '@mcp/shared';
 import { and, desc, eq, isNull, notInArray } from 'drizzle-orm';
-import { db, pool } from '../../infrastructure/database/client.js';
-import { alertEvents } from '../../infrastructure/database/schema.js';
-import { sendMail } from '../../infrastructure/mail/mailer.js';
-import { currentSystemSettings } from '../system/settings.js';
+import { db, pool } from '@/auth/infrastructure/database/client.js';
+import { alertEvents } from '@/auth/infrastructure/database/schema.js';
+import { sendMail } from '@/auth/infrastructure/mail/mailer.js';
+import { currentSystemSettings } from '@/auth/modules/system/settings.js';
 
 function deserialize(row: typeof alertEvents.$inferSelect): AlertEvent {
   return {

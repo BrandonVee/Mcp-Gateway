@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Flex, Space, Typography } from 'antd';
-import { useI18n } from '../i18n';
-import type { MessageKey } from '../i18n';
+import { useI18n } from '@/web/i18n';
+import type { MessageKey } from '@/web/i18n';
 
 interface PageToolbarProps {
   eyebrow: MessageKey;

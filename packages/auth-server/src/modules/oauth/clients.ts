@@ -1,9 +1,9 @@
 /** OAuth client registry backed by PostgreSQL + RFC 7591 Dynamic Client Registration. */
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { db } from '../../infrastructure/database/client.js';
-import { clients } from '../../infrastructure/database/schema.js';
-import { isValidRedirectUri } from './redirect.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { clients } from '@/auth/infrastructure/database/schema.js';
+import { isValidRedirectUri } from '@/auth/modules/oauth/redirect.js';
 
 export interface OAuthClient {
   client_id: string;

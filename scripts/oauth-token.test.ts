@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { getAccessToken } from './oauth-token.js';
+import { getAccessToken } from '@/scripts/oauth-token.js';
 
 test('CLI dynamically registers a client and exchanges a PKCE code for an existing user', async (t) => {
   const originalFetch = globalThis.fetch;

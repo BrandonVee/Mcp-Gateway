@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { endpointUrlRule } from '../packages/admin-web/src/features/servers/ServerDialogs';
-import { untrustedUpstreamHost } from '../packages/admin-web/src/features/servers/upstream-allowlist';
-import type { SystemSettings } from '../packages/admin-web/src/types';
+import { endpointUrlRule } from '@/web/features/servers/ServerDialogs';
+import { untrustedUpstreamHost } from '@/web/features/servers/upstream-allowlist';
+import type { SystemSettings } from '@/web/types';
 
 const validate = async (value: string) => {
   try {

@@ -1,20 +1,19 @@
 /** Run with local database/Redis configuration; all writes use a disposable schema. */
 import assert from 'node:assert/strict';
-import { createIsolatedAuthSchema } from './isolated-auth-schema.js';
+import { createIsolatedAuthSchema } from '@/scripts/isolated-auth-schema.js';
 
 async function main() {
   const isolated = await createIsolatedAuthSchema();
   process.env.DATABASE_URL = isolated.databaseUrl;
   process.env.SYSTEM_CONFIG_MODE = 'database';
   process.env.NODE_ENV = 'development';
-  const { db, pool } = await import('../packages/auth-server/src/infrastructure/database/client.js');
-  const { createLoginSession } = await import('../packages/auth-server/src/modules/identity/sessions.js');
+  const { db, pool } = await import('@/auth/infrastructure/database/client.js');
+  const { createLoginSession } = await import('@/auth/modules/identity/sessions.js');
   try {
-    const { users } = await import('../packages/auth-server/src/infrastructure/database/schema.js');
-    const { saveSystemSettings, refreshSystemSettings } =
-      await import('../packages/auth-server/src/modules/system/settings.js');
-    const { createAdminRouter } = await import('../packages/auth-server/src/modules/admin/router.js');
-    const { loadSigningKeys } = await import('../packages/auth-server/src/modules/oauth/keys.js');
+    const { users } = await import('@/auth/infrastructure/database/schema.js');
+    const { saveSystemSettings, refreshSystemSettings } = await import('@/auth/modules/system/settings.js');
+    const { createAdminRouter } = await import('@/auth/modules/admin/router.js');
+    const { loadSigningKeys } = await import('@/auth/modules/oauth/keys.js');
     const settings = {
       public_url: 'https://gateway.example.test',
       upstream_allowlist_enabled: true,

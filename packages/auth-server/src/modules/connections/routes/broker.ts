@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db } from '../../../infrastructure/database/client.js';
-import { users } from '../../../infrastructure/database/schema.js';
-import { internalTokenMatches } from '../../../shared/security/internal-token.js';
-import { accessibleServer, resolveCredential } from '../legacy-service.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { users } from '@/auth/infrastructure/database/schema.js';
+import { internalTokenMatches } from '@/auth/shared/security/internal-token.js';
+import { accessibleServer, resolveCredential } from '@/auth/modules/connections/pool/service.js';
 /** Registers broker browser routes; write protection is applied by the parent router. */
 export function registerBrokerRoutes(router: Hono) {
   // Gateway-internal: hands the upstream credential to a proxying Gateway that

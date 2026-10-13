@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { internalTokenMatches } from '../../../shared/security/internal-token.js';
-import { resolveUpstreamCredential } from '../connection-service.js';
+import { internalTokenMatches } from '@/auth/shared/security/internal-token.js';
+import { resolveUpstreamCredential } from '@/auth/modules/upstreams/connection-service.js';
 /** Registers broker operations for concrete upstreams, with per-owner credential isolation. */
 export function registerBrokerRoutes(router: Hono) {
   router.get('/internal/upstream-credential', async (c) => {

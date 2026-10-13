@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Drawer, Form, Input, Select, Space, Table, Typography } from 'antd';
-import { apiForSession } from '../../api';
-import { useI18n } from '../../i18n';
-import type { PlatformSession, UsageCall, UsageFilters } from '../../types';
+import { apiForSession } from '@/web/api';
+import { useI18n } from '@/web/i18n';
+import type { PlatformSession, UsageCall, UsageFilters } from '@/web/types';
 
 export function MyCallLogs({ session }: { session: PlatformSession }) {
   const { t, language } = useI18n();

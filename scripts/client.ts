@@ -1,7 +1,7 @@
 /** Connect to a registered MCP Server and list its actual tools. */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { getAccessToken } from './oauth-token.js';
+import { getAccessToken } from '@/scripts/oauth-token.js';
 
 async function main(): Promise<void> {
   const serverName = process.env.MCP_SERVER_NAME;

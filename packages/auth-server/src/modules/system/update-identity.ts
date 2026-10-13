@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { hostname } from 'node:os';
-import { stableVersion, type UpdateRelease } from './releases.js';
-import type { ContainerInspect } from './update-spec.js';
+import { stableVersion, type UpdateRelease } from '@/auth/modules/system/releases.js';
+import type { ContainerInspect } from '@/auth/modules/system/update-spec.js';
 
 export const DEFAULT_UPDATE_IMAGE = 'brandonvee/mcp-gateway';
 

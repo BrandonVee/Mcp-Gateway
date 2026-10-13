@@ -2,6 +2,32 @@
 
 宿主机运行源码需 **Node.js 20.19+（20.x）或 ≥ 22.12、pnpm 10.33.0**（与 Vite 要求一致），以及可用的 PostgreSQL 和 Redis。以下开发方式任选一种，不要同时启动两组 Auth、Gateway 和管理前端。
 
+## 路径别名与工具边界
+
+路径映射统一定义在根目录 `tsconfig.base.json`，所有工作区继承；Vite 从同一份配置读取映射，esbuild 显式使用它，根目录 `tsconfig.json` 供 tsx 脚本解析。根配置不重复执行各包的类型检查，统一使用 `pnpm typecheck`。
+
+| 别名           | 源码目录                     |
+| -------------- | ---------------------------- |
+| `@/auth/*`     | `packages/auth-server/src/*` |
+| `@/gateway/*`  | `packages/gateway/src/*`     |
+| `@/web/*`      | `packages/admin-web/src/*`   |
+| `@/shared/*`   | `packages/shared/src/*`      |
+| `@/fixtures/*` | `tests/fixtures/src/*`       |
+| `@/scripts/*`  | `scripts/*`                  |
+
+例如：`import { db } from '@/auth/infrastructure/database/client.js'`。同一个测试进程会加载多个包，因此别名显式标识包，不按当前工作目录改变 `@/` 的含义。现有 `@mcp/shared` 公共入口继续使用；浏览器只导入 shared 中不依赖 Node 的具体模块，不能导入包含配置文件读取的服务端入口。
+
+- TypeScript 模块引用统一使用上述别名；NodeNext 服务端保留 `.js` 扩展名。
+- CSS 内部引用、字体和图片 URL、`new URL(..., import.meta.url)`、数据库迁移路径是资源定位，不改写为模块别名。
+- 直接由 Node 运行的 `.mjs` 运维脚本使用原生模块路径，不为它们新增自定义加载器。
+- 优先使用已有库和标准库：Zod 负责凭据契约校验，Node `crypto` 负责 PKCE 和安全比较，`URL` 负责地址解析，`node:util.parseEnv` 负责本地环境文件解析。不要手写替代实现。
+- 跨前后端的纯校验放 `packages/shared/src/security`；仅服务端可用的安全工具独立存放。凭据归属、权限检查、事务锁和 OAuth 刷新仍属于业务服务，不能塞进通用 utils。
+- 只有明确复用的逻辑才提取小函数；不创建万能请求客户端、通用仓储或只转发导出的兼容入口。
+
+`modules/connections/pool/` 维护仍在使用的实例池认证与旧地址回调，`modules/upstreams/` 维护每个 MCP Server 独立认证。前者不是未使用文件：移除它需要先迁移现有池、凭据和 OAuth 提供方登记的回调地址。
+
+新增的 `scripts/module-aliases.test.ts` 从根目录及所有工作区验证跨包导入；`pnpm build:admin`、`pnpm build:runtime` 和 `pnpm --filter @mcp/auth-server db:generate` 分别检查前端、服务端及 Drizzle 的解析。
+
 ## 方式一：容器运行数据库，宿主机运行应用
 
 在项目根目录安装依赖并启动数据库：

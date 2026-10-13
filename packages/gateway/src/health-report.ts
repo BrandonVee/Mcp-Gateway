@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { serverConfigs } from './config.js';
-import { redis } from './lb.js';
-import { upstreamHealth } from './upstream-health.js';
+import { serverConfigs } from '@/gateway/config.js';
+import { redis } from '@/gateway/lb.js';
+import { upstreamHealth } from '@/gateway/upstream-health.js';
 
 const replicaId = randomUUID();
 const healthKey = `gw:health:${replicaId}`;

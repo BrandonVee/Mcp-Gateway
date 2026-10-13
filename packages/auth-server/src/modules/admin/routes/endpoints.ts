@@ -1,20 +1,20 @@
 import { eq, sql } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { db } from '../../../infrastructure/database/client.js';
+import { db } from '@/auth/infrastructure/database/client.js';
 import {
   alertEvents,
   mcpServerInstances,
   mcpServers,
   oauthConnectionStates,
   userMcpCredentials,
-} from '../../../infrastructure/database/schema.js';
-import { jsonError } from '../../../shared/http/responses.js';
-import { authSettings } from '../../upstreams/auth-settings.js';
-import { listEndpointCatalog } from '../../upstreams/endpoint-catalog.js';
-import { convertEndpointToGroup } from '../../upstreams/endpoint-groups.js';
-import { validateMcpEndpoint } from '../../upstreams/endpoint-validation.js';
-import type { AdminRouter } from '../context.js';
-import { serverCreateSchema, serverPatchSchema } from '../validation.js';
+} from '@/auth/infrastructure/database/schema.js';
+import { jsonError } from '@/auth/shared/http/responses.js';
+import { authSettings } from '@/auth/modules/upstreams/auth-settings.js';
+import { listEndpointCatalog } from '@/auth/modules/upstreams/endpoint-catalog.js';
+import { convertEndpointToGroup } from '@/auth/modules/upstreams/endpoint-groups.js';
+import { validateMcpEndpoint } from '@/auth/modules/upstreams/endpoint-validation.js';
+import type { AdminRouter } from '@/auth/modules/admin/context.js';
+import { serverCreateSchema, serverPatchSchema } from '@/auth/modules/admin/validation.js';
 
 /** 逻辑端点只管理分组、状态与访问策略。 */
 export function registerEndpointsRoutes(router: AdminRouter) {

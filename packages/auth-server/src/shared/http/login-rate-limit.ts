@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { limitLoginAccount } from '../../infrastructure/cache/rate-limit.js';
+import { limitLoginAccount } from '@/auth/infrastructure/cache/rate-limit.js';
 
 /** Fail closed if Redis is unavailable; share account throttling across both login surfaces. */
 export async function enforceLoginAccountLimit(c: Context, username: unknown): Promise<Response | null> {

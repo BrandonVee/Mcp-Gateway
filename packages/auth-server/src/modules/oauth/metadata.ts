@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { registerClient } from './clients.js';
-import type { SigningKeys } from './keys.js';
+import { registerClient } from '@/auth/modules/oauth/clients.js';
+import type { SigningKeys } from '@/auth/modules/oauth/keys.js';
 
 /** OAuth 2.0 Authorization Server Metadata (RFC 8414) + JWKS + DCR (RFC 7591). */
 export function createMetadataRouter(keys: SigningKeys, issuer: string | (() => string)): Hono {

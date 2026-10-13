@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { timingSafeEqual } from 'node:crypto';
-import { db } from '../../infrastructure/database/client.js';
-import { emailVerificationCodes, users } from '../../infrastructure/database/schema.js';
-import { mailConfigured, sendMail, verificationCodeMail } from '../../infrastructure/mail/mailer.js';
-import { generateVerificationCode, hashVerificationCode } from '../../infrastructure/security/verification-code.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { emailVerificationCodes, users } from '@/auth/infrastructure/database/schema.js';
+import { mailConfigured, sendMail, verificationCodeMail } from '@/auth/infrastructure/mail/mailer.js';
+import { generateVerificationCode, hashVerificationCode } from '@/auth/infrastructure/security/verification-code.js';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 

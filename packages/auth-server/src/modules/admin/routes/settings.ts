@@ -10,12 +10,12 @@ import {
   systemOptionDefaults,
   upstreamAllowlistEnabled,
 } from '@mcp/shared';
-import { mailConfigured, sendMail, sendMailWithSettings } from '../../../infrastructure/mail/mailer.js';
-import { decryptCredential, encryptCredential } from '../../../infrastructure/security/credential-crypto.js';
-import { addUpstreamHost, currentSystemSettings, saveSystemSettings } from '../../system/settings.js';
-import { canReuseSmtpPassword, smtpTestConfigSchema } from '../../system/smtp-config.js';
+import { mailConfigured, sendMail, sendMailWithSettings } from '@/auth/infrastructure/mail/mailer.js';
+import { decryptCredential, encryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
+import { addUpstreamHost, currentSystemSettings, saveSystemSettings } from '@/auth/modules/system/settings.js';
+import { canReuseSmtpPassword, smtpTestConfigSchema } from '@/auth/modules/system/smtp-config.js';
 
-import type { AdminDeps, AdminRouter } from '../context.js';
+import type { AdminDeps, AdminRouter } from '@/auth/modules/admin/context.js';
 /** Registers settings routes under the shared administrator guard. */
 export function registerSettingsRoutes(router: AdminRouter, deps: AdminDeps) {
   router.get('/admin/system-settings', (c) => {

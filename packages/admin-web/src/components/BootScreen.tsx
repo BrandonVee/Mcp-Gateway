@@ -1,6 +1,6 @@
 import { LoadingOutlined, RadarChartOutlined } from '@ant-design/icons';
 import { Flex, Typography } from 'antd';
-import { useI18n } from '../i18n';
+import { useI18n } from '@/web/i18n';
 
 export function BootScreen() {
   const { t } = useI18n();

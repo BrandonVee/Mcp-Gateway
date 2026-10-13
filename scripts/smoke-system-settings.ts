@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { request as httpRequest } from 'node:http';
-import { getAccessToken } from './oauth-token.js';
-import { readDeploymentEnvironment } from './deploy-env.js';
+import { getAccessToken } from '@/scripts/oauth-token.js';
+import { readDeploymentEnvironment } from '@/scripts/deploy-env.js';
 
 async function main() {
   const directory = process.env.MCP_DEPLOY_DIR;

@@ -1,11 +1,12 @@
+import { upstreamCredentialResponseSchema } from '@/shared/security/credentials.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { McpServerConfig } from '@mcp/shared';
-import { env } from '../config.js';
-import { redis } from '../lb.js';
-import { AggregateConnection, AggregateError, upstreamRpc, type AggregateSession } from '../aggregate.js';
-import { reserveUpstreamSlot } from './capacity.js';
-import { tokenAuthVersion } from '../auth.js';
+import { env } from '@/gateway/config.js';
+import { redis } from '@/gateway/lb.js';
+import { AggregateConnection, AggregateError, upstreamRpc, type AggregateSession } from '@/gateway/aggregate.js';
+import { reserveUpstreamSlot } from '@/gateway/routes/capacity.js';
+import { tokenAuthVersion } from '@/gateway/auth.js';
 
 export async function aggregateRequest(req: FastifyRequest, reply: FastifyReply, cfg: McpServerConfig) {
   const owner = req.mcpAuth?.uid,
@@ -118,19 +119,9 @@ export async function aggregateRequest(req: FastifyRequest, reply: FastifyReply,
           id,
         );
       }
-      const data = (await response.json()) as any;
-      if (
-        !Number.isSafeInteger(data.revision) ||
-        data.revision < 0 ||
-        (data.credential &&
-          (typeof data.credential.header !== 'string' ||
-            !/^(authorization|x-[a-z0-9-]{1,60})$/i.test(data.credential.header) ||
-            typeof data.credential.value !== 'string' ||
-            !data.credential.value ||
-            /[\x00-\x1f\x7f]/.test(data.credential.value)))
-      )
-        throw new AggregateError('invalid_upstream_credential');
-      return data;
+      const parsed = upstreamCredentialResponseSchema.safeParse(await response.json());
+      if (!parsed.success) throw new AggregateError('invalid_upstream_credential');
+      return parsed.data;
     }
     const connection = new AggregateConnection(cfg.upstreams ?? [], session, {
       credential: (u) => credential(u.id),

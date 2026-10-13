@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { registerBrokerRoutes } from './routes/broker.js';
-import { registerCatalogRoutes } from './routes/catalog.js';
-import { registerCredentialsRoutes } from './routes/credentials.js';
-import { registerOauthRoutes } from './routes/oauth.js';
+import { registerBrokerRoutes } from '@/auth/modules/upstreams/routes/broker.js';
+import { registerCatalogRoutes } from '@/auth/modules/upstreams/routes/catalog.js';
+import { registerCredentialsRoutes } from '@/auth/modules/upstreams/routes/credentials.js';
+import { registerOauthRoutes } from '@/auth/modules/upstreams/routes/oauth.js';
 
 /** Route composition only; callers supply the shared browser middleware. */
 export function createUpstreamConnectionsRouter() {

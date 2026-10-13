@@ -1,6 +1,6 @@
 import { bigint, boolean, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
-import { epoch } from './helpers.js';
-import { users } from './identity.js';
+import { epoch } from '@/auth/infrastructure/database/schema/helpers.js';
+import { users } from '@/auth/infrastructure/database/schema/identity.js';
 
 export const clients = pgTable('clients', {
   clientId: text('client_id').primaryKey(),

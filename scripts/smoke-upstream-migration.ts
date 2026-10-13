@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
-import { createIsolatedAuthSchema } from './isolated-auth-schema.js';
+import { createIsolatedAuthSchema } from '@/scripts/isolated-auth-schema.js';
 const { Pool } = createRequire(new URL('../packages/auth-server/package.json', import.meta.url))('pg');
 async function main() {
   const isolated = await createIsolatedAuthSchema({ through: 18 });

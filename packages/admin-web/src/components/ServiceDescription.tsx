@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
-import { useI18n } from '../i18n';
-import './service-description.css';
+import { useI18n } from '@/web/i18n';
+import '@/web/components/service-description.css';
 
 export function ServiceDescription({ description }: { description?: string }) {
   const { t } = useI18n();

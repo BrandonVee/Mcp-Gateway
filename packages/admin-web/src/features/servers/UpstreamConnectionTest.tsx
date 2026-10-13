@@ -1,11 +1,15 @@
-import { upstreamProbeDraft, sameUpstreamProbeDraft, type UpstreamProbeDraft } from './upstream-probe-draft';
+import {
+  upstreamProbeDraft,
+  sameUpstreamProbeDraft,
+  type UpstreamProbeDraft,
+} from '@/web/features/servers/upstream-probe-draft';
 import { ApiOutlined } from '@ant-design/icons';
 import { Alert, Button, Form, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
-import { useI18n, type MessageKey } from '../../i18n';
-import type { SystemSettings, UpstreamTestResult, UpstreamTestAuthInput } from '../../types';
-import { isEndpointUrl } from '../../utils/validation';
-import { untrustedUpstreamHost } from './upstream-allowlist';
+import { useI18n, type MessageKey } from '@/web/i18n';
+import type { SystemSettings, UpstreamTestResult, UpstreamTestAuthInput } from '@/web/types';
+import { isEndpointUrl } from '@/shared/security/urls.js';
+import { untrustedUpstreamHost } from '@/web/features/servers/upstream-allowlist';
 
 const resultMessages: Record<UpstreamTestResult['reason'], MessageKey> = {
   ok: 'mcpTest.success',

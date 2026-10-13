@@ -1,12 +1,12 @@
 import { normalizeEmail } from '@mcp/shared';
 import { eq } from 'drizzle-orm';
-import { db } from '../../../infrastructure/database/client.js';
-import { mcpServers, userServerAccess, users } from '../../../infrastructure/database/schema.js';
-import { scryptHash } from '../../../infrastructure/security/password.js';
-import { jsonError } from '../../../shared/http/responses.js';
-import { listServerNamesForUser, replaceUserServers } from '../../access/grants.js';
-import type { AdminRouter } from '../context.js';
-import { SERVER_NAME_RE, userCreateSchema } from '../validation.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { mcpServers, userServerAccess, users } from '@/auth/infrastructure/database/schema.js';
+import { scryptHash } from '@/auth/infrastructure/security/password.js';
+import { jsonError } from '@/auth/shared/http/responses.js';
+import { listServerNamesForUser, replaceUserServers } from '@/auth/modules/access/grants.js';
+import type { AdminRouter } from '@/auth/modules/admin/context.js';
+import { SERVER_NAME_RE, userCreateSchema } from '@/auth/modules/admin/validation.js';
 /** Registers grants routes under the shared administrator guard. */
 export function registerGrantsRoutes(router: AdminRouter) {
   router.get('/admin/users', async (c) => {

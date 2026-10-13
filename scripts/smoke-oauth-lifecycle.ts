@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
-import { createIsolatedAuthSchema } from './isolated-auth-schema.js';
+import { createIsolatedAuthSchema } from '@/scripts/isolated-auth-schema.js';
 
 const require = createRequire(new URL('../packages/auth-server/package.json', import.meta.url));
 const { Hono } = require('hono');
@@ -22,16 +22,15 @@ async function main() {
   process.env.NODE_ENV = 'test';
   process.env.CREDENTIAL_ENCRYPT_KEY = '65'.repeat(32);
   process.env.CREDENTIAL_BROKER_TOKEN = 'isolated-oauth-broker';
-  const { db, pool } = await import('../packages/auth-server/src/infrastructure/database/client.js');
-  const { createLoginSession } = await import('../packages/auth-server/src/modules/identity/sessions.js');
+  const { db, pool } = await import('@/auth/infrastructure/database/client.js');
+  const { createLoginSession } = await import('@/auth/modules/identity/sessions.js');
   const { mcpServers, oauthConnectionStates, userMcpCredentials, users } =
-    await import('../packages/auth-server/src/infrastructure/database/schema.js');
-  const { decryptCredential } =
-    await import('../packages/auth-server/src/infrastructure/security/credential-crypto.js');
-  const { createConnectionsRouter } = await import('../packages/auth-server/src/modules/connections/router.js');
-  const { createAdminRouter } = await import('../packages/auth-server/src/modules/admin/router.js');
-  const { scryptHash } = await import('../packages/auth-server/src/infrastructure/security/password.js');
-  const { authIssuer } = await import('../packages/shared/src/index.js');
+    await import('@/auth/infrastructure/database/schema.js');
+  const { decryptCredential } = await import('@/auth/infrastructure/security/credential-crypto.js');
+  const { createConnectionsRouter } = await import('@/auth/modules/connections/router.js');
+  const { createAdminRouter } = await import('@/auth/modules/admin/router.js');
+  const { scryptHash } = await import('@/auth/infrastructure/security/password.js');
+  const { authIssuer } = await import('@/shared/index.js');
   type Mode = 'success' | 'short' | 'limited' | 'timeout' | 'network' | 'invalid' | 'blocked';
   let mode: Mode = 'success';
   let refreshCalls = 0;

@@ -1,5 +1,5 @@
-import type { AdminRouter } from '../admin/context.js';
-import { buildTopologySnapshot } from './service.js';
+import type { AdminRouter } from '@/auth/modules/admin/context.js';
+import { buildTopologySnapshot } from '@/auth/modules/topology/service.js';
 
 /** Mounted inside the administrator-only router. */
 export function registerTopologyRoutes(router: AdminRouter) {

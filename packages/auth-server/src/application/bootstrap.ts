@@ -1,16 +1,16 @@
 import { serve } from '@hono/node-server';
 import { authIssuer, loadPlatformConfig, validateProductionRuntime } from '@mcp/shared';
-import { rateLimitHealthy } from '../infrastructure/cache/rate-limit.js';
+import { rateLimitHealthy } from '@/auth/infrastructure/cache/rate-limit.js';
 import {
   assertNoDevelopmentFixtures,
   initializeDatabase,
   startExpirySweep,
-} from '../infrastructure/database/lifecycle.js';
-import { bootstrapAdmin } from '../modules/identity/bootstrap.js';
-import { startMonitoring } from '../modules/monitoring/collector.js';
-import { loadSigningKeys } from '../modules/oauth/keys.js';
-import { refreshSystemSettings } from '../modules/system/settings.js';
-import { createAuthApp } from './app.js';
+} from '@/auth/infrastructure/database/lifecycle.js';
+import { bootstrapAdmin } from '@/auth/modules/identity/bootstrap.js';
+import { startMonitoring } from '@/auth/modules/monitoring/collector.js';
+import { loadSigningKeys } from '@/auth/modules/oauth/keys.js';
+import { refreshSystemSettings } from '@/auth/modules/system/settings.js';
+import { createAuthApp } from '@/auth/application/app.js';
 
 /** Persistent bootstrap completes before any public listener accepts traffic. */
 export async function startAuthServer(): Promise<void> {

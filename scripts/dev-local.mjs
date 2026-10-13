@@ -1,3 +1,4 @@
+import { parseEnv } from 'node:util';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
@@ -13,11 +14,8 @@ let stopping = false;
 
 function loadLocalEnv() {
   if (!existsSync(localEnvPath)) return;
-  for (const line of readFileSync(localEnvPath, 'utf8').split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-    if (!match || process.env[match[1]] !== undefined) continue;
-    const value = match[2].trim();
-    process.env[match[1]] = /^(['"]).*\1$/.test(value) ? value.slice(1, -1) : value;
+  for (const [name, value] of Object.entries(parseEnv(readFileSync(localEnvPath, 'utf8')))) {
+    if (process.env[name] === undefined) process.env[name] = value;
   }
 }
 

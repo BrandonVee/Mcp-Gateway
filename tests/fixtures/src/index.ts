@@ -2,7 +2,7 @@ import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { registerTools } from './tools.js';
+import { registerTools } from '@/fixtures/tools.js';
 
 // Instance processes have local identity/listen settings; routing and
 // registration live exclusively in PostgreSQL, not in this process config.

@@ -1,20 +1,15 @@
+import { isOAuthUrl } from '@/shared/security/urls.js';
+import { isValidApiKey } from '@/shared/security/credentials.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mergeDraft, mutateAndRefresh, submitDialog } from '../packages/admin-web/src/utils/operations';
-import {
-  isOAuthUrl,
-  isPublicOrigin,
-  upstreamHosts,
-  validUpstreamHosts,
-  validApiKey,
-  validationRule,
-} from '../packages/admin-web/src/utils/validation';
-import { authFields } from '../packages/admin-web/src/features/servers/ServerDialogs';
-import { oauthResultKey } from '../packages/admin-web/src/features/connections/oauth-result';
-import { routableInstances } from '../packages/admin-web/src/features/servers/upstream-allowlist';
-import { apiErrorMessage } from '../packages/admin-web/src/api';
-import { normalizeSystemSettings } from '../packages/shared/src/index.js';
-import type { McpServer, SystemSettings } from '../packages/admin-web/src/types';
+import { mergeDraft, mutateAndRefresh, submitDialog } from '@/web/utils/operations';
+import { isPublicOrigin, upstreamHosts, validUpstreamHosts, validationRule } from '@/web/utils/validation';
+import { authFields } from '@/web/features/servers/ServerDialogs';
+import { oauthResultKey } from '@/web/features/connections/oauth-result';
+import { routableInstances } from '@/web/features/servers/upstream-allowlist';
+import { apiErrorMessage } from '@/web/api';
+import { normalizeSystemSettings } from '@/shared/index.js';
+import type { McpServer, SystemSettings } from '@/web/types';
 
 test('successful writes survive refresh failure and are never repeated', async () => {
   let writes = 0;
@@ -155,10 +150,10 @@ test('editing OAuth without optional values preserves blank fields and public cl
 });
 
 test('API key validation rejects blank, oversized and multiline credentials', () => {
-  assert.equal(validApiKey('valid-key'), true);
-  assert.equal(validApiKey('a'.repeat(4096)), true);
+  assert.equal(isValidApiKey('valid-key'), true);
+  assert.equal(isValidApiKey('a'.repeat(4096)), true);
   for (const value of ['', '   ', 'a'.repeat(4097), 'key\nvalue', 'key\rvalue', 'key\u0000value'])
-    assert.equal(validApiKey(value), false);
+    assert.equal(isValidApiKey(value), false);
 });
 
 test('route counts exclude paused services, disabled instances and hosts blocked by the allowlist', () => {

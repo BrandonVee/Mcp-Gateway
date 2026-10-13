@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { DockerError } from '../../../infrastructure/docker/client.js';
-import { getUpdateStatus, getUpdateTaskStatus, startUpdate } from '../../system/update-service.js';
-import { updateEnabled } from '../../system/update-identity.js';
+import { DockerError } from '@/auth/infrastructure/docker/client.js';
+import { getUpdateStatus, getUpdateTaskStatus, startUpdate } from '@/auth/modules/system/update-service.js';
+import { updateEnabled } from '@/auth/modules/system/update-identity.js';
 
-import type { AdminRouter } from '../context.js';
+import type { AdminRouter } from '@/auth/modules/admin/context.js';
 /** Registers updates routes under the shared administrator guard. */
 export function registerUpdatesRoutes(router: AdminRouter) {
   router.get('/admin/system-update', async (c) => {

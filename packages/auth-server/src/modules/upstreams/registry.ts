@@ -1,9 +1,9 @@
 import { currentSystemSettings, loadPlatformConfig } from '@mcp/shared';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { db } from '../../infrastructure/database/client.js';
-import { mcpServerInstances, mcpServers, userServerAccess, users } from '../../infrastructure/database/schema.js';
-import { bearerTokenMatches } from '../../shared/security/internal-token.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { mcpServerInstances, mcpServers, userServerAccess, users } from '@/auth/infrastructure/database/schema.js';
+import { bearerTokenMatches } from '@/shared/security/bearer.js';
 
 /** Internal control-plane endpoint consumed by every gateway replica. */
 export function createRegistryRouter(): Hono {

@@ -1,11 +1,11 @@
 import { authIssuer, normalizeEmail, registrationEmailVerificationEnabled, registrationEnabled } from '@mcp/shared';
 import { Hono } from 'hono';
-import { consumeRateLimit } from '../../../infrastructure/cache/rate-limit.js';
-import { setSessionCookie } from '../../../shared/http/session-cookie.js';
-import { createRegisteredUser, sendSignupEmailCode, validateSignup } from '../../identity/registration.js';
-import { currentUser } from '../../identity/session-user.js';
-import { createLoginSession } from '../../identity/sessions.js';
-import { signupErrors } from '../context.js';
+import { consumeRateLimit } from '@/auth/infrastructure/cache/rate-limit.js';
+import { setSessionCookie } from '@/auth/shared/http/session-cookie.js';
+import { createRegisteredUser, sendSignupEmailCode, validateSignup } from '@/auth/modules/identity/registration.js';
+import { currentUser } from '@/auth/modules/identity/session-user.js';
+import { createLoginSession } from '@/auth/modules/identity/sessions.js';
+import { signupErrors } from '@/auth/modules/connections/context.js';
 /** Registers registration browser routes; write protection is applied by the parent router. */
 export function registerRegistrationRoutes(router: Hono) {
   /** Anonymous read so the login page can hide the entry when signup is closed. */

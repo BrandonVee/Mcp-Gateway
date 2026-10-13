@@ -1,13 +1,13 @@
 import { and, eq } from 'drizzle-orm';
-import { db } from '../../infrastructure/database/client.js';
-import { LockNamespace, lockTransaction } from '../../infrastructure/database/locks.js';
+import { db } from '@/auth/infrastructure/database/client.js';
+import { LockNamespace, lockTransaction } from '@/auth/infrastructure/database/locks.js';
 import {
   mcpServers,
   oauthConnectionStates,
   userMcpCredentials,
   userServerAccess,
   users,
-} from '../../infrastructure/database/schema.js';
+} from '@/auth/infrastructure/database/schema.js';
 
 export type ConnectionTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 

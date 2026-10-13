@@ -1,10 +1,15 @@
 import { Hono, type Context } from 'hono';
 import { SignJWT } from 'jose';
 import { createHash, randomBytes } from 'node:crypto';
-import { getUserAuthorization, withAuthenticatedUser } from '../identity/authentication.js';
-import { getClient } from './clients.js';
-import type { SigningKeys } from './keys.js';
-import { consumeAuthCode, consumeRefreshToken, saveRefreshToken, type RefreshTokenEntry } from './stores.js';
+import { getUserAuthorization, withAuthenticatedUser } from '@/auth/modules/identity/authentication.js';
+import { getClient } from '@/auth/modules/oauth/clients.js';
+import type { SigningKeys } from '@/auth/modules/oauth/keys.js';
+import {
+  consumeAuthCode,
+  consumeRefreshToken,
+  saveRefreshToken,
+  type RefreshTokenEntry,
+} from '@/auth/modules/oauth/stores.js';
 
 export interface TokenRouteDeps {
   keys: SigningKeys;

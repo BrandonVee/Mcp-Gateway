@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { messages as zhMessages } from './locales/zh-CN';
-import { messages as enMessages } from './locales/en-US';
+import { messages as zhMessages } from '@/web/locales/zh-CN';
+import { messages as enMessages } from '@/web/locales/en-US';
 
 export type Language = 'zh-CN' | 'en-US';
 

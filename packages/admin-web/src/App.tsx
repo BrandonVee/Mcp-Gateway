@@ -2,64 +2,66 @@ import { lazy, Suspense, useState, useEffect } from 'react';
 import { Alert, App as AntApp, Button, ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
-import { AppShell } from './components/AppShell';
-import { BootScreen } from './components/BootScreen';
-import { DataLoadError, PageSkeleton } from './components/DataLoadState';
-import { useControlPlane } from './hooks/useControlPlane';
-import { getAppTheme } from './theme';
-import { ThemeProvider, useColorMode } from './color-mode';
-import type { DialogState, PlatformSession, SystemSettings, View } from './types';
-import { I18nProvider, useI18n } from './i18n';
-import { waitForSystemUpdate } from './features/settings/update-task';
-import { usePlatformSession } from './features/auth/usePlatformSession';
+import { AppShell } from '@/web/components/AppShell';
+import { BootScreen } from '@/web/components/BootScreen';
+import { DataLoadError, PageSkeleton } from '@/web/components/DataLoadState';
+import { useControlPlane } from '@/web/hooks/useControlPlane';
+import { getAppTheme } from '@/web/theme';
+import { ThemeProvider, useColorMode } from '@/web/color-mode';
+import type { DialogState, PlatformSession, SystemSettings, View } from '@/web/types';
+import { I18nProvider, useI18n } from '@/web/i18n';
+import { waitForSystemUpdate } from '@/web/features/settings/update-task';
+import { usePlatformSession } from '@/web/features/auth/usePlatformSession';
 
 const LoginPage = lazy(() =>
-  import('./features/auth/LoginPage').then((module) => ({
+  import('@/web/features/auth/LoginPage').then((module) => ({
     default: module.LoginPage,
   })),
 );
 const SettingsPage = lazy(() =>
-  import('./features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })),
+  import('@/web/features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })),
 );
 const OverviewPage = lazy(() =>
-  import('./features/overview/OverviewPage').then((module) => ({
+  import('@/web/features/overview/OverviewPage').then((module) => ({
     default: module.OverviewPage,
   })),
 );
 const UsersPage = lazy(() =>
-  import('./features/users/UsersPage').then((module) => ({
+  import('@/web/features/users/UsersPage').then((module) => ({
     default: module.UsersPage,
   })),
 );
 const UserDialogs = lazy(() =>
-  import('./features/users/UserDialogs').then((module) => ({
+  import('@/web/features/users/UserDialogs').then((module) => ({
     default: module.UserDialogs,
   })),
 );
 const ServersPage = lazy(() =>
-  import('./features/servers/ServersPage').then((module) => ({
+  import('@/web/features/servers/ServersPage').then((module) => ({
     default: module.ServersPage,
   })),
 );
 const ServerDialogs = lazy(() =>
-  import('./features/servers/ServerDialogs').then((module) => ({
+  import('@/web/features/servers/ServerDialogs').then((module) => ({
     default: module.ServerDialogs,
   })),
 );
 const ConnectionsPage = lazy(() =>
-  import('./features/connections/ConnectionsPage').then((module) => ({ default: module.ConnectionsPage })),
+  import('@/web/features/connections/ConnectionsPage').then((module) => ({ default: module.ConnectionsPage })),
 );
 const ConnectionsAdminPage = lazy(() =>
-  import('./features/connections/ConnectionsAdminPage').then((module) => ({ default: module.ConnectionsAdminPage })),
+  import('@/web/features/connections/ConnectionsAdminPage').then((module) => ({
+    default: module.ConnectionsAdminPage,
+  })),
 );
 const MonitoringPage = lazy(() =>
-  import('./features/monitoring/MonitoringPage').then((module) => ({ default: module.MonitoringPage })),
+  import('@/web/features/monitoring/MonitoringPage').then((module) => ({ default: module.MonitoringPage })),
 );
 const AuditPage = lazy(() =>
-  import('./features/monitoring/AuditPage').then((module) => ({ default: module.AuditPage })),
+  import('@/web/features/monitoring/AuditPage').then((module) => ({ default: module.AuditPage })),
 );
 const TopologyPage = lazy(() =>
-  import('./features/topology/TopologyPage').then((module) => ({ default: module.TopologyPage })),
+  import('@/web/features/topology/TopologyPage').then((module) => ({ default: module.TopologyPage })),
 );
 
 export function App() {
@@ -286,8 +288,6 @@ function ControlPlane({
               onNavigate={navigate}
               users={controlPlane.users}
               servers={controlPlane.servers}
-              health={controlPlane.health}
-              authHealth={controlPlane.authHealth}
               settings={controlPlane.settings}
             />
           )}

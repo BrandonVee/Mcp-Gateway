@@ -17,12 +17,12 @@ import {
 } from '@ant-design/icons';
 import { Button, Flex, Layout, Menu, Space, Typography } from 'antd';
 import { useState } from 'react';
-import type { View } from '../types';
-import { CommandPalette } from './CommandPalette';
-import { LanguageSwitcher } from './LanguageSwitcher';
-import { ThemeSwitcher } from './ThemeSwitcher';
-import { useColorMode } from '../color-mode';
-import { useI18n, type MessageKey } from '../i18n';
+import type { View } from '@/web/types';
+import { CommandPalette } from '@/web/components/CommandPalette';
+import { LanguageSwitcher } from '@/web/components/LanguageSwitcher';
+import { ThemeSwitcher } from '@/web/components/ThemeSwitcher';
+import { useColorMode } from '@/web/color-mode';
+import { useI18n, type MessageKey } from '@/web/i18n';
 
 const { Header, Sider, Content } = Layout;
 

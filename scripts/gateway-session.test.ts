@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { get, createServer, type ServerResponse } from 'node:http';
 import { createRequire } from 'node:module';
 import { test, type TestContext } from 'node:test';
-import { env, serverConfigs } from '../packages/gateway/src/config.js';
-import { tokenAuthVersion } from '../packages/gateway/src/auth.js';
-import { bindSession, pickInstance, redis, removeSession, touchSession } from '../packages/gateway/src/lb.js';
-import { registerMcpRoutes } from '../packages/gateway/src/routes/mcp.js';
+import { env, serverConfigs } from '@/gateway/config.js';
+import { tokenAuthVersion } from '@/gateway/auth.js';
+import { bindSession, pickInstance, redis, removeSession, touchSession } from '@/gateway/lb.js';
+import { registerMcpRoutes } from '@/gateway/routes/mcp.js';
 
 const Fastify = createRequire(new URL('../packages/gateway/package.json', import.meta.url))('fastify');
 redis.disconnect();

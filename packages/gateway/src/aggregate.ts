@@ -1,4 +1,4 @@
-import { upstreamRequestTimeout } from './transport-policy.js';
+import { upstreamRequestTimeout } from '@/gateway/transport-policy.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { McpServerConfig } from '@mcp/shared';
 

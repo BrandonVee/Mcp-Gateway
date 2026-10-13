@@ -1,5 +1,5 @@
 /** Mint a token for an existing user; requires MCP_USER and MCP_PASSWORD. */
-import { getAccessToken } from './oauth-token.js';
+import { getAccessToken } from '@/scripts/oauth-token.js';
 
 async function main(): Promise<void> {
   const tokens = await getAccessToken();

@@ -10,7 +10,7 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { epoch } from './helpers.js';
+import { epoch } from '@/auth/infrastructure/database/schema/helpers.js';
 
 export const userRole = pgEnum('user_role', ['admin', 'user']);
 

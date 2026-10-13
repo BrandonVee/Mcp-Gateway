@@ -2,8 +2,8 @@ import { randomUUID, createHash } from 'node:crypto';
 import { Redis } from 'ioredis';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { runtimeSettings, monitoringStream, monitoringDropped, safeLabel, type CallEvent } from '@mcp/shared';
-import { env } from './config.js';
-import { requestMetadata, ResponseObserver, type RpcMetadata } from './response-observer.js';
+import { env } from '@/gateway/config.js';
+import { requestMetadata, ResponseObserver, type RpcMetadata } from '@/gateway/response-observer.js';
 
 const redis = new Redis(env.redisUrl, { enableOfflineQueue: false, maxRetriesPerRequest: 1, connectTimeout: 3000 });
 export const collectionStatus = { dropped: 0, lastQueuedAt: 0, lastError: '' };

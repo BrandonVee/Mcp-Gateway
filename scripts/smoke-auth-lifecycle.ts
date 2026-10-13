@@ -81,16 +81,16 @@ async function main() {
       'migration preserves user accounts',
     );
 
-    const databaseClient = await import('../packages/auth-server/src/infrastructure/database/client.js');
-    const databaseAuthentication = await import('../packages/auth-server/src/modules/identity/authentication.js');
-    const databaseSessions = await import('../packages/auth-server/src/modules/identity/sessions.js');
-    const databaseBootstrap = await import('../packages/auth-server/src/modules/identity/bootstrap.js');
+    const databaseClient = await import('@/auth/infrastructure/database/client.js');
+    const databaseAuthentication = await import('@/auth/modules/identity/authentication.js');
+    const databaseSessions = await import('@/auth/modules/identity/sessions.js');
+    const databaseBootstrap = await import('@/auth/modules/identity/bootstrap.js');
     applicationPool = databaseClient.pool;
-    const { createAdminRouter } = await import('../packages/auth-server/src/modules/admin/router.js');
-    const { createConnectionsRouter } = await import('../packages/auth-server/src/modules/connections/router.js');
-    const { createTokenRouter } = await import('../packages/auth-server/src/modules/oauth/token.js');
-    const { createRegistryRouter } = await import('../packages/auth-server/src/modules/upstreams/registry.js');
-    const stores = await import('../packages/auth-server/src/modules/oauth/stores.js');
+    const { createAdminRouter } = await import('@/auth/modules/admin/router.js');
+    const { createConnectionsRouter } = await import('@/auth/modules/connections/router.js');
+    const { createTokenRouter } = await import('@/auth/modules/oauth/token.js');
+    const { createRegistryRouter } = await import('@/auth/modules/upstreams/registry.js');
+    const stores = await import('@/auth/modules/oauth/stores.js');
     const pair = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const issuer = 'http://localhost:9001';
     const keys = {

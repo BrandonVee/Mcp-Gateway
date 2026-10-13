@@ -1,21 +1,21 @@
 import { upstreamTestAuthInputSchema } from '@mcp/shared';
 import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
-import { db } from '../../../infrastructure/database/client.js';
+import { db } from '@/auth/infrastructure/database/client.js';
 import {
   mcpServerInstances,
   mcpServers,
   upstreamCredentials,
   upstreamOAuthStates,
-} from '../../../infrastructure/database/schema.js';
-import { jsonError } from '../../../shared/http/responses.js';
-import { authSettings } from '../../upstreams/auth-settings.js';
-import { requestUpstreamTest } from '../../upstreams/connection-test.js';
-import { convertEndpointToGroup } from '../../upstreams/endpoint-groups.js';
-import { validateMcpEndpoint } from '../../upstreams/endpoint-validation.js';
-import { resolveProbeCredential } from '../../upstreams/probe-credential.js';
-import type { AdminRouter } from '../context.js';
-import { instanceCreateSchema, instancePatchSchema } from '../validation.js';
+} from '@/auth/infrastructure/database/schema.js';
+import { jsonError } from '@/auth/shared/http/responses.js';
+import { authSettings } from '@/auth/modules/upstreams/auth-settings.js';
+import { requestUpstreamTest } from '@/auth/modules/upstreams/connection-test.js';
+import { convertEndpointToGroup } from '@/auth/modules/upstreams/endpoint-groups.js';
+import { validateMcpEndpoint } from '@/auth/modules/upstreams/endpoint-validation.js';
+import { resolveProbeCredential } from '@/auth/modules/upstreams/probe-credential.js';
+import type { AdminRouter } from '@/auth/modules/admin/context.js';
+import { instanceCreateSchema, instancePatchSchema } from '@/auth/modules/admin/validation.js';
 
 /** 实际上游分别管理地址、认证和连接失效范围。 */
 export function registerUpstreamsRoutes(router: AdminRouter) {

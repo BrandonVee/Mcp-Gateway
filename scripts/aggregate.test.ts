@@ -6,7 +6,7 @@ import {
   upstreamNamespace,
   upstreamRpc,
   type Upstream,
-} from '../packages/gateway/src/aggregate.js';
+} from '@/gateway/aggregate.js';
 const upstreams: Upstream[] = [
   { id: 'search', url: 'http://search/mcp', authMode: 'system_api_key' },
   { id: 'papers', url: 'http://papers/mcp', authMode: 'api_key' },

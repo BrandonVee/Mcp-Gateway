@@ -1,4 +1,6 @@
-import { useI18n } from '../../i18n';
+import { isEndpointUrl, isOAuthUrl } from '@/shared/security/urls.js';
+import { API_KEY_HEADER, isValidApiKey, isValidApiKeyPrefix } from '@/shared/security/credentials.js';
+import { useI18n } from '@/web/i18n';
 import {
   ApiOutlined,
   CloudServerOutlined,
@@ -21,11 +23,11 @@ import type {
   SystemSettings,
   UpstreamTestResult,
   UpstreamTestAuthInput,
-} from '../../types';
-import { submitDialog } from '../../utils/operations';
-import { isEndpointUrl, isOAuthUrl, validationRule } from '../../utils/validation';
-import { untrustedUpstreamHost } from './upstream-allowlist';
-import { UpstreamConnectionTest } from './UpstreamConnectionTest';
+} from '@/web/types';
+import { submitDialog } from '@/web/utils/operations';
+import { validationRule } from '@/web/utils/validation';
+import { untrustedUpstreamHost } from '@/web/features/servers/upstream-allowlist';
+import { UpstreamConnectionTest } from '@/web/features/servers/UpstreamConnectionTest';
 
 interface UpstreamAllowlistProps {
   settings: SystemSettings | null;
@@ -485,7 +487,7 @@ function AuthFormFields({ server }: { server?: McpServer } = {}) {
                 label={t('serverDialog.upstreamHeader')}
                 rules={[
                   { required: true, message: t('serverDialog.enterUpstreamHeader') },
-                  { pattern: /^(authorization|x-[a-z0-9-]{1,60})$/i, message: t('api.invalidKeyHeader') },
+                  { pattern: API_KEY_HEADER, message: t('api.invalidKeyHeader') },
                 ]}
               >
                 <Input placeholder={t('serverDialog.authorizationXApiKey')} />
@@ -493,13 +495,7 @@ function AuthFormFields({ server }: { server?: McpServer } = {}) {
               <Form.Item
                 name="api_key_prefix"
                 label={t('serverDialog.valuePrefix')}
-                rules={[
-                  validationRule(
-                    (value) => value.length <= 100 && !/[\x00-\x1f\x7f]/.test(value),
-                    t('api.invalidKeyPrefix'),
-                    true,
-                  ),
-                ]}
+                rules={[validationRule(isValidApiKeyPrefix, t('api.invalidKeyPrefix'), true)]}
               >
                 <Input placeholder={t('serverDialog.bearerOptional')} />
               </Form.Item>
@@ -510,11 +506,7 @@ function AuthFormFields({ server }: { server?: McpServer } = {}) {
                     label={t('serverDialog.systemApiKey')}
                     rules={[
                       { required: !server?.system_api_key_configured, message: t('serverDialog.enterSystemApiKey') },
-                      validationRule(
-                        (value) => value.length <= 4096 && !/[\x00-\x1f\x7f]/.test(value) && Boolean(value.trim()),
-                        t('api.invalidApiKey'),
-                        true,
-                      ),
+                      validationRule(isValidApiKey, t('api.invalidApiKey'), true),
                     ]}
                   >
                     <Input.Password

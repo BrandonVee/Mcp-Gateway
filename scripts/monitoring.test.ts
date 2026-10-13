@@ -7,9 +7,9 @@ import {
   validCallEvent,
   captureCallContent,
   normalizeSystemSettings,
-} from '../packages/shared/src/index.js';
-import { alertFingerprint } from '../packages/shared/src/alerts.js';
-import { ResponseObserver, requestMetadata } from '../packages/gateway/src/response-observer.js';
+} from '@/shared/index.js';
+import { alertFingerprint } from '@/shared/alerts.js';
+import { ResponseObserver, requestMetadata } from '@/gateway/response-observer.js';
 
 test('monitoring captures RPC inputs with credential fields redacted', () => {
   const input = {
