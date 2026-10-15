@@ -1,21 +1,14 @@
 import Fastify from 'fastify';
 import { registerMonitoring, collectionStatus } from '@/gateway/monitoring.js';
 import { activeUpstreamRequests } from '@/gateway/routes/capacity.js';
-import { databaseSettingsEnabled, systemConfigured, validateUpstreamEndpoint } from '@mcp/shared';
-import {
-  env,
-  ensureServerConfigsFresh,
-  refreshServerConfigs,
-  registryStatus,
-  serverConfigs,
-  startRegistryRefresh,
-} from '@/gateway/config.js';
+import { validateUpstreamEndpoint } from '@mcp/shared';
+import { env, refreshServerConfigs, registryStatus, serverConfigs, startRegistryRefresh } from '@/gateway/config.js';
 import { authHook, hasServerAccess } from '@/gateway/auth.js';
 import { registerMcpRoutes } from '@/gateway/routes/mcp.js';
 import { registerMetadataRoutes } from '@/gateway/routes/metadata.js';
 import { registerDevelopmentOAuthRoutes } from '@/gateway/routes/oauth.js';
 import { redisHealthy } from '@/gateway/lb.js';
-import { isAllowedMcpOrigin, mcpCorsHeaders } from '@/gateway/routes/origin.js';
+import { registerRequestPolicy } from '@/gateway/routes/request-policy.js';
 import { probeRegisteredUpstreams, upstreamHealth } from '@/gateway/upstream-health.js';
 import { publishHealthSnapshot } from '@/gateway/health-report.js';
 import { registerUpstreamTestRoute } from '@/gateway/routes/upstream-test.js';
@@ -78,25 +71,7 @@ app.get('/health', async (_req, reply) => {
 });
 
 await app.register(async (instance) => {
-  instance.addHook('onRequest', async (req, reply) => {
-    const path = req.url.split('?')[0];
-    if (databaseSettingsEnabled() && (path.startsWith('/mcp') || path === '/servers')) {
-      try {
-        await ensureServerConfigsFresh();
-      } catch {
-        return reply.code(503).send({ error: 'system_settings_unavailable' });
-      }
-      if (!systemConfigured()) return reply.code(503).send({ error: 'system_not_configured' });
-    }
-    if (!path.startsWith('/mcp/')) return;
-    if (!isAllowedMcpOrigin(req.headers.origin, env.resourceBaseUrl)) {
-      await reply.code(403).send({ error: 'invalid_origin' });
-      return;
-    }
-    for (const [name, value] of Object.entries(mcpCorsHeaders(req.headers.origin, env.resourceBaseUrl)))
-      reply.header(name, value);
-    if (req.method === 'OPTIONS' && req.headers.origin) await reply.code(204).send();
-  });
+  registerRequestPolicy(instance);
   instance.addHook('onRequest', authHook);
   instance.get('/servers', async (req) => ({
     servers: [...serverConfigs.values()]
