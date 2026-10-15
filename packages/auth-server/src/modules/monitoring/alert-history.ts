@@ -1,9 +1,17 @@
-import { alertFingerprint, histogramP95, runtimeSettings, type ActiveAlert, type AlertEvent } from '@mcp/shared';
-import { and, desc, eq, isNull, notInArray } from 'drizzle-orm';
+import {
+  alertFingerprint,
+  alertNotificationsConfigured,
+  histogramP95,
+  runtimeSettings,
+  type ActiveAlert,
+  type AlertEvent,
+} from '@mcp/shared';
+import { and, desc, eq, isNull, notInArray, lt, lte, or } from 'drizzle-orm';
 import { db, pool } from '@/auth/infrastructure/database/client.js';
 import { alertEvents } from '@/auth/infrastructure/database/schema.js';
 import { sendMail } from '@/auth/infrastructure/mail/mailer.js';
 import { currentSystemSettings } from '@/auth/modules/system/settings.js';
+import { lockTransaction, LockNamespace } from '@/auth/infrastructure/database/locks.js';
 
 function deserialize(row: typeof alertEvents.$inferSelect): AlertEvent {
   return {
@@ -97,14 +105,15 @@ async function deliver(active: ActiveAlert): Promise<{ notifiedAt: number | null
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ event: 'alert_triggered', ...active, message }),
             signal: AbortSignal.timeout(5000),
-          }).then((response) => {
+          }).then(async (response) => {
+            await response.body?.cancel();
             if (!response.ok) throw new Error(`webhook_status_${response.status}`);
           }),
         ]
       : []),
     ...recipients.map((email) => sendMail(email, `MCP Gateway ${label}: ${active.server}`, message)),
   ]);
-  if (!results.length) return { notifiedAt: Date.now(), error: null };
+  if (!results.length) return { notifiedAt: null, error: 'notification_not_configured' };
   if (results.every((result) => result.status === 'fulfilled')) return { notifiedAt: Date.now(), error: null };
   const errors = results
     .filter((result) => result.status === 'rejected')
@@ -116,8 +125,9 @@ async function deliver(active: ActiveAlert): Promise<{ notifiedAt: number | null
 export async function evaluateAlerts(active: ActiveAlert[]): Promise<void> {
   const now = Date.now();
   await db.transaction(async (tx) => {
+    await lockTransaction(tx, LockNamespace.AlertEvaluation, 0);
     for (const alert of active) {
-      const [row] = await tx
+      await tx
         .insert(alertEvents)
         .values({
           fingerprint: alertFingerprint(alert.server, alert.type),
@@ -130,20 +140,13 @@ export async function evaluateAlerts(active: ActiveAlert[]): Promise<void> {
         })
         .onConflictDoUpdate({
           target: alertEvents.fingerprint,
+          targetWhere: isNull(alertEvents.resolvedAt),
           set: {
             value: alert.value,
             threshold: alert.threshold,
             lastSeenAt: now,
-            resolvedAt: null,
           },
-        })
-        .returning();
-      if (!row || row.notifiedAt || row.notificationError) continue;
-      const delivery = await deliver(alert);
-      await tx
-        .update(alertEvents)
-        .set({ notifiedAt: delivery.notifiedAt, notificationError: delivery.error })
-        .where(eq(alertEvents.id, row.id));
+        });
     }
     await tx
       .update(alertEvents)
@@ -160,4 +163,61 @@ export async function evaluateAlerts(active: ActiveAlert[]): Promise<void> {
         ),
       );
   });
+  await deliverPendingAlerts();
+}
+
+/** Claim a bounded batch, then release database locks before contacting notification providers. */
+export async function deliverPendingAlerts(): Promise<void> {
+  if (!alertNotificationsConfigured(currentSystemSettings())) return;
+  const now = Date.now();
+  const pending = await db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(alertEvents)
+      .where(
+        and(
+          isNull(alertEvents.resolvedAt),
+          isNull(alertEvents.notifiedAt),
+          lt(alertEvents.notificationAttempts, 5),
+          or(isNull(alertEvents.nextNotificationAt), lte(alertEvents.nextNotificationAt, now)),
+        ),
+      )
+      .orderBy(alertEvents.firstSeenAt)
+      .limit(10)
+      .for('update', { skipLocked: true });
+    for (const row of rows) {
+      await tx
+        .update(alertEvents)
+        .set({ notificationAttempts: row.notificationAttempts + 1, nextNotificationAt: now + 60_000 })
+        .where(eq(alertEvents.id, row.id));
+    }
+    return rows;
+  });
+  await Promise.all(
+    pending.map(async (row) => {
+      const delivery = await deliver({
+        server: row.server,
+        type: row.type as ActiveAlert['type'],
+        value: row.value,
+        threshold: row.threshold,
+      });
+      const attempt = row.notificationAttempts + 1;
+      const backoff = [60_000, 120_000, 300_000, 900_000][Math.min(attempt - 1, 3)];
+      await db
+        .update(alertEvents)
+        .set({
+          notifiedAt: delivery.notifiedAt,
+          notificationError: delivery.error,
+          nextNotificationAt: delivery.notifiedAt || attempt >= 5 ? null : Date.now() + backoff,
+        })
+        .where(
+          and(
+            eq(alertEvents.id, row.id),
+            eq(alertEvents.notificationAttempts, attempt),
+            isNull(alertEvents.notifiedAt),
+            isNull(alertEvents.resolvedAt),
+          ),
+        );
+    }),
+  );
 }

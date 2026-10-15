@@ -17,6 +17,12 @@ export const serverName = z
 export const serverDescription = z.string({ invalid_type_error: DESCRIPTION_MESSAGE }).max(2000, DESCRIPTION_MESSAGE);
 
 export const signupAccess = z.boolean({ invalid_type_error: 'signup_access must be a boolean' });
+const serverPolicyFields = {
+  monitoring_logs_enabled: z.boolean().optional(),
+  user_rate_limit_per_minute: z.number().int().min(0).max(100000).optional(),
+  user_daily_quota: z.number().int().min(0).max(100000000).optional(),
+  user_max_concurrent: z.number().int().min(0).max(1000).optional(),
+};
 
 export const userCreateSchema = z.object({
   username: z
@@ -53,6 +59,7 @@ export const instancePatchSchema = z
 
 export const serverCreateSchema = z
   .object({
+    ...serverPolicyFields,
     name: serverName,
     routing_mode: z.enum(['pool', 'aggregate']).optional(),
     display_name: z.string({ invalid_type_error: 'display_name must be a string' }).optional(),
@@ -64,6 +71,7 @@ export const serverCreateSchema = z
 
 export const serverPatchSchema = z
   .object({
+    ...serverPolicyFields,
     name: serverName.optional(),
     routing_mode: z.enum(['pool', 'aggregate']).optional(),
     display_name: z

@@ -25,6 +25,8 @@ export function registerConnectionsRoutes(router: AdminRouter) {
         expiresAt: userMcpCredentials.expiresAt,
         refreshSecret: userMcpCredentials.refreshSecret,
         updatedAt: userMcpCredentials.updatedAt,
+        validationStatus: userMcpCredentials.validationStatus,
+        validatedAt: userMcpCredentials.validatedAt,
       })
       .from(userMcpCredentials);
     const upstreamRows = await db
@@ -36,6 +38,8 @@ export function registerConnectionsRoutes(router: AdminRouter) {
         expiresAt: upstreamCredentials.expiresAt,
         refreshSecret: upstreamCredentials.refreshSecret,
         updatedAt: upstreamCredentials.updatedAt,
+        validationStatus: upstreamCredentials.validationStatus,
+        validatedAt: upstreamCredentials.validatedAt,
       })
       .from(upstreamCredentials)
       .innerJoin(mcpServerInstances, eq(mcpServerInstances.id, upstreamCredentials.instanceId))
@@ -53,6 +57,8 @@ export function registerConnectionsRoutes(router: AdminRouter) {
             expires_at: row.expiresAt,
             has_refresh_token: Boolean(row.refreshSecret),
             updated_at: row.updatedAt,
+            validation_status: row.validationStatus,
+            validated_at: row.validatedAt,
           })),
         ...rows.map((row) => ({
           user_id: row.userId,
@@ -61,6 +67,8 @@ export function registerConnectionsRoutes(router: AdminRouter) {
           expires_at: row.expiresAt,
           has_refresh_token: Boolean(row.refreshSecret),
           updated_at: row.updatedAt,
+          validation_status: row.validationStatus,
+          validated_at: row.validatedAt,
         })),
       ],
     });

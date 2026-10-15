@@ -32,9 +32,33 @@ export const credentialHeaderSchema = z.object({
     .refine((value) => !CONTROL_CHARACTERS.test(value)),
 });
 export type CredentialHeader = z.infer<typeof credentialHeaderSchema>;
+export const poolCredentialResponseSchema = credentialHeaderSchema.extend({
+  credential_version: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+  validation_status: z.enum(['saved', 'verified', 'rejected']).optional(),
+});
 
 /** A missing credential is explicitly null; malformed broker responses fail closed. */
 export const upstreamCredentialResponseSchema = z.object({
   revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   credential: credentialHeaderSchema.nullable(),
+  credential_version: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+  validation_status: z.enum(['saved', 'verified', 'rejected']).optional(),
 });
+
+export const credentialValidationReportSchema = z
+  .object({
+    instance_id: z.string().min(1).max(256).optional(),
+    server: z.string().min(1).max(64).optional(),
+    user_id: z.number().int().positive().safe(),
+    auth_version: z.number().int().nonnegative().safe(),
+    upstream_url: z.string().min(1).max(4096),
+    credential_version: z.string().regex(/^[a-f0-9]{64}$/),
+    status: z.enum(['verified', 'rejected']),
+  })
+  .refine((value) => Boolean(value.instance_id) !== Boolean(value.server));

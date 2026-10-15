@@ -33,7 +33,14 @@ export interface McpInstance extends Partial<ServerAuthInput> {
   enabled: boolean;
 }
 
-export interface McpServer {
+export interface ServerPolicyInput {
+  monitoring_logs_enabled?: boolean;
+  user_rate_limit_per_minute?: number;
+  user_daily_quota?: number;
+  user_max_concurrent?: number;
+}
+
+export interface McpServer extends ServerPolicyInput {
   upstream_id?: string;
   routing_mode?: 'pool' | 'aggregate';
   name: string;
@@ -118,6 +125,8 @@ export interface AdminConnection {
   expires_at: number | null;
   has_refresh_token: boolean;
   updated_at: number;
+  validation_status?: 'saved' | 'verified' | 'rejected';
+  validated_at?: number | null;
 }
 
 export type View = 'overview' | 'users' | 'servers' | 'credentials' | 'topology' | 'monitoring' | 'audit' | 'settings';
@@ -153,7 +162,7 @@ export interface UpdateUserInput {
   email_verified?: boolean;
 }
 
-export interface CreateServerInput {
+export interface CreateServerInput extends ServerPolicyInput {
   routing_mode?: 'pool' | 'aggregate';
   name: string;
   display_name: string;
@@ -183,7 +192,8 @@ export interface ConnectionServer {
   display_name: string;
   description?: string;
   auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
-  connection_status: 'not_required' | 'not_connected' | 'connected' | 'expired';
+  connection_status: 'not_required' | 'not_connected' | 'saved' | 'connected' | 'rejected' | 'expired';
+  validated_at?: number | null;
 }
 
 export interface AddInstanceInput extends Partial<ServerAuthInput> {

@@ -6,7 +6,11 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/auth/infrastructure/database/client.js';
 import { mcpServers, userMcpCredentials, userServerAccess } from '@/auth/infrastructure/database/schema.js';
-import { decryptCredential, encryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
+import {
+  credentialVersion,
+  decryptCredential,
+  encryptCredential,
+} from '@/auth/infrastructure/security/credential-crypto.js';
 import type { User } from '@/auth/modules/identity/session-user.js';
 import {
   accessTokenValid,
@@ -46,7 +50,12 @@ export async function resolveCredential(
   userId: number,
   snapshot: typeof mcpServers.$inferSelect,
   authVersion: number,
-): Promise<{ header: string; value: string } | null> {
+): Promise<{
+  header: string;
+  value: string;
+  credential_version?: string;
+  validation_status?: 'saved' | 'verified' | 'rejected';
+} | null> {
   return db.transaction(async (tx) => {
     const server = await lockAccessibleConnection(tx, userId, snapshot.name, snapshot.authRevision, authVersion);
     if (!server || server.authMode === 'none') return null;
@@ -62,8 +71,18 @@ export async function resolveCredential(
       .limit(1);
     if (!row || row.mode !== server.authMode) return null;
     if (server.authMode === 'api_key')
-      return { header: server.apiKeyHeader, value: `${server.apiKeyPrefix}${decryptCredential(row.secret)}` };
-    const access = () => ({ header: 'authorization', value: `Bearer ${decryptCredential(row.secret)}` });
+      return {
+        header: server.apiKeyHeader,
+        value: `${server.apiKeyPrefix}${decryptCredential(row.secret)}`,
+        credential_version: credentialVersion(row.secret),
+        validation_status: row.validationStatus,
+      };
+    const access = () => ({
+      header: 'authorization',
+      value: `Bearer ${decryptCredential(row.secret)}`,
+      credential_version: credentialVersion(row.secret),
+      validation_status: row.validationStatus,
+    });
     if (!shouldRefresh(row.expiresAt, Boolean(row.refreshSecret))) {
       return accessTokenValid(row.expiresAt) ? access() : null;
     }
@@ -89,17 +108,25 @@ export async function resolveCredential(
       throw error;
     }
     const nextRefresh = typeof body.refresh_token === 'string' && body.refresh_token ? body.refresh_token : refresh;
+    const secret = encryptCredential(body.access_token);
     await tx
       .update(userMcpCredentials)
       .set({
-        secret: encryptCredential(body.access_token),
+        secret,
         refreshSecret: encryptCredential(nextRefresh),
         expiresAt: tokenExpiry(body),
         updatedAt: Date.now(),
+        validationStatus: 'verified',
+        validatedAt: Date.now(),
       })
       .where(and(eq(userMcpCredentials.userId, userId), eq(userMcpCredentials.serverName, server.name)));
     return accessTokenValid(tokenExpiry(body))
-      ? { header: 'authorization', value: `Bearer ${body.access_token}` }
+      ? {
+          header: 'authorization',
+          value: `Bearer ${body.access_token}`,
+          credential_version: credentialVersion(secret),
+          validation_status: 'verified',
+        }
       : null;
   });
 }

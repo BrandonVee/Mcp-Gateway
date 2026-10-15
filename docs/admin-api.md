@@ -41,6 +41,17 @@ curl -X PUT http://localhost:9001/admin/users/USER_ID/servers \
 
 管理员通过 `PATCH /admin/users/:id` 设置 `{"disabled":true}` 可关闭用户认证。关闭认证、重置密码或变更角色会递增认证版本，撤销浏览器会话、授权码、刷新令牌和待完成的上游 OAuth 授权，并立即拒绝旧管理与 MCP Access Token。认证记录绑定不可复用用户 ID，删除后重建同名账号不会继承旧身份。最后一名启用管理员不可禁用、降级或删除，界面和服务端均拦截，包括并发操作。移除 Server 授权会立即阻止旧 Access Token 访问；新增授权仍需获取新 Token，因为 JWT 中的授权列表是签发时的快照。
 
+创建和编辑逻辑端点还支持以下字段：
+
+| 字段                         | 默认值 | 含义                                                 |
+| ---------------------------- | ------ | ---------------------------------------------------- |
+| `user_rate_limit_per_minute` | 120    | 每用户每分钟请求上限，0 为不限                       |
+| `user_max_concurrent`        | 5      | 每用户同时请求上限，0 为不限                         |
+| `user_daily_quota`           | 0      | 每用户每日受理的工具调用次数，UTC 零点重置，0 为不限 |
+| `monitoring_logs_enabled`    | false  | 是否记录端点的输入输出，同时受系统调用明细开关控制   |
+
+`GET /admin/connections` 新增 `validation_status`（`saved`、`verified`、`rejected`）及 `validated_at` 元数据。个人连接状态区分凭据已保存、已验证、被拒绝和过期；连接中心的验证接口及并发策略见 [上游服务接入](upstream-connections.md)。
+
 ## 前端管理系统
 
 `packages/admin-web` 是 React + TypeScript + Vite + Ant Design 管理端，覆盖：

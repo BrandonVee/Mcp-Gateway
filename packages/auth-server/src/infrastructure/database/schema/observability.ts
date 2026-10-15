@@ -10,6 +10,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { epoch } from '@/auth/infrastructure/database/schema/helpers.js';
+import { sql } from 'drizzle-orm';
 
 /** Metadata-only admin audit trail. Never store request bodies, tokens or secrets. */
 export const auditEvents = pgTable(
@@ -108,9 +109,13 @@ export const alertEvents = pgTable(
     acknowledgedBy: text('acknowledged_by'),
     notifiedAt: bigint('notified_at', { mode: 'number' }),
     notificationError: text('notification_error'),
+    notificationAttempts: integer('notification_attempts').notNull().default(0),
+    nextNotificationAt: bigint('next_notification_at', { mode: 'number' }),
   },
   (table) => [
-    uniqueIndex('uq_alert_fingerprint').on(table.fingerprint),
+    uniqueIndex('uq_alert_fingerprint')
+      .on(table.fingerprint)
+      .where(sql`${table.resolvedAt} IS NULL`),
     index('idx_alert_last_seen').on(table.lastSeenAt),
     index('idx_alert_open').on(table.resolvedAt, table.lastSeenAt),
   ],

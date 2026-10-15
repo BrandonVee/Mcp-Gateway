@@ -54,20 +54,52 @@ export interface RegistryStatus {
 }
 
 export const registryStatus: RegistryStatus = {};
+let registryRefresh: Promise<void> | undefined;
+let registryEtag: string | null = null;
+
+/** Request traffic shares the periodic snapshot; authorization is still checked live. */
+export async function ensureServerConfigsFresh(): Promise<void> {
+  if (
+    registryStatus.lastSuccessAt &&
+    Date.now() - registryStatus.lastSuccessAt < Math.max(1, env.registryRefreshSeconds) * 1000
+  )
+    return;
+  await refreshServerConfigs();
+}
 
 /** Refresh the logical-server routing table from the auth control plane. */
 export async function refreshServerConfigs(): Promise<void> {
+  if (registryRefresh) return registryRefresh;
+  registryRefresh = fetchServerConfigs();
+  try {
+    await registryRefresh;
+  } finally {
+    registryRefresh = undefined;
+  }
+}
+
+async function fetchServerConfigs(): Promise<void> {
   try {
     const response = await fetch(env.registryUrl, {
-      headers: { authorization: `Bearer ${env.internalApiToken}` },
+      headers: {
+        authorization: `Bearer ${env.internalApiToken}`,
+        ...(registryEtag ? { 'if-none-match': registryEtag } : {}),
+      },
       signal: AbortSignal.timeout(5_000),
     });
+    if (response.status === 304 && registryStatus.lastSuccessAt) {
+      registryStatus.lastSuccessAt = Date.now();
+      registryStatus.lastError = undefined;
+      return;
+    }
     if (!response.ok) throw new Error(`registry returned HTTP ${response.status}`);
     const body = (await response.json()) as {
       system_settings?: SystemSettings;
       servers?: Array<{
         name: string;
         authMode?: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
+        monitoringLogsEnabled?: boolean;
+        userLimits?: McpServerConfig['userLimits'];
         upstreams?: McpServerConfig['upstreams'];
         instances: Array<{ id: string; url: string }>;
       }>;
@@ -103,6 +135,8 @@ export async function refreshServerConfigs(): Promise<void> {
       next.set(server.name, {
         name: server.name,
         authMode: server.authMode ?? 'none',
+        monitoringLogsEnabled: server.monitoringLogsEnabled === true,
+        userLimits: server.userLimits,
         instances,
         ...(upstreams ? { upstreams } : {}),
       });
@@ -111,6 +145,7 @@ export async function refreshServerConfigs(): Promise<void> {
     for (const [name, server] of next) serverConfigs.set(name, server);
     registryStatus.lastSuccessAt = Date.now();
     registryStatus.lastError = undefined;
+    registryEtag = response.headers.get('etag');
   } catch (error) {
     registryStatus.lastError = error instanceof Error ? error.message : String(error);
     throw error;

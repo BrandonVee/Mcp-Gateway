@@ -1,8 +1,17 @@
 import { Hono } from 'hono';
 import { internalTokenMatches } from '@/auth/shared/security/internal-token.js';
 import { resolveUpstreamCredential } from '@/auth/modules/upstreams/connection-service.js';
+import { credentialValidationReportSchema } from '@/shared/security/credentials.js';
+import { recordCredentialValidation } from '@/auth/modules/upstreams/credential-validation.js';
 /** Registers broker operations for concrete upstreams, with per-owner credential isolation. */
 export function registerBrokerRoutes(router: Hono) {
+  router.post('/internal/credential-validation', async (c) => {
+    if (!internalTokenMatches(c.req.header('authorization'))) return c.json({ error: 'invalid_internal_token' }, 401);
+    c.header('Cache-Control', 'no-store');
+    const parsed = credentialValidationReportSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'invalid_validation_report' }, 400);
+    return c.json({ updated: await recordCredentialValidation(parsed.data) });
+  });
   router.get('/internal/upstream-credential', async (c) => {
     if (!internalTokenMatches(c.req.header('authorization'))) return c.json({ error: 'invalid_internal_token' }, 401);
     c.header('Cache-Control', 'no-store');

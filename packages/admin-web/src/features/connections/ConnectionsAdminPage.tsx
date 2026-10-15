@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { PageToolbar } from '@/web/components/PageToolbar';
 import type { AdminConnection, AdminUser, McpServer } from '@/web/types';
 
-type ConnectionStatus = 'connected' | 'pending' | 'expired' | 'disabled' | 'stale' | 'paused';
+type ConnectionStatus = 'connected' | 'saved' | 'rejected' | 'pending' | 'expired' | 'disabled' | 'stale' | 'paused';
 
 interface ConnectionRow {
   key: string;
@@ -26,6 +26,8 @@ interface ConnectionsAdminPageProps {
 
 const statusMeta: Record<ConnectionStatus, { label: MessageKey; color: string }> = {
   connected: { label: 'status.connected', color: 'success' },
+  saved: { label: 'connections.saved', color: 'processing' },
+  rejected: { label: 'connections.rejected', color: 'error' },
   pending: { label: 'connectionsAdmin.waitingUser', color: 'warning' },
   expired: { label: 'status.expired', color: 'error' },
   disabled: { label: 'connectionsAdmin.userDisabled', color: 'default' },
@@ -81,6 +83,8 @@ export function ConnectionsAdminPage({ users, servers, connections, busy, onRevo
         )
           status = 'stale';
         else if (!credential) status = 'pending';
+        else if (credential.validation_status === 'rejected') status = 'rejected';
+        else if (credential.mode === 'api_key' && credential.validation_status !== 'verified') status = 'saved';
         else if (credential.expires_at && credential.expires_at <= Date.now() && !credential.has_refresh_token)
           status = 'expired';
         else status = 'connected';

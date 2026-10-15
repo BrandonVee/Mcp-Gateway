@@ -1,4 +1,4 @@
-import { bigint, boolean, index, pgTable, primaryKey, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import { bigint, boolean, index, integer, pgTable, primaryKey, text, uniqueIndex } from 'drizzle-orm/pg-core';
 import { epoch } from '@/auth/infrastructure/database/schema/helpers.js';
 import { users } from '@/auth/infrastructure/database/schema/identity.js';
 import { upstreamAuthColumns } from '@/auth/infrastructure/database/schema/upstream-auth.js';
@@ -10,6 +10,10 @@ export const mcpServers = pgTable('mcp_servers', {
   description: text('description').notNull().default(''),
   enabled: boolean('enabled').notNull().default(true),
   signupAccess: boolean('signup_access').notNull().default(false),
+  monitoringLogsEnabled: boolean('monitoring_logs_enabled').notNull().default(false),
+  userRateLimitPerMinute: integer('user_rate_limit_per_minute').notNull().default(120),
+  userDailyQuota: integer('user_daily_quota').notNull().default(0),
+  userMaxConcurrent: integer('user_max_concurrent').notNull().default(5),
   ...upstreamAuthColumns(),
   createdAt: epoch('created_at'),
   updatedAt: epoch('updated_at'),
@@ -28,6 +32,8 @@ export const userMcpCredentials = pgTable(
     secret: text('secret').notNull(),
     refreshSecret: text('refresh_secret'),
     expiresAt: bigint('expires_at', { mode: 'number' }),
+    validationStatus: text('validation_status').$type<'saved' | 'verified' | 'rejected'>().notNull().default('saved'),
+    validatedAt: bigint('validated_at', { mode: 'number' }),
     updatedAt: epoch('updated_at'),
   },
   (table) => [primaryKey({ columns: [table.userId, table.serverName] })],
@@ -83,6 +89,8 @@ export const upstreamCredentials = pgTable(
     secret: text('secret').notNull(),
     refreshSecret: text('refresh_secret'),
     expiresAt: bigint('expires_at', { mode: 'number' }),
+    validationStatus: text('validation_status').$type<'saved' | 'verified' | 'rejected'>().notNull().default('saved'),
+    validatedAt: bigint('validated_at', { mode: 'number' }),
     updatedAt: epoch('updated_at'),
   },
   (table) => [primaryKey({ columns: [table.instanceId, table.owner] })],

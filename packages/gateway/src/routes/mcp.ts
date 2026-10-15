@@ -1,16 +1,18 @@
-import { credentialHeaderSchema, type CredentialHeader } from '@/shared/security/credentials.js';
-import { upstreamRequestTimeout, rpcMethod } from '@/gateway/transport-policy.js';
+import { poolCredentialResponseSchema, type CredentialHeader } from '@/shared/security/credentials.js';
+import { upstreamRequestTimeout, rpcMethod, toolCallCount } from '@/gateway/transport-policy.js';
 import { aggregateRequest } from '@/gateway/routes/aggregate.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { request } from 'undici';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { env, getServerConfig, refreshServerConfigs } from '@/gateway/config.js';
-import { pickInstance, bindSession, touchSession, removeSession, sessionOwnedBy } from '@/gateway/lb.js';
+import { redis, pickInstance, bindSession, touchSession, removeSession, sessionOwnedBy } from '@/gateway/lb.js';
 import { forbidden, hasServerAccess, tokenAuthVersion, unauthorized } from '@/gateway/auth.js';
 import { filterRequestHeaders, filterResponseHeaders } from '@/gateway/routes/headers.js';
 import { reserveUpstreamSlot } from '@/gateway/routes/capacity.js';
 import { mcpCorsHeaders } from '@/gateway/routes/origin.js';
+import { reserveUserRequest } from '@/gateway/routes/user-limits.js';
+import { reportCredentialStatus } from '@/gateway/credential-status.js';
 import { isRetryableInitialize, orderedAvailableInstances, upstreamHealth } from '@/gateway/upstream-health.js';
 
 export function registerMcpRoutes(app: FastifyInstance): void {
@@ -18,12 +20,18 @@ export function registerMcpRoutes(app: FastifyInstance): void {
   app.all('/mcp/:serverName/*', proxyHandler);
 }
 
+declare module 'fastify' {
+  interface FastifyRequest {
+    releaseUserPermit?: () => Promise<void>;
+  }
+}
+
 async function proxyHandler(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  req.monitoring?.parse();
   try {
     await proxyRequest(req, reply);
   } finally {
     req.monitoring?.finish(reply.raw.statusCode, reply.raw.destroyed && !reply.raw.writableFinished);
+    await req.releaseUserPermit?.().catch(() => undefined);
   }
 }
 
@@ -43,6 +51,8 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
     await reply.code(404).send({ error: 'server_not_found', server: serverName });
     return;
   }
+  req.monitoring?.setContentEnabled(cfg.monitoringLogsEnabled === true);
+  req.monitoring?.parse();
   if (!hasServerAccess(req.mcpAuth, serverName)) {
     await forbidden(reply, serverName);
     return;
@@ -56,6 +66,21 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
   const authVersion = tokenAuthVersion(req.mcpAuth);
   if (authVersion === null) {
     await unauthorized(reply, 'invalid_token', 'invalid auth_version claim', serverName);
+    return;
+  }
+
+  try {
+    const permit = await reserveUserRequest(redis, cfg, userId, toolCallCount(req.body));
+    if ('error' in permit) {
+      await reply
+        .code(429)
+        .header('Retry-After', String(permit.retryAfter))
+        .send({ error: permit.error, server: serverName });
+      return;
+    }
+    req.releaseUserPermit = permit.release;
+  } catch {
+    await reply.code(503).send({ error: 'rate_limit_unavailable' });
     return;
   }
 
@@ -89,6 +114,8 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
   }
 
   let upstreamCredential: CredentialHeader | undefined;
+  let credentialVersion: string | undefined;
+  let validationStatus: string | undefined;
   if (cfg.authMode !== 'none') {
     if (!env.credentialBrokerToken) {
       await reply.code(503).send({ error: 'credential_service_unavailable' });
@@ -118,10 +145,12 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
         return;
       }
       if (!result.ok) throw new Error(`credential broker HTTP ${result.status}`);
-      const parsed = credentialHeaderSchema.safeParse(await result.json());
+      const parsed = poolCredentialResponseSchema.safeParse(await result.json());
       // Never include schema issues here: validation details can contain credential values.
       if (!parsed.success) throw new Error('credential broker returned invalid header');
       upstreamCredential = { header: parsed.data.header.toLowerCase(), value: parsed.data.value };
+      credentialVersion = parsed.data.credential_version;
+      validationStatus = parsed.data.validation_status;
     } catch (error) {
       req.log.error({ err: error, server: serverName }, 'credential lookup failed');
       await reply.code(503).send({ error: 'credential_service_unavailable' });
@@ -250,6 +279,15 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
 
       if (cfg.authMode !== 'none' && (upstream.statusCode === 401 || upstream.statusCode === 403)) {
         await upstream.body.dump();
+        if (validationStatus !== 'rejected')
+          await reportCredentialStatus({
+            server: cfg.name,
+            user_id: userId,
+            auth_version: authVersion,
+            upstream_url: targetUrl,
+            credential_version: credentialVersion,
+            status: 'rejected',
+          });
         if (cfg.authMode === 'system_api_key') {
           await reply.code(503).send({ error: 'system_credential_rejected', server: serverName });
           return;
@@ -259,6 +297,15 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
           .send({ error: 'upstream_credential_rejected', server: serverName, connect_url: env.connectionsWebUrl });
         return;
       }
+      if (upstream.statusCode >= 200 && upstream.statusCode < 300 && validationStatus !== 'verified')
+        await reportCredentialStatus({
+          server: cfg.name,
+          user_id: userId,
+          auth_version: authVersion,
+          upstream_url: targetUrl,
+          credential_version: credentialVersion,
+          status: 'verified',
+        });
 
       // A successful DELETE or upstream 404 ends the session. Otherwise renew
       // the verified incoming ID even when subsequent responses do not echo it.

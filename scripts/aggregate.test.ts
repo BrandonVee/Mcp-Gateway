@@ -99,6 +99,18 @@ test('credentials are rechecked for every invocation and a missing user connecti
   assert.equal(f.calls.length, before, 'revoked credentials do not reach upstream');
 });
 
+test('revocation during upstream initialization prevents the waiting business call', async () => {
+  const f = fixture();
+  const rpc = f.engine.deps.rpc;
+  f.engine.deps.rpc = async (upstream, message, credential, member) => {
+    const response = await rpc(upstream, message, credential, member);
+    if (message.method === 'initialize') f.missing.add(upstream.id);
+    return response;
+  };
+  await assert.rejects(f.engine.invoke(upstreams[0], 'tools/call', { name: 'search' }), /connection_required/);
+  assert.equal(f.calls.filter((call) => call.method === 'tools/call').length, 0);
+});
+
 test('resources and prompts retain their upstream identity', async () => {
   const f = fixture();
   const resources = (await f.engine.handle({ jsonrpc: '2.0', id: 1, method: 'resources/list' })).result.resources;

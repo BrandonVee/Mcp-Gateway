@@ -2,7 +2,14 @@ import Fastify from 'fastify';
 import { registerMonitoring, collectionStatus } from '@/gateway/monitoring.js';
 import { activeUpstreamRequests } from '@/gateway/routes/capacity.js';
 import { databaseSettingsEnabled, systemConfigured, validateUpstreamEndpoint } from '@mcp/shared';
-import { env, refreshServerConfigs, registryStatus, serverConfigs, startRegistryRefresh } from '@/gateway/config.js';
+import {
+  env,
+  ensureServerConfigsFresh,
+  refreshServerConfigs,
+  registryStatus,
+  serverConfigs,
+  startRegistryRefresh,
+} from '@/gateway/config.js';
 import { authHook, hasServerAccess } from '@/gateway/auth.js';
 import { registerMcpRoutes } from '@/gateway/routes/mcp.js';
 import { registerMetadataRoutes } from '@/gateway/routes/metadata.js';
@@ -75,7 +82,7 @@ await app.register(async (instance) => {
     const path = req.url.split('?')[0];
     if (databaseSettingsEnabled() && (path.startsWith('/mcp') || path === '/servers')) {
       try {
-        await refreshServerConfigs();
+        await ensureServerConfigsFresh();
       } catch {
         return reply.code(503).send({ error: 'system_settings_unavailable' });
       }

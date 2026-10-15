@@ -1,11 +1,19 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { Redis } from 'ioredis';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { runtimeSettings, monitoringStream, monitoringDropped, safeLabel, type CallEvent } from '@mcp/shared';
+import {
+  captureCallContent,
+  runtimeSettings,
+  monitoringStream,
+  monitoringDropped,
+  safeLabel,
+  type CallEvent,
+} from '@mcp/shared';
 import { env } from '@/gateway/config.js';
 import { requestMetadata, ResponseObserver, type RpcMetadata } from '@/gateway/response-observer.js';
 
 const redis = new Redis(env.redisUrl, { enableOfflineQueue: false, maxRetriesPerRequest: 1, connectTimeout: 3000 });
+export { redis as monitoringRedis };
 export const collectionStatus = { dropped: 0, lastQueuedAt: 0, lastError: '' };
 redis.on('error', () => {
   collectionStatus.lastError = 'redis_unavailable';
@@ -51,6 +59,7 @@ export class RequestMonitor {
   private started = Date.now();
   private items: { rpc: RpcMetadata; done: boolean }[] = [];
   private done = false;
+  private contentEnabled = false;
   attempts = 0;
   instance = '';
   error = '';
@@ -60,24 +69,50 @@ export class RequestMonitor {
     private detail: boolean,
   ) {}
   parse() {
-    this.items = requestMetadata(this.req.body, this.req.method).map((rpc) => ({ rpc, done: false }));
+    this.items = requestMetadata(this.req.body, this.req.method, this.detail && this.contentEnabled).map((rpc) => ({
+      rpc,
+      done: false,
+    }));
+  }
+  setContentEnabled(enabled: boolean) {
+    this.contentEnabled = enabled;
+    if (!enabled) for (const item of this.items) item.rpc.input = null;
+  }
+  rpcResponse(id: unknown, response: { result?: any; error?: any }, status = 200) {
+    const item = this.items.find((item) => !item.done && item.rpc.id !== null && item.rpc.id === id);
+    if (!item) return;
+    this.status = status;
+    const rpcError = response.error !== undefined;
+    const toolError = response.result?.isError === true;
+    this.record(
+      item,
+      rpcError || toolError || status >= 400 ? 'failed' : 'success',
+      rpcError ? 'json_rpc_error' : toolError ? 'tool_error' : '',
+      Date.now() - this.started,
+      this.detail && this.contentEnabled ? captureCallContent(response.error ?? response.result) : null,
+    );
   }
   target(url: string) {
     this.attempts++;
     this.instance = createHash('sha256').update(url).digest('hex').slice(0, 12);
   }
   observer(contentType: string) {
-    return new ResponseObserver(contentType, (id, failed, error, output) => {
-      const item = this.items.find((item) => !item.done && item.rpc.id !== null && item.rpc.id === id);
-      if (item)
-        this.record(
-          item,
-          failed || this.status >= 400 ? 'failed' : 'success',
-          error,
-          Date.now() - this.started,
-          output,
-        );
-    });
+    return new ResponseObserver(
+      contentType,
+      (id, failed, error, output) => {
+        const item = this.items.find((item) => !item.done && item.rpc.id !== null && item.rpc.id === id);
+        if (item)
+          this.record(
+            item,
+            failed || this.status >= 400 ? 'failed' : 'success',
+            error,
+            Date.now() - this.started,
+            output,
+          );
+      },
+      256 * 1024,
+      this.detail && this.contentEnabled,
+    );
   }
   private record(
     item: { rpc: RpcMetadata; done: boolean },
@@ -105,8 +140,11 @@ export class RequestMonitor {
       error: safeLabel(error),
       instance: this.instance,
       attempts: this.attempts,
-      input: this.detail ? (item.rpc.input ?? null) : null,
-      output: this.detail ? output : null,
+      input:
+        this.detail && this.contentEnabled && runtimeSettings().monitoring_logs_enabled
+          ? (item.rpc.input ?? null)
+          : null,
+      output: this.detail && this.contentEnabled && runtimeSettings().monitoring_logs_enabled ? output : null,
       detail: this.detail && runtimeSettings().monitoring_logs_enabled,
     });
   }

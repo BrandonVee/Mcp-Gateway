@@ -1,6 +1,6 @@
 import { MyCallLogs } from '@/web/features/monitoring/MyCallLogs';
 import { useEffect, useMemo, useState } from 'react';
-import { App, Button, Card, Empty, Input, Modal, Tag, Typography } from 'antd';
+import { Alert, App, Button, Card, Empty, Input, Modal, Tag, Typography } from 'antd';
 import {
   ApiOutlined,
   CopyOutlined,
@@ -12,7 +12,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { ApiError, apiForSession } from '@/web/api';
-import type { ConnectionServer, PlatformSession } from '@/web/types';
+import type { ConnectionServer, PlatformSession, UpstreamTestResult } from '@/web/types';
 import { DataLoadError } from '@/web/components/DataLoadState';
 import { useI18n } from '@/web/i18n';
 import { ServiceDescription } from '@/web/components/ServiceDescription';
@@ -22,6 +22,7 @@ import { mcpConfig, mcpServerUrl } from '@/web/features/connections/mcp-config';
 import { mutateAndRefresh } from '@/web/utils/operations';
 import { isValidApiKey } from '@/shared/security/credentials.js';
 import { oauthResultKey } from '@/web/features/connections/oauth-result';
+import { upstreamTestMessages } from '@/web/features/servers/upstream-test-messages';
 import '@/web/features/connections/connections.css';
 
 export function ConnectionsPage({
@@ -45,6 +46,7 @@ export function ConnectionsPage({
   const [key, setKey] = useState('');
   const [resource, setResource] = useState('');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, UpstreamTestResult>>({});
 
   const checkSession = (error: unknown) => {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.code === 'session_changed'))
@@ -94,7 +96,25 @@ export function ConnectionsPage({
     }
     setBusy(true);
     try {
-      const result = await mutateAndRefresh(() => api.saveApiKey(selected.name, key), load);
+      const target = selected;
+      const result = await mutateAndRefresh(async () => {
+        await api.saveApiKey(target.name, key);
+        setKey('');
+        setSelected(null);
+        setTestResults((previous) => {
+          const next = { ...previous };
+          delete next[target.name];
+          return next;
+        });
+        try {
+          const test = await api.testMyConnection(target.name);
+          setTestResults((previous) => ({ ...previous, [target.name]: test }));
+          if (!test.ok) message.warning(t('connections.savedNeedsAttention'));
+        } catch (error) {
+          checkSession(error);
+          message.warning(t('connections.savedTestUnavailable'));
+        }
+      }, load);
       setKey('');
       setSelected(null);
       message.success(t('connections.apiKeySaved'));
@@ -102,6 +122,23 @@ export function ConnectionsPage({
     } catch (error) {
       checkSession(error);
       message.error(error instanceof Error ? error.message : t('connections.saveFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const testConnection = async (server: ConnectionServer) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await mutateAndRefresh(async () => {
+        const test = await api.testMyConnection(server.name);
+        setTestResults((previous) => ({ ...previous, [server.name]: test }));
+      }, load);
+      if (result.refreshError) message.warning(t('common.savedRefreshFailed'));
+    } catch (error) {
+      checkSession(error);
+      message.error(error instanceof Error ? error.message : t('common.operationFailed'));
     } finally {
       setBusy(false);
     }
@@ -132,6 +169,11 @@ export function ConnectionsPage({
         try {
           const result = await mutateAndRefresh(() => api.removeCredential(server.name), load);
           message.success(t('connections.connectionDisconnected'));
+          setTestResults((previous) => {
+            const next = { ...previous };
+            delete next[server.name];
+            return next;
+          });
           if (result.refreshError) message.warning(t('common.savedRefreshFailed'));
         } catch (error) {
           checkSession(error);
@@ -249,21 +291,29 @@ export function ConnectionsPage({
                     <span className="connection-index">{String(index + 1).padStart(2, '0')}</span>
                     <Tag
                       color={
-                        server.connection_status === 'connected'
-                          ? 'success'
-                          : server.connection_status === 'expired'
-                            ? 'warning'
-                            : 'default'
+                        server.connection_status === 'rejected'
+                          ? 'error'
+                          : server.connection_status === 'saved'
+                            ? 'processing'
+                            : server.connection_status === 'connected'
+                              ? 'success'
+                              : server.connection_status === 'expired'
+                                ? 'warning'
+                                : 'default'
                       }
                     >
                       {t(
-                        server.connection_status === 'connected'
-                          ? 'status.connected'
-                          : server.connection_status === 'not_required'
-                            ? 'connections.noConnectionNeeded'
-                            : server.connection_status === 'expired'
-                              ? 'status.expired'
-                              : 'connections.notConnected',
+                        server.connection_status === 'rejected'
+                          ? 'connections.rejected'
+                          : server.connection_status === 'saved'
+                            ? 'connections.saved'
+                            : server.connection_status === 'connected'
+                              ? 'status.connected'
+                              : server.connection_status === 'not_required'
+                                ? 'connections.noConnectionNeeded'
+                                : server.connection_status === 'expired'
+                                  ? 'status.expired'
+                                  : 'connections.notConnected',
                       )}
                     </Tag>
                   </div>
@@ -290,6 +340,15 @@ export function ConnectionsPage({
                     </div>
                   </dl>
                   <ServiceDescription description={server.description} />
+                  {testResults[server.name] && (
+                    <Alert
+                      showIcon
+                      type={testResults[server.name].ok ? 'success' : 'warning'}
+                      message={t(upstreamTestMessages[testResults[server.name].reason], {
+                        status: testResults[server.name].http_status ?? '—',
+                      })}
+                    />
+                  )}
                   <div className="connection-bottom">
                     <span>
                       {t(
@@ -307,6 +366,14 @@ export function ConnectionsPage({
                     <Button icon={<CopyOutlined />} onClick={() => copyMcpConfig([server])}>
                       {t('connections.copyMcpConfig')}
                     </Button>
+                    {(server.auth_mode === 'api_key' ||
+                      server.auth_mode === 'oauth' ||
+                      (server.auth_mode === 'system_oauth' && isAdmin)) &&
+                      server.connection_status !== 'not_connected' && (
+                        <Button disabled={busy} icon={<ReloadOutlined />} onClick={() => void testConnection(server)}>
+                          {t('connections.testConnection')}
+                        </Button>
+                      )}
                     {server.auth_mode === 'api_key' && (
                       <Button
                         disabled={busy}
@@ -318,7 +385,7 @@ export function ConnectionsPage({
                         }}
                       >
                         {t(
-                          server.connection_status === 'connected'
+                          server.connection_status !== 'not_connected'
                             ? 'connections.updateKey'
                             : 'connections.configureKey',
                         )}
@@ -332,7 +399,7 @@ export function ConnectionsPage({
                         onClick={() => connectOAuth(server)}
                       >
                         {t(
-                          server.connection_status === 'connected'
+                          server.connection_status !== 'not_connected'
                             ? 'connections.reauthorize'
                             : 'connections.connectAccount',
                         )}
@@ -370,7 +437,7 @@ export function ConnectionsPage({
       <Modal
         title={t('connections.configureApiKeyServer', { server: selected?.display_name ?? '' })}
         open={!!selected}
-        okText={t('connections.saveKey')}
+        okText={t('connections.saveAndVerify')}
         okButtonProps={{ disabled: !isValidApiKey(key) || busy, loading: busy }}
         cancelButtonProps={{ disabled: busy }}
         closable={!busy}

@@ -9,6 +9,9 @@ import {
 } from '@/shared/security/credentials.js';
 import { upstreamTestCredentialSchema } from '@/shared/upstream-test.js';
 import { createPkceAuthorization } from '@/auth/shared/security/pkce.js';
+import { connectionStatus } from '@/auth/modules/upstreams/connection-status.js';
+import { serverPatchSchema } from '@/auth/modules/admin/validation.js';
+import { toolCallCount } from '@/gateway/transport-policy.js';
 
 test('credential brokers reject malformed responses and header injection while allowing long OAuth tokens', () => {
   for (const credential of [
@@ -56,4 +59,39 @@ test('PKCE flows use independent unpredictable state and an S256 challenge of th
   assert.notEqual(first.state, second.state);
   assert.notEqual(first.verifier, second.verifier);
   assert.equal(first.challenge, createHash('sha256').update(first.verifier).digest('base64url'));
+});
+
+test('saved keys remain unverified until accepted, rejected credentials stay actionable, and OAuth expiry is distinct', () => {
+  const row = { mode: 'api_key', expiresAt: null, hasRefreshToken: false, validationStatus: 'saved' as const };
+  assert.equal(connectionStatus('api_key', row), 'saved');
+  assert.equal(connectionStatus('api_key', { ...row, validationStatus: 'verified' }), 'connected');
+  assert.equal(connectionStatus('api_key', { ...row, validationStatus: 'rejected' }), 'rejected');
+  assert.equal(connectionStatus('oauth', { ...row, mode: 'oauth', expiresAt: Date.now() - 1 }), 'expired');
+  assert.equal(
+    connectionStatus('oauth', { ...row, mode: 'oauth', expiresAt: Date.now() - 1, hasRefreshToken: true }),
+    'connected',
+  );
+  assert.equal(connectionStatus('system_api_key'), 'not_required');
+});
+
+test('service limits reject negative, fractional and excessive values, and zero explicitly disables limits', () => {
+  assert.equal(
+    serverPatchSchema.safeParse({ user_daily_quota: 0, user_rate_limit_per_minute: 0, user_max_concurrent: 0 }).success,
+    true,
+  );
+  for (const patch of [
+    { user_daily_quota: -1 },
+    { user_max_concurrent: 1.5 },
+    { user_rate_limit_per_minute: 100001 },
+    { user_daily_quota: '100' },
+    { monitoring_logs_enabled: 'true' },
+  ])
+    assert.equal(serverPatchSchema.safeParse(patch).success, false);
+});
+
+test('daily quota includes every tool in legacy JSON-RPC batches and excludes discovery', () => {
+  const batch = [{ method: 'tools/call' }, { method: 'tools/list' }, { method: 'tools/call' }];
+  assert.equal(toolCallCount(Buffer.from(JSON.stringify(batch))), 2);
+  assert.equal(toolCallCount({ method: 'tools/call' }), 1);
+  assert.equal(toolCallCount(Buffer.from('invalid')), 0);
 });

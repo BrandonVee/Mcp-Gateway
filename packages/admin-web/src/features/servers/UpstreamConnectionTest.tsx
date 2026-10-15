@@ -6,30 +6,11 @@ import {
 import { ApiOutlined } from '@ant-design/icons';
 import { Alert, Button, Form, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
-import { useI18n, type MessageKey } from '@/web/i18n';
+import { useI18n } from '@/web/i18n';
+import { upstreamTestMessages } from '@/web/features/servers/upstream-test-messages';
 import type { SystemSettings, UpstreamTestResult, UpstreamTestAuthInput } from '@/web/types';
 import { isEndpointUrl } from '@/shared/security/urls.js';
 import { untrustedUpstreamHost } from '@/web/features/servers/upstream-allowlist';
-
-const resultMessages: Record<UpstreamTestResult['reason'], MessageKey> = {
-  ok: 'mcpTest.success',
-  dns: 'mcpTest.dns',
-  connection_refused: 'mcpTest.connectionRefused',
-  timeout: 'mcpTest.timeout',
-  tls: 'mcpTest.tls',
-  network: 'mcpTest.network',
-  http: 'mcpTest.http',
-  not_found: 'mcpTest.notFound',
-  method_not_allowed: 'mcpTest.methodNotAllowed',
-  auth_required: 'mcpTest.authRequired',
-  access_denied: 'mcpTest.accessDenied',
-  redirect: 'mcpTest.redirect',
-  invalid_mcp: 'mcpTest.invalidMcp',
-  tools_failed: 'mcpTest.toolsFailed',
-  response_too_large: 'mcpTest.responseTooLarge',
-  gateway_unavailable: 'mcpTest.gatewayUnavailable',
-  busy: 'mcpTest.busy',
-};
 
 export function loopbackUpstreamEndpoint(value: string): boolean {
   try {
@@ -142,7 +123,9 @@ export function UpstreamConnectionTest({
           message={result.ok ? t('mcpTest.success') : t('mcpTest.failed')}
           description={
             <div className="upstream-test-result" role="status">
-              {!result.ok && <span>{t(resultMessages[result.reason], { status: result.http_status ?? '—' })}</span>}
+              {!result.ok && (
+                <span>{t(upstreamTestMessages[result.reason], { status: result.http_status ?? '—' })}</span>
+              )}
               {result.server && (
                 <span>{t('mcpTest.server', { name: result.server.name, version: result.server.version })}</span>
               )}

@@ -1,5 +1,21 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
+  'serverDialog.invalidLimit': 'Enter a whole number within the allowed range; use 0 for unlimited.',
+  'serverDialog.userRateLimit': 'Requests per user per minute',
+  'serverDialog.userDailyQuota': 'Daily tool calls per user',
+  'serverDialog.userConcurrency': 'Concurrent requests per user',
+  'serverDialog.limitHelp': 'Counted separately for each user on this endpoint. Set 0 for unlimited.',
+  'serverDialog.dailyQuotaHelp':
+    'Counts admitted tool attempts, including failures. Resets at midnight UTC. Set 0 for unlimited.',
+  'serverDialog.captureContent': 'Record call inputs and outputs',
+  'serverDialog.captureContentHelp':
+    'Only call metadata is recorded by default. Enabling this allows administrators to view inputs and outputs when system call logs are enabled.',
+  'connections.saved': 'Saved, awaiting verification',
+  'connections.rejected': 'Credential rejected',
+  'connections.testConnection': 'Verify connection',
+  'connections.saveAndVerify': 'Save and verify',
+  'connections.savedNeedsAttention': 'Key saved. Verification failed; see the reason on the service card.',
+  'connections.savedTestUnavailable': 'Key saved. Verification is unavailable; try Verify connection later.',
   'mcpTest.action': 'Test MCP connection',
   'mcpTest.credentialRequired': 'Enter a key for this probe, or authorize this upstream account.',
   'mcpTest.help': 'Test the current form values without saving or replacing the production configuration.',

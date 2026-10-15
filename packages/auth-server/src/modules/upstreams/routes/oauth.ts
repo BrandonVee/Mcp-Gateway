@@ -125,6 +125,8 @@ export function registerOauthRoutes(router: Hono) {
         refreshSecret:
           typeof body.refresh_token === 'string' && body.refresh_token ? encryptCredential(body.refresh_token) : null,
         expiresAt: tokenExpiry(body),
+        validationStatus: 'verified' as const,
+        validatedAt: Date.now(),
         updatedAt: Date.now(),
       };
       await tx

@@ -17,6 +17,8 @@ export interface McpServerConfig {
   name: string;
   instances: string[];
   authMode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
+  monitoringLogsEnabled?: boolean;
+  userLimits?: { perMinute: number; daily: number; concurrent: number };
   upstreams?: Array<{
     id: string;
     displayName?: string;

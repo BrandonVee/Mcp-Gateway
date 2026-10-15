@@ -129,6 +129,8 @@ jobs:
           DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp pnpm exec tsx scripts/smoke-upstream-migration.ts
       - name: Verify upstream OAuth lifecycle and revocation races
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-oauth-lifecycle.ts
+      - name: Verify credential validation, concurrent sessions, user quotas and recurring alerts
+        run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-gateway-reliability.ts
       # The broader smoke test deliberately exhausts /register's shared IP
       # limit. Run signup first so its OAuth client registration has quota.
       - name: Verify self-registration and default service grants

@@ -58,6 +58,10 @@ export function registerEndpointsRoutes(router: AdminRouter) {
           description,
           enabled: true,
           signupAccess: body.signup_access ?? false,
+          monitoringLogsEnabled: body.monitoring_logs_enabled ?? false,
+          userRateLimitPerMinute: body.user_rate_limit_per_minute ?? 120,
+          userDailyQuota: body.user_daily_quota ?? 0,
+          userMaxConcurrent: body.user_max_concurrent ?? 5,
           createdAt: now,
           updatedAt: now,
           ...auth.values,
@@ -95,6 +99,10 @@ export function registerEndpointsRoutes(router: AdminRouter) {
         description,
         enabled: true,
         signup_access: body.signup_access ?? false,
+        monitoring_logs_enabled: body.monitoring_logs_enabled ?? false,
+        user_rate_limit_per_minute: body.user_rate_limit_per_minute ?? 120,
+        user_daily_quota: body.user_daily_quota ?? 0,
+        user_max_concurrent: body.user_max_concurrent ?? 5,
         auth_mode: auth.values?.authMode,
         instances: normalizedInstances,
       },
@@ -121,6 +129,11 @@ export function registerEndpointsRoutes(router: AdminRouter) {
           if (taken) return { error: 'server already exists', status: 409 as const };
         }
         const changes: Partial<typeof mcpServers.$inferInsert> = { name: nextName, updatedAt: Date.now() };
+        if (body.monitoring_logs_enabled !== undefined) changes.monitoringLogsEnabled = body.monitoring_logs_enabled;
+        if (body.user_rate_limit_per_minute !== undefined)
+          changes.userRateLimitPerMinute = body.user_rate_limit_per_minute;
+        if (body.user_daily_quota !== undefined) changes.userDailyQuota = body.user_daily_quota;
+        if (body.user_max_concurrent !== undefined) changes.userMaxConcurrent = body.user_max_concurrent;
         let credentialsChanged = false;
         if (body.auth_mode !== undefined) {
           if (existing.routingMode === 'aggregate' && body.auth_mode !== 'none')

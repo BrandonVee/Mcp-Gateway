@@ -83,6 +83,7 @@ async function main() {
         await admin('/servers', 'POST', {
           name,
           auth_mode: 'none',
+          monitoring_logs_enabled: true,
           instances: [{ url: `http://${process.env.SIGNUP_UPSTREAM_HOST ?? '127.0.0.1'}:${address.port}/mcp` }],
         })
       ).response.status,

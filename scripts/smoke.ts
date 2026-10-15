@@ -775,9 +775,9 @@ async function main(): Promise<void> {
     servers: Array<{ name: string; connection_status: string; api_key?: string }>;
   };
   check(
-    'connection status is visible without exposing key',
+    'saved credential awaits verification without exposing key',
     connectionList.servers.some(
-      (server) => server.name === externalServerName && server.connection_status === 'connected' && !server.api_key,
+      (server) => server.name === externalServerName && server.connection_status === 'saved' && !server.api_key,
     ),
   );
   const adminWithoutKey = await fetch(`${GW}/mcp/${externalServerName}`, {

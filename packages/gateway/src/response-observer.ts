@@ -8,7 +8,7 @@ export interface RpcMetadata {
   input?: string | null;
 }
 const label = (value: unknown) => (typeof value === 'string' && /^[a-zA-Z0-9_.:/-]{1,128}$/.test(value) ? value : '');
-export function requestMetadata(body: unknown, httpMethod: string): RpcMetadata[] {
+export function requestMetadata(body: unknown, httpMethod: string, captureContent = true): RpcMetadata[] {
   try {
     if (!Buffer.isBuffer(body)) throw new Error('no body');
     const data = JSON.parse(body.toString('utf8'));
@@ -25,7 +25,7 @@ export function requestMetadata(body: unknown, httpMethod: string): RpcMetadata[
         id,
         method,
         tool: method === 'tools/call' ? label(request.params?.name) : '',
-        input: captureCallContent(request.params),
+        input: captureContent ? captureCallContent(request.params) : null,
       };
     });
   } catch {
@@ -45,6 +45,7 @@ export class ResponseObserver {
     private contentType: string,
     private result: (id: unknown, failed: boolean, error: string, output?: string | null) => void,
     private limit = 256 * 1024,
+    private captureContent = true,
   ) {}
   private json(text: string) {
     try {
@@ -57,7 +58,7 @@ export class ResponseObserver {
           value.id,
           failed,
           Object.hasOwn(value, 'error') ? 'json_rpc_error' : failed ? 'tool_error' : '',
-          captureCallContent(value.error ?? value.result),
+          this.captureContent ? captureCallContent(value.error ?? value.result) : null,
         );
       }
     } catch {

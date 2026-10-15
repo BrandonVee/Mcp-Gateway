@@ -10,7 +10,7 @@ import {
   SearchOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Alert, Button, Checkbox, Empty, Form, Input, Modal, Segmented, Select, Switch } from 'antd';
+import { Alert, Button, Checkbox, Empty, Form, Input, InputNumber, Modal, Segmented, Select, Switch } from 'antd';
 import { useMemo, useState } from 'react';
 import type {
   AddInstanceInput,
@@ -23,6 +23,7 @@ import type {
   SystemSettings,
   UpstreamTestResult,
   UpstreamTestAuthInput,
+  ServerPolicyInput,
 } from '@/web/types';
 import { submitDialog } from '@/web/utils/operations';
 import { validationRule } from '@/web/utils/validation';
@@ -47,7 +48,12 @@ interface ServerDialogsProps extends UpstreamAllowlistProps {
   onCreate: (data: CreateServerInput) => void;
   onEdit: (
     server: McpServer,
-    data: { name: string; display_name: string; description: string; routing_mode?: 'pool' | 'aggregate' },
+    data: {
+      name: string;
+      display_name: string;
+      description: string;
+      routing_mode?: 'pool' | 'aggregate';
+    } & ServerPolicyInput,
   ) => void;
   onEditInstance: (server: McpServer, instance: McpInstance, data: AddInstanceInput) => void;
   onAddInstance: (server: McpServer, data: AddInstanceInput) => void;
@@ -55,7 +61,7 @@ interface ServerDialogsProps extends UpstreamAllowlistProps {
   onConfigureUsers: (server: McpServer, userIds: number[], signupAccess: boolean) => void;
 }
 
-interface ServerFormValues {
+interface ServerFormValues extends ServerPolicyInput {
   name: string;
   routing_mode?: 'pool' | 'aggregate';
   displayName?: string;
@@ -125,6 +131,10 @@ function CreateServerDialog({
         instances: [],
         auth_mode: 'none',
         routing_mode: 'aggregate',
+        monitoring_logs_enabled: values.monitoring_logs_enabled,
+        user_rate_limit_per_minute: values.user_rate_limit_per_minute,
+        user_daily_quota: values.user_daily_quota,
+        user_max_concurrent: values.user_max_concurrent,
       }),
     );
   };
@@ -133,6 +143,8 @@ function CreateServerDialog({
     <Modal
       open
       width={560}
+      style={{ top: 24 }}
+      styles={{ body: { maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' } }}
       title={
         <ModalTitle
           icon={<CloudServerOutlined />}
@@ -167,6 +179,10 @@ function CreateServerDialog({
           auth_mode: 'none',
           api_key_header: 'authorization',
           api_key_prefix: 'Bearer ',
+          monitoring_logs_enabled: false,
+          user_rate_limit_per_minute: 120,
+          user_daily_quota: 0,
+          user_max_concurrent: 5,
         }}
       >
         <Form.Item
@@ -195,6 +211,7 @@ function CreateServerDialog({
           <Switch />
         </Form.Item>
         <Alert type="info" showIcon message={t('serverDialog.endpointGroupHelp')} />
+        <ServerPolicyFields />
       </Form>
     </Modal>
   );
@@ -277,16 +294,20 @@ function EditServerDialog({
   onEdit,
 }: Pick<ServerDialogsProps, 'busy' | 'onClose' | 'onEdit'> & { server: McpServer }) {
   const { t } = useI18n();
-  const [form] = Form.useForm<{
-    name: string;
-    display_name: string;
-    description: string;
-    routing_mode?: 'pool' | 'aggregate';
-  }>();
+  const [form] = Form.useForm<
+    ServerPolicyInput & {
+      name: string;
+      display_name: string;
+      description: string;
+      routing_mode?: 'pool' | 'aggregate';
+    }
+  >();
   return (
     <Modal
       open
       width={560}
+      style={{ top: 24 }}
+      styles={{ body: { maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' } }}
       title={t('serverDialog.editServer')}
       okText={t('serverDialog.saveSettings')}
       cancelText={t('common.cancel')}
@@ -303,6 +324,10 @@ function EditServerDialog({
             display_name: values.display_name.trim(),
             routing_mode: values.routing_mode,
             description: values.description.trim(),
+            monitoring_logs_enabled: values.monitoring_logs_enabled,
+            user_rate_limit_per_minute: values.user_rate_limit_per_minute,
+            user_daily_quota: values.user_daily_quota,
+            user_max_concurrent: values.user_max_concurrent,
           }),
         )
       }
@@ -317,6 +342,10 @@ function EditServerDialog({
           display_name: server.display_name,
           description: server.description ?? '',
           routing_mode: server.routing_mode ?? 'aggregate',
+          monitoring_logs_enabled: server.monitoring_logs_enabled ?? false,
+          user_rate_limit_per_minute: server.user_rate_limit_per_minute ?? 120,
+          user_daily_quota: server.user_daily_quota ?? 0,
+          user_max_concurrent: server.user_max_concurrent ?? 5,
         }}
       >
         <Form.Item
@@ -362,8 +391,52 @@ function EditServerDialog({
             ]}
           />
         </Form.Item>
+        <ServerPolicyFields />
       </Form>
     </Modal>
+  );
+}
+
+function ServerPolicyFields() {
+  const { t } = useI18n();
+  const rules = (max: number) => [
+    { required: true, type: 'integer' as const, min: 0, max, message: t('serverDialog.invalidLimit') },
+  ];
+  return (
+    <>
+      <Form.Item
+        name="user_rate_limit_per_minute"
+        label={t('serverDialog.userRateLimit')}
+        extra={t('serverDialog.limitHelp')}
+        rules={rules(100000)}
+      >
+        <InputNumber min={0} max={100000} precision={0} style={{ width: '100%' }} />
+      </Form.Item>
+      <Form.Item
+        name="user_daily_quota"
+        label={t('serverDialog.userDailyQuota')}
+        extra={t('serverDialog.dailyQuotaHelp')}
+        rules={rules(100000000)}
+      >
+        <InputNumber min={0} max={100000000} precision={0} style={{ width: '100%' }} />
+      </Form.Item>
+      <Form.Item
+        name="user_max_concurrent"
+        label={t('serverDialog.userConcurrency')}
+        extra={t('serverDialog.limitHelp')}
+        rules={rules(1000)}
+      >
+        <InputNumber min={0} max={1000} precision={0} style={{ width: '100%' }} />
+      </Form.Item>
+      <Form.Item
+        name="monitoring_logs_enabled"
+        valuePropName="checked"
+        label={t('serverDialog.captureContent')}
+        extra={t('serverDialog.captureContentHelp')}
+      >
+        <Switch />
+      </Form.Item>
+    </>
   );
 }
 

@@ -7,6 +7,8 @@ import { redis } from '@/gateway/lb.js';
 import { AggregateConnection, AggregateError, upstreamRpc, type AggregateSession } from '@/gateway/aggregate.js';
 import { reserveUpstreamSlot } from '@/gateway/routes/capacity.js';
 import { tokenAuthVersion } from '@/gateway/auth.js';
+import { AggregateSessionStore } from '@/gateway/aggregate-session.js';
+import { reportCredentialStatus } from '@/gateway/credential-status.js';
 
 export async function aggregateRequest(req: FastifyRequest, reply: FastifyReply, cfg: McpServerConfig) {
   const owner = req.mcpAuth?.uid,
@@ -48,31 +50,25 @@ export async function aggregateRequest(req: FastifyRequest, reply: FastifyReply,
   if (initializing && incoming) return reply.code(400).send({ error: 'session_already_initialized' });
   if (!initializing && !incoming) return reply.code(404).send({ error: 'session_not_found' });
   const sid = typeof incoming === 'string' ? incoming : randomUUID();
-  const key = `gw:aggregate:${cfg.name}:${sid}`,
-    lock = `${key}:lock`,
-    token = randomUUID();
+  const key = `gw:aggregate:${cfg.name}:${sid}`;
+  const store = new AggregateSessionStore(redis, key, owner, authVersion, env.sessionTtlSeconds);
   const releaseSlot = reserveUpstreamSlot();
   if (!releaseSlot) return reply.code(503).send({ error: 'upstream_capacity_exceeded' });
-  let locked = false,
-    heartbeat: ReturnType<typeof setInterval> | undefined;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  const credentials = new Map<string, { credential_version?: string; validation_status?: string }>();
   try {
-    locked = (await redis.set(lock, token, 'EX', 60, 'NX')) === 'OK';
-    if (!locked) return reply.code(409).send({ error: 'session_busy' });
-    heartbeat = setInterval(() => {
-      void redis
-        .eval(
-          "if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('expire',KEYS[1],60) end return 0",
-          1,
-          lock,
-          token,
-        )
-        .catch(() => undefined);
-    }, 15_000);
+    if (initializing) {
+      const session: AggregateSession = { owner, authVersion, members: {} };
+      await redis.set(key, JSON.stringify(session), 'EX', env.sessionTtlSeconds, 'NX');
+    }
+    const session = await store.read();
+    heartbeat = setInterval(
+      () => {
+        void store.touch().catch(() => undefined);
+      },
+      Math.max(250, Math.min(15_000, (env.sessionTtlSeconds * 1000) / 3)),
+    );
     heartbeat.unref();
-    const raw = initializing ? null : await redis.get(key);
-    const session: AggregateSession = initializing ? { owner, authVersion, members: {} } : raw ? JSON.parse(raw) : null;
-    if (!session || session.owner !== owner || session.authVersion !== authVersion)
-      return reply.code(404).send({ error: 'session_not_found' });
     if (req.method === 'DELETE') {
       await redis.del(key);
       await Promise.allSettled(
@@ -121,42 +117,70 @@ export async function aggregateRequest(req: FastifyRequest, reply: FastifyReply,
       }
       const parsed = upstreamCredentialResponseSchema.safeParse(await response.json());
       if (!parsed.success) throw new AggregateError('invalid_upstream_credential');
+      credentials.set(id, parsed.data);
       return parsed.data;
     }
     const connection = new AggregateConnection(cfg.upstreams ?? [], session, {
       credential: (u) => credential(u.id),
+      prepareMember: (id, revision, initialize, version) => store.member(id, revision, initialize, version),
+      updateSession: async (change) => {
+        const updated = await store.update(change);
+        Object.assign(session, updated.session);
+        return updated.value;
+      },
       rpc: async (u, rpc, header, member) => {
         req.monitoring?.target(u.url);
-        return upstreamRpc(u, rpc, header, member);
+        const saved = credentials.get(u.id);
+        const report = async (status: 'verified' | 'rejected') => {
+          if (!saved?.credential_version || saved.validation_status === status) return;
+          if (
+            await reportCredentialStatus({
+              instance_id: u.id,
+              upstream_url: u.url,
+              user_id: owner,
+              auth_version: authVersion,
+              credential_version: saved.credential_version,
+              status,
+            })
+          )
+            saved.validation_status = status;
+        };
+        try {
+          const response = await upstreamRpc(u, rpc, header, member);
+          if (rpc.id !== undefined) await report('verified');
+          return response;
+        } catch (error) {
+          if (
+            error instanceof AggregateError &&
+            ['upstream_credential_rejected', 'system_credential_rejected'].includes(error.code)
+          )
+            await report('rejected');
+          throw error;
+        }
       },
     });
     const response = initializing ? { result: await connection.initialize() } : await connection.handle(message);
-    await redis.set(key, JSON.stringify(session), 'EX', env.sessionTtlSeconds);
+    await store.touch();
     if (message.id === undefined) return reply.code(202).send();
+    req.monitoring?.rpcResponse(message.id, response);
     return reply.header('mcp-session-id', sid).send({
       jsonrpc: '2.0',
       id: message.id,
       ...(response.error ? { error: response.error } : { result: response.result }),
     });
   } catch (error) {
+    if (initializing) await redis.del(key).catch(() => undefined);
     const failure = error instanceof AggregateError ? error : new AggregateError('upstream_unavailable', 502);
     if (req.monitoring) req.monitoring.error = failure.code;
     return reply.code(failure.status).send({
       error: failure.code,
       ...(failure.upstream ? { upstream_id: failure.upstream } : {}),
-      ...(failure.code === 'connection_required' ? { connect_url: env.connectionsWebUrl } : {}),
+      ...(['connection_required', 'upstream_credential_rejected'].includes(failure.code)
+        ? { connect_url: env.connectionsWebUrl }
+        : {}),
     });
   } finally {
     if (heartbeat) clearInterval(heartbeat);
-    if (locked)
-      await redis
-        .eval(
-          "if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del',KEYS[1]) end return 0",
-          1,
-          lock,
-          token,
-        )
-        .catch(() => undefined);
     releaseSlot();
   }
 }

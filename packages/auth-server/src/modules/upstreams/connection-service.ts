@@ -9,7 +9,11 @@ import {
   users,
   userServerAccess,
 } from '@/auth/infrastructure/database/schema.js';
-import { decryptCredential, encryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
+import {
+  credentialVersion,
+  decryptCredential,
+  encryptCredential,
+} from '@/auth/infrastructure/security/credential-crypto.js';
 import {
   accessTokenValid,
   exchangeOAuthToken,
@@ -59,7 +63,12 @@ export type CredentialResolution =
   | { denied: true }
   | { configChanged: true }
   | { missing: true; system: boolean }
-  | { credential: CredentialHeader | null; revision: number };
+  | {
+      credential: CredentialHeader | null;
+      revision: number;
+      credential_version?: string;
+      validation_status?: 'saved' | 'verified' | 'rejected';
+    };
 
 /**
  * 同一事务内检查用户授权、地址与认证修订号，再读取当前 owner 的凭据。
@@ -98,6 +107,8 @@ export async function resolveUpstreamCredential(
       return {
         credential: { header: s.apiKeyHeader, value: s.apiKeyPrefix + decryptCredential(row.secret) },
         revision: s.authRevision,
+        credential_version: credentialVersion(row.secret),
+        validation_status: row.validationStatus,
       };
     if (shouldRefresh(row.expiresAt, Boolean(row.refreshSecret))) {
       try {
@@ -113,6 +124,8 @@ export async function resolveUpstreamCredential(
               : row.refreshSecret,
           expiresAt: tokenExpiry(body),
           updatedAt: Date.now(),
+          validationStatus: 'verified' as const,
+          validatedAt: Date.now(),
         };
         await tx
           .update(upstreamCredentials)
@@ -121,6 +134,8 @@ export async function resolveUpstreamCredential(
         return {
           credential: { header: 'authorization', value: `Bearer ${body.access_token}` },
           revision: s.authRevision,
+          credential_version: credentialVersion(values.secret),
+          validation_status: 'verified' as const,
         };
       } catch (error) {
         if (error instanceof OAuthTokenError && error.permanent) {
@@ -136,6 +151,8 @@ export async function resolveUpstreamCredential(
       ? {
           credential: { header: 'authorization', value: `Bearer ${decryptCredential(row.secret)}` },
           revision: s.authRevision,
+          credential_version: credentialVersion(row.secret),
+          validation_status: row.validationStatus,
         }
       : { missing: true as const, system };
   });

@@ -16,3 +16,13 @@ export function rpcMethod(body: unknown): string | undefined {
     return undefined;
   }
 }
+
+/** Legacy pools forward JSON-RPC batches; every tool attempt must consume daily quota. */
+export function toolCallCount(body: unknown): number {
+  try {
+    const parsed = Buffer.isBuffer(body) ? JSON.parse(body.toString()) : body;
+    return (Array.isArray(parsed) ? parsed : [parsed]).filter((message) => message?.method === 'tools/call').length;
+  } catch {
+    return 0;
+  }
+}

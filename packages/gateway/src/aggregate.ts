@@ -6,17 +6,18 @@ import type { McpServerConfig } from '@mcp/shared';
 export type Upstream = NonNullable<McpServerConfig['upstreams']>[number];
 type Rpc = { jsonrpc: '2.0'; id?: string | number | null; method: string; params?: Record<string, any> };
 export type Header = { header: string; value: string } | null;
-type Member = {
+export type AggregateMember = {
   sessionId?: string;
   protocolVersion: string;
   revision: number;
+  credentialVersion?: string;
   capabilities: Record<string, any>;
   toolNames?: string[];
 };
 export type AggregateSession = {
   owner: number;
   authVersion: number;
-  members: Record<string, Member>;
+  members: Record<string, AggregateMember>;
   toolRoutes?: Record<string, ToolRoute>;
 };
 export class AggregateError extends Error {
@@ -33,13 +34,20 @@ const nameFor = (u: Upstream, name: string) => `${upstreamNamespace(u.id)}__${na
 const uriFor = (u: Upstream, uri: string) => `mcp-gateway://${upstreamNamespace(u.id)}/${encodeURIComponent(uri)}`;
 
 export interface AggregateDeps {
-  credential(upstream: Upstream): Promise<{ credential: Header; revision: number }>;
+  credential(upstream: Upstream): Promise<{ credential: Header; revision: number; credential_version?: string }>;
   rpc(
     upstream: Upstream,
     message: Rpc,
     header: Header,
-    member?: Member,
+    member?: AggregateMember,
   ): Promise<{ result?: any; error?: any; sessionId?: string }>;
+  prepareMember?(
+    id: string,
+    revision: number,
+    initialize: () => Promise<AggregateMember>,
+    credentialVersion?: string,
+  ): Promise<AggregateMember>;
+  updateSession?<T>(change: (session: AggregateSession) => T): Promise<T>;
 }
 
 /** Concrete upstreams retain separate credentials, capabilities and MCP sessions. */
@@ -49,34 +57,51 @@ export class AggregateConnection {
     readonly session: AggregateSession,
     readonly deps: AggregateDeps,
   ) {}
-  async prepare(u: Upstream) {
-    const auth = await this.deps.credential(u);
+  async prepare(
+    u: Upstream,
+    attempt = 0,
+  ): Promise<{ auth: Awaited<ReturnType<AggregateDeps['credential']>>; member: AggregateMember }> {
+    let auth = await this.deps.credential(u);
     let member = this.session.members[u.id];
-    if (!member || member.revision !== auth.revision) {
-      const initialized = await this.deps.rpc(
-        u,
-        {
-          jsonrpc: '2.0',
-          id: randomUUID(),
-          method: 'initialize',
-          params: {
-            protocolVersion: '2025-03-26',
-            capabilities: {},
-            clientInfo: { name: 'mcp-gateway', version: '1.0.0' },
+    if (!member || member.revision !== auth.revision || member.credentialVersion !== auth.credential_version) {
+      const initialize = async (): Promise<AggregateMember> => {
+        const initialized = await this.deps.rpc(
+          u,
+          {
+            jsonrpc: '2.0',
+            id: randomUUID(),
+            method: 'initialize',
+            params: {
+              protocolVersion: '2025-03-26',
+              capabilities: {},
+              clientInfo: { name: 'mcp-gateway', version: '1.0.0' },
+            },
           },
-        },
-        auth.credential,
-      );
-      if (initialized.error || !initialized.result?.protocolVersion || !initialized.result?.capabilities)
-        throw new AggregateError('upstream_initialize_failed', 502, u.id);
-      member = {
-        sessionId: initialized.sessionId,
-        revision: auth.revision,
-        protocolVersion: initialized.result.protocolVersion,
-        capabilities: initialized.result.capabilities,
+          auth.credential,
+        );
+        if (initialized.error || !initialized.result?.protocolVersion || !initialized.result?.capabilities)
+          throw new AggregateError('upstream_initialize_failed', 502, u.id);
+        const created = {
+          sessionId: initialized.sessionId,
+          revision: auth.revision,
+          credentialVersion: auth.credential_version,
+          protocolVersion: initialized.result.protocolVersion,
+          capabilities: initialized.result.capabilities,
+        };
+        await this.deps.rpc(u, { jsonrpc: '2.0', method: 'notifications/initialized' }, auth.credential, created);
+        return created;
       };
-      await this.deps.rpc(u, { jsonrpc: '2.0', method: 'notifications/initialized' }, auth.credential, member);
+      member = this.deps.prepareMember
+        ? await this.deps.prepareMember(u.id, auth.revision, initialize, auth.credential_version)
+        : await initialize();
       this.session.members[u.id] = member;
+      // Initialization may wait behind another replica or a slow upstream. Recheck revocation before business RPCs.
+      const current = await this.deps.credential(u);
+      if (current.revision !== auth.revision || current.credential_version !== auth.credential_version) {
+        if (attempt >= 2) throw new AggregateError('connection_required', 409, u.id);
+        return this.prepare(u, attempt + 1);
+      }
+      auth = current;
     }
     return { auth, member };
   }
@@ -156,16 +181,22 @@ export class AggregateConnection {
       }),
     );
     if (results.every((r) => r.status === 'rejected')) throw new AggregateError('upstream_unavailable', 502);
+    const catalogs = results.flatMap((result, index) =>
+      result.status === 'fulfilled' ? [{ upstream: this.upstreams[index], tools: result.value }] : [],
+    );
+    const merge = (session: AggregateSession) => {
+      for (const { upstream, tools } of catalogs) {
+        const member = session.members[upstream.id];
+        if (member) member.toolNames = tools.map((tool) => tool.name);
+      }
+      return mergeToolCatalog(this.upstreams, session, catalogs);
+    };
     return {
       [field]:
         field === 'tools'
-          ? mergeToolCatalog(
-              this.upstreams,
-              this.session,
-              results.flatMap((result, index) =>
-                result.status === 'fulfilled' ? [{ upstream: this.upstreams[index], tools: result.value }] : [],
-              ),
-            )
+          ? this.deps.updateSession
+            ? await this.deps.updateSession(merge)
+            : merge(this.session)
           : results.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])),
       _meta: {
         unavailable_upstreams: results.flatMap((r, i) =>
@@ -236,7 +267,7 @@ export async function upstreamRpc(
   u: Upstream,
   message: Rpc,
   header: Header,
-  member?: Member,
+  member?: AggregateMember,
   fetchImpl: typeof fetch = fetch,
 ) {
   const headers: Record<string, string> = {
@@ -262,7 +293,7 @@ export async function upstreamRpc(
           ? 'system_credential_rejected'
           : 'upstream_credential_rejected'
         : 'upstream_unavailable',
-      system ? 503 : 502,
+      response.status === 401 || response.status === 403 ? (system ? 503 : 409) : 502,
       u.id,
     );
   }

@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
 /**
  * Envelope encryption for upstream credentials at rest. The key comes from the
@@ -29,4 +29,9 @@ export function decryptCredential(value: string): string {
   const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(nonce, 'base64url'));
   decipher.setAuthTag(Buffer.from(tag, 'base64url'));
   return Buffer.concat([decipher.update(Buffer.from(ciphertext, 'base64url')), decipher.final()]).toString('utf8');
+}
+
+/** A random encrypted envelope identifies one saved credential without exposing it. */
+export function credentialVersion(secret: string): string {
+  return createHash('sha256').update(secret).digest('hex');
 }

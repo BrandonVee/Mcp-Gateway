@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/auth/infrastructure/database/client.js';
 import {
   mcpServerInstances,
@@ -9,82 +9,109 @@ import {
 } from '@/auth/infrastructure/database/schema.js';
 import type { User } from '@/auth/modules/identity/session-user.js';
 import { ownerFor } from '@/auth/modules/upstreams/connection-service.js';
-import { accessTokenValid } from '@/auth/modules/upstreams/token-exchange.js';
-/** 查询结果只投影业务状态；密钥和令牌不得进入 HTTP DTO。 */
+import { connectionStatus } from '@/auth/modules/upstreams/connection-status.js';
+
+/** Read only authorized owners and metadata; no encrypted credential needs to enter this query. */
 export async function listUpstreamConnections(user: User) {
-  const parents = await db.select().from(mcpServers).where(eq(mcpServers.enabled, true));
-
-  const grants = await db.select().from(userServerAccess).where(eq(userServerAccess.userId, user.id));
-
-  const allowed = new Set(
-    parents
-      .filter((p) => user.role === 'admin' || user.allServers || grants.some((g) => g.serverName === p.name))
-      .map((p) => p.name),
-  );
-
-  const instances = await db.select().from(mcpServerInstances).where(eq(mcpServerInstances.enabled, true));
-
-  const rows = await db
-    .select({
-      instanceId: upstreamCredentials.instanceId,
-      owner: upstreamCredentials.owner,
-      mode: upstreamCredentials.mode,
-      expiresAt: upstreamCredentials.expiresAt,
-      refreshSecret: upstreamCredentials.refreshSecret,
-    })
-    .from(upstreamCredentials);
-
-  const legacy = await db.select().from(userMcpCredentials).where(eq(userMcpCredentials.userId, user.id));
-  return {
-    servers: instances
-      .filter(
-        (s) => allowed.has(s.serverName) && parents.find((p) => p.name === s.serverName)?.routingMode === 'aggregate',
-      )
-      .map((s) => {
-        const system = s.authMode === 'system_oauth';
-        const row = rows.find((r) => r.instanceId === s.id && r.owner === ownerFor(system, user.id));
-        const mode = s.authMode === 'api_key' ? 'api_key' : 'oauth';
-        const status =
-          s.authMode === 'none' || s.authMode === 'system_api_key'
-            ? 'not_required'
-            : !row || row.mode !== mode
-              ? 'not_connected'
-              : !accessTokenValid(row.expiresAt) && !row.refreshSecret
-                ? 'expired'
-                : 'connected';
-        const parent = parents.find((p) => p.name === s.serverName)!;
-        return {
-          name: s.id,
-          endpoint_name: parent.name,
-          endpoint_display_name: parent.displayName,
-          display_name: s.displayName || s.id,
-          description: parent.description,
-          auth_mode: s.authMode,
-          connection_status: status,
-        };
-      })
-      .concat(
-        parents
-          .filter((p) => p.routingMode === 'pool' && allowed.has(p.name))
-          .map((p) => {
-            const row = legacy.find((r) => r.serverName === p.name);
-            return {
-              name: `endpoint:${p.name}`,
-              endpoint_name: p.name,
-              endpoint_display_name: p.displayName,
-              display_name: p.displayName,
-              description: p.description,
-              auth_mode: p.authMode,
-              connection_status:
-                p.authMode === 'none' || p.authMode === 'system_api_key'
-                  ? 'not_required'
-                  : !row || row.mode !== p.authMode
-                    ? 'not_connected'
-                    : !accessTokenValid(row.expiresAt) && !row.refreshSecret
-                      ? 'expired'
-                      : 'connected',
-            };
-          }),
+  const grants = await db
+    .select({ name: userServerAccess.serverName })
+    .from(userServerAccess)
+    .where(eq(userServerAccess.userId, user.id));
+  const names = grants.map((grant) => grant.name);
+  if (user.role !== 'admin' && !user.allServers && !names.length) return { servers: [] };
+  const parents = await db
+    .select()
+    .from(mcpServers)
+    .where(
+      and(
+        eq(mcpServers.enabled, true),
+        user.role === 'admin' || user.allServers ? undefined : inArray(mcpServers.name, names),
       ),
+    );
+  if (!parents.length) return { servers: [] };
+  const parentMap = new Map(parents.map((parent) => [parent.name, parent]));
+  const instances = await db
+    .select()
+    .from(mcpServerInstances)
+    .where(
+      and(
+        eq(mcpServerInstances.enabled, true),
+        inArray(
+          mcpServerInstances.serverName,
+          parents.map((parent) => parent.name),
+        ),
+      ),
+    );
+  const rows = instances.length
+    ? await db
+        .select({
+          instanceId: upstreamCredentials.instanceId,
+          owner: upstreamCredentials.owner,
+          mode: upstreamCredentials.mode,
+          expiresAt: upstreamCredentials.expiresAt,
+          hasRefreshToken: sql<boolean>`${upstreamCredentials.refreshSecret} IS NOT NULL`,
+          validationStatus: upstreamCredentials.validationStatus,
+          validatedAt: upstreamCredentials.validatedAt,
+        })
+        .from(upstreamCredentials)
+        .where(
+          and(
+            inArray(
+              upstreamCredentials.instanceId,
+              instances.map((instance) => instance.id),
+            ),
+            inArray(upstreamCredentials.owner, [ownerFor(false, user.id), 'system']),
+          ),
+        )
+    : [];
+  const linked = new Map(rows.map((row) => [JSON.stringify([row.instanceId, row.owner]), row]));
+  const legacy = await db
+    .select({
+      serverName: userMcpCredentials.serverName,
+      mode: userMcpCredentials.mode,
+      expiresAt: userMcpCredentials.expiresAt,
+      hasRefreshToken: sql<boolean>`${userMcpCredentials.refreshSecret} IS NOT NULL`,
+      validationStatus: userMcpCredentials.validationStatus,
+      validatedAt: userMcpCredentials.validatedAt,
+    })
+    .from(userMcpCredentials)
+    .where(eq(userMcpCredentials.userId, user.id));
+  const legacyMap = new Map(legacy.map((row) => [row.serverName, row]));
+  return {
+    servers: [
+      ...instances
+        .filter((instance) => parentMap.get(instance.serverName)?.routingMode === 'aggregate')
+        .map((instance) => {
+          const parent = parentMap.get(instance.serverName)!;
+          const row = linked.get(
+            JSON.stringify([instance.id, ownerFor(instance.authMode === 'system_oauth', user.id)]),
+          );
+          return {
+            name: instance.id,
+            endpoint_name: parent.name,
+            endpoint_display_name: parent.displayName,
+            display_name: instance.displayName || instance.id,
+            description: parent.description,
+            auth_mode: instance.authMode,
+            connection_status: connectionStatus(instance.authMode, row),
+            validated_at: row?.validatedAt ?? null,
+          };
+        }),
+      ...parents
+        .filter((parent) => parent.routingMode === 'pool')
+        .map((parent) => {
+          const row = legacyMap.get(parent.name);
+          return {
+            name: `endpoint:${parent.name}`,
+            endpoint_name: parent.name,
+            endpoint_display_name: parent.displayName,
+            display_name: parent.displayName,
+            description: parent.description,
+            auth_mode: parent.authMode,
+            connection_status: connectionStatus(parent.authMode, row),
+            validated_at: row?.validatedAt ?? null,
+          };
+        }),
+    ],
   };
 }

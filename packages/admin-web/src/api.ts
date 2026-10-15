@@ -295,6 +295,10 @@ export function apiForSession(session?: PlatformSession) {
             enabled?: boolean;
             signup_access?: boolean;
             routing_mode?: 'pool' | 'aggregate';
+            monitoring_logs_enabled?: boolean;
+            user_rate_limit_per_minute?: number;
+            user_daily_quota?: number;
+            user_max_concurrent?: number;
           }
         | ServerAuthInput,
     ) =>
@@ -359,6 +363,11 @@ export function apiForSession(session?: PlatformSession) {
     signupSendCode: (email: string) =>
       request<{ ok: boolean }>('/api/me/signup/send-code', { method: 'POST', body: JSON.stringify({ email }) }),
     myServers: () => request<{ servers: ConnectionServer[] }>('/api/me/upstreams'),
+    testMyConnection: (name: string) =>
+      request<UpstreamTestResult>(
+        `${name.startsWith('endpoint:') ? '/api/me/servers/' + encodeURIComponent(name.slice(9)) : '/api/me/upstreams/' + encodeURIComponent(name)}/test-connection`,
+        { method: 'POST' },
+      ),
     saveApiKey: (name: string, apiKey: string) =>
       request(
         `${name.startsWith('endpoint:') ? '/api/me/servers/' + encodeURIComponent(name.slice(9)) : '/api/me/upstreams/' + encodeURIComponent(name)}/credential`,

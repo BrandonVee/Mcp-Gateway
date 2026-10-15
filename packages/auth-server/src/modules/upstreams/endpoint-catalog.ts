@@ -23,6 +23,10 @@ export async function listEndpointCatalog() {
       description: mcpServers.description,
       enabled: mcpServers.enabled,
       signupAccess: mcpServers.signupAccess,
+      monitoringLogsEnabled: mcpServers.monitoringLogsEnabled,
+      userRateLimitPerMinute: mcpServers.userRateLimitPerMinute,
+      userDailyQuota: mcpServers.userDailyQuota,
+      userMaxConcurrent: mcpServers.userMaxConcurrent,
       authMode: mcpServers.authMode,
       apiKeyHeader: mcpServers.apiKeyHeader,
       apiKeyPrefix: mcpServers.apiKeyPrefix,
@@ -43,60 +47,66 @@ export async function listEndpointCatalog() {
     .groupBy(mcpServers.name)
     .orderBy(mcpServers.name);
 
-  const serverDtos = await Promise.all(
-    rows.map(async (row) => {
-      const instances = await db
-        .select()
-        .from(mcpServerInstances)
-        .where(eq(mcpServerInstances.serverName, row.name))
-        .orderBy(mcpServerInstances.id);
-      const systemConnections = await db
-        .select({ instanceId: upstreamCredentials.instanceId })
-        .from(upstreamCredentials)
-        .where(eq(upstreamCredentials.owner, 'system'));
-      return {
-        name: row.name,
-        routing_mode: row.routingMode,
-        display_name: row.displayName,
-        description: row.description,
-        enabled: row.enabled,
-        signup_access: row.signupAccess,
-        auth_mode: row.authMode,
-        api_key_header: row.apiKeyHeader,
-        api_key_prefix: row.apiKeyPrefix,
-        system_api_key_configured: row.systemApiKeyConfigured,
-        oauth_authorize_url: row.oauthAuthorizeUrl,
-        oauth_token_url: row.oauthTokenUrl,
-        oauth_client_id: row.oauthClientId,
-        oauth_scopes: row.oauthScopes,
-        oauth_resource: row.oauthResource,
-        oauth_issuer: row.oauthIssuer,
-        oauth_client_auth_method: row.oauthClientAuthMethod,
-        oauth_client_secret_configured: row.oauthClientSecretConfigured,
-        user_count: Number(row.userCount) + Number(wildcardUserCount),
-        created_at: row.createdAt,
-        instances: instances.map((instance) => ({
-          id: instance.id,
-          url: instance.url,
-          enabled: instance.enabled,
-          display_name: instance.displayName,
-          auth_mode: instance.authMode,
-          api_key_header: instance.apiKeyHeader,
-          api_key_prefix: instance.apiKeyPrefix,
-          system_api_key_configured: Boolean(instance.systemApiKey),
-          oauth_authorize_url: instance.oauthAuthorizeUrl,
-          oauth_token_url: instance.oauthTokenUrl,
-          oauth_client_id: instance.oauthClientId,
-          oauth_client_secret_configured: Boolean(instance.oauthClientSecret),
-          oauth_scopes: instance.oauthScopes,
-          oauth_resource: instance.oauthResource,
-          oauth_issuer: instance.oauthIssuer,
-          oauth_client_auth_method: instance.oauthClientAuthMethod,
-          system_oauth_connected: systemConnections.some((c) => c.instanceId === instance.id),
-        })),
-      };
-    }),
-  );
+  const allInstances = await db.select().from(mcpServerInstances).orderBy(mcpServerInstances.id);
+  const systemConnections = await db
+    .select({ instanceId: upstreamCredentials.instanceId })
+    .from(upstreamCredentials)
+    .where(eq(upstreamCredentials.owner, 'system'));
+  const connected = new Set(systemConnections.map((connection) => connection.instanceId));
+  const grouped = new Map<string, typeof allInstances>();
+  for (const instance of allInstances) {
+    const group = grouped.get(instance.serverName) ?? [];
+    group.push(instance);
+    grouped.set(instance.serverName, group);
+  }
+  const serverDtos = rows.map((row) => {
+    const instances = grouped.get(row.name) ?? [];
+    return {
+      name: row.name,
+      routing_mode: row.routingMode,
+      display_name: row.displayName,
+      description: row.description,
+      enabled: row.enabled,
+      signup_access: row.signupAccess,
+      monitoring_logs_enabled: row.monitoringLogsEnabled,
+      user_rate_limit_per_minute: row.userRateLimitPerMinute,
+      user_daily_quota: row.userDailyQuota,
+      user_max_concurrent: row.userMaxConcurrent,
+      auth_mode: row.authMode,
+      api_key_header: row.apiKeyHeader,
+      api_key_prefix: row.apiKeyPrefix,
+      system_api_key_configured: row.systemApiKeyConfigured,
+      oauth_authorize_url: row.oauthAuthorizeUrl,
+      oauth_token_url: row.oauthTokenUrl,
+      oauth_client_id: row.oauthClientId,
+      oauth_scopes: row.oauthScopes,
+      oauth_resource: row.oauthResource,
+      oauth_issuer: row.oauthIssuer,
+      oauth_client_auth_method: row.oauthClientAuthMethod,
+      oauth_client_secret_configured: row.oauthClientSecretConfigured,
+      user_count: Number(row.userCount) + Number(wildcardUserCount),
+      created_at: row.createdAt,
+      instances: instances.map((instance) => ({
+        id: instance.id,
+        url: instance.url,
+        enabled: instance.enabled,
+        display_name: instance.displayName,
+        auth_mode: instance.authMode,
+        api_key_header: instance.apiKeyHeader,
+        api_key_prefix: instance.apiKeyPrefix,
+        system_api_key_configured: Boolean(instance.systemApiKey),
+        oauth_authorize_url: instance.oauthAuthorizeUrl,
+        oauth_token_url: instance.oauthTokenUrl,
+        oauth_client_id: instance.oauthClientId,
+        oauth_client_secret_configured: Boolean(instance.oauthClientSecret),
+        oauth_scopes: instance.oauthScopes,
+        oauth_resource: instance.oauthResource,
+        oauth_issuer: instance.oauthIssuer,
+        oauth_client_auth_method: instance.oauthClientAuthMethod,
+        system_oauth_connected: connected.has(instance.id),
+      })),
+    };
+  });
   return {
     servers: serverDtos,
   };

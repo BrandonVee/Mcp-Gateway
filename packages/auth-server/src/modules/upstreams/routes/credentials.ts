@@ -25,6 +25,8 @@ export function registerCredentialsRoutes(router: Hono) {
         secret: encryptCredential(key),
         refreshSecret: null,
         expiresAt: null,
+        validationStatus: 'saved' as const,
+        validatedAt: null,
         updatedAt: Date.now(),
       };
       await tx
@@ -33,7 +35,7 @@ export function registerCredentialsRoutes(router: Hono) {
         .onConflictDoUpdate({ target: [upstreamCredentials.instanceId, upstreamCredentials.owner], set: values });
       return true;
     });
-    return saved ? c.json({ connection_status: 'connected' }) : c.json({ error: 'server_changed_or_denied' }, 409);
+    return saved ? c.json({ connection_status: 'saved' }) : c.json({ error: 'server_changed_or_denied' }, 409);
   });
 
   router.delete('/me/upstreams/:id/credential', async (c) => {

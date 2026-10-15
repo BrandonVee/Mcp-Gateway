@@ -1,5 +1,20 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
+  'serverDialog.invalidLimit': '请输入范围内的整数，0 表示不限。',
+  'serverDialog.userRateLimit': '每用户每分钟请求数',
+  'serverDialog.userDailyQuota': '每用户每日工具调用次数',
+  'serverDialog.userConcurrency': '每用户同时请求数',
+  'serverDialog.limitHelp': '每个用户在此逻辑端点单独计数，0 表示不限。',
+  'serverDialog.dailyQuotaHelp': '按已受理的工具调用计数，失败调用也计入；每天 UTC 00:00重置，0 表示不限。',
+  'serverDialog.captureContent': '记录调用输入输出',
+  'serverDialog.captureContentHelp':
+    '默认仅记录调用元数据。开启后管理员可查看此端点的输入输出，同时受系统调用明细开关控制。',
+  'connections.saved': '已保存，待验证',
+  'connections.rejected': '凭据被拒绝',
+  'connections.testConnection': '验证连接',
+  'connections.saveAndVerify': '保存并验证',
+  'connections.savedNeedsAttention': '密钥已保存，连接验证未通过，请查看服务下方的原因。',
+  'connections.savedTestUnavailable': '密钥已保存，暂时无法验证，可稍后点击“验证连接”。',
   'mcpTest.action': '测试 MCP 连接',
   'mcpTest.credentialRequired': '请填写测试用的密钥，或完成此上游的账号授权。',
   'mcpTest.help': '使用当前表单配置测试连接，不会保存或替换正式配置。',

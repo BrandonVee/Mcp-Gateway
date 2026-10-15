@@ -15,6 +15,7 @@ import { currentUser } from '@/auth/modules/identity/session-user.js';
 import { exchangeOAuthToken, tokenExpiry } from '@/auth/modules/upstreams/token-exchange.js';
 import { accessibleServer } from '@/auth/modules/connections/pool/service.js';
 import { lockAccessibleConnection, revokeUserConnection } from '@/auth/modules/connections/lifecycle.js';
+import { connectionStatus } from '@/auth/modules/upstreams/connection-status.js';
 /** Pool-mode connection routes; parent middleware protects browser writes. */
 export function registerPoolConnectionRoutes(router: Hono) {
   router.get('/me/servers', async (c) => {
@@ -44,6 +45,7 @@ export function registerPoolConnectionRoutes(router: Hono) {
         mode: userMcpCredentials.mode,
         expiresAt: userMcpCredentials.expiresAt,
         refreshSecret: userMcpCredentials.refreshSecret,
+        validationStatus: userMcpCredentials.validationStatus,
       })
       .from(userMcpCredentials)
       .where(eq(userMcpCredentials.userId, user.id));
@@ -58,14 +60,10 @@ export function registerPoolConnectionRoutes(router: Hono) {
             display_name: server.displayName,
             description: server.description,
             auth_mode: server.authMode,
-            connection_status:
-              server.authMode === 'none' || server.authMode === 'system_api_key'
-                ? 'not_required'
-                : !credential || credential.mode !== server.authMode
-                  ? 'not_connected'
-                  : credential.expiresAt && credential.expiresAt <= Date.now() && !credential.refreshSecret
-                    ? 'expired'
-                    : 'connected',
+            connection_status: connectionStatus(
+              server.authMode,
+              credential ? { ...credential, hasRefreshToken: Boolean(credential.refreshSecret) } : undefined,
+            ),
           };
         }),
     });
@@ -95,13 +93,15 @@ export function registerPoolConnectionRoutes(router: Hono) {
             secret,
             refreshSecret: null,
             expiresAt: null,
+            validationStatus: 'saved',
+            validatedAt: null,
             updatedAt: now,
           },
         });
       return true;
     });
     if (!saved) return c.json({ error: 'server_changed_or_denied' }, 409);
-    return c.json({ connection_status: 'connected' });
+    return c.json({ connection_status: 'saved' });
   });
 
   router.delete('/me/servers/:name/credential', async (c) => {
@@ -217,11 +217,15 @@ export function registerPoolConnectionRoutes(router: Hono) {
           refreshSecret: refresh,
           expiresAt,
           updatedAt: now,
+          validationStatus: 'verified',
+          validatedAt: now,
         })
         .onConflictDoUpdate({
           target: [userMcpCredentials.userId, userMcpCredentials.serverName],
           set: {
             mode: 'oauth',
+            validationStatus: 'verified',
+            validatedAt: now,
             secret,
             refreshSecret: refresh,
             expiresAt,

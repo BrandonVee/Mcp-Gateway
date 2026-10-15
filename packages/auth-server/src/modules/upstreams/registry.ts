@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { db } from '@/auth/infrastructure/database/client.js';
 import { mcpServerInstances, mcpServers, userServerAccess, users } from '@/auth/infrastructure/database/schema.js';
 import { bearerTokenMatches } from '@/shared/security/bearer.js';
+import { createHash } from 'node:crypto';
 
 /** Internal control-plane endpoint consumed by every gateway replica. */
 export function createRegistryRouter(): Hono {
@@ -23,31 +24,51 @@ export function createRegistryRouter(): Hono {
         displayName: mcpServers.displayName,
         authMode: mcpServers.authMode,
         routingMode: mcpServers.routingMode,
+        monitoringLogsEnabled: mcpServers.monitoringLogsEnabled,
+        perMinute: mcpServers.userRateLimitPerMinute,
+        daily: mcpServers.userDailyQuota,
+        concurrent: mcpServers.userMaxConcurrent,
       })
       .from(mcpServers)
       .where(eq(mcpServers.enabled, true))
       .orderBy(mcpServers.name);
 
-    const result = await Promise.all(
-      servers.map(async (server) => {
-        const instances = await db
-          .select({
-            id: mcpServerInstances.id,
-            displayName: mcpServerInstances.displayName,
-            url: mcpServerInstances.url,
-            authMode: mcpServerInstances.authMode,
-          })
-          .from(mcpServerInstances)
-          .where(and(eq(mcpServerInstances.serverName, server.name), eq(mcpServerInstances.enabled, true)))
-          .orderBy(mcpServerInstances.id);
-        return { ...server, instances, ...(server.routingMode === 'aggregate' ? { upstreams: instances } : {}) };
-      }),
-    );
+    const allInstances = await db
+      .select({
+        serverName: mcpServerInstances.serverName,
+        id: mcpServerInstances.id,
+        displayName: mcpServerInstances.displayName,
+        url: mcpServerInstances.url,
+        authMode: mcpServerInstances.authMode,
+      })
+      .from(mcpServerInstances)
+      .where(eq(mcpServerInstances.enabled, true))
+      .orderBy(mcpServerInstances.id);
+    const grouped = new Map<string, typeof allInstances>();
+    for (const instance of allInstances) {
+      const group = grouped.get(instance.serverName) ?? [];
+      group.push(instance);
+      grouped.set(instance.serverName, group);
+    }
+    const result = servers.map(({ perMinute, daily, concurrent, ...server }) => {
+      const instances = (grouped.get(server.name) ?? []).map(({ serverName: _parent, ...instance }) => instance);
+      return {
+        ...server,
+        userLimits: { perMinute, daily, concurrent },
+        instances,
+        ...(server.routingMode === 'aggregate' ? { upstreams: instances } : {}),
+      };
+    });
 
-    return c.json({
+    const payload = {
       servers: result.filter((server) => server.instances.length > 0),
       ...(process.env.SYSTEM_CONFIG_MODE !== 'file' ? { system_settings: currentSystemSettings() } : {}),
-    });
+    };
+    const etag = `"${createHash('sha256').update(JSON.stringify(payload)).digest('hex')}"`;
+    c.header('ETag', etag);
+    c.header('Cache-Control', 'private, no-cache');
+    if (c.req.header('if-none-match') === etag) return c.body(null, 304);
+    return c.json(payload);
   });
 
   // Recheck mutable authorization state so disabling a user or removing a grant
