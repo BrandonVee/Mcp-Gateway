@@ -683,7 +683,11 @@ export function SettingsPage({
                         update.release_check_failures?.map((failure) => (
                           <p key={failure.source}>
                             {t('settings.updateSourceFailure', {
-                              source: failure.source === 'github' ? 'GitHub' : 'Docker Hub',
+                              source: {
+                                github: 'GitHub',
+                                dockerhub: 'Docker Hub',
+                                docker_registry: 'Docker Registry',
+                              }[failure.source],
                               reason: t(`settings.updateFailure.${failure.reason}`),
                             })}
                             {failure.http_status ? ` (HTTP ${failure.http_status})` : ''}

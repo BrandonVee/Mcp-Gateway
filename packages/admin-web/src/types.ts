@@ -72,7 +72,7 @@ export interface SystemUpdateStatus {
   releases: Array<{ tag: string; version: string; digest: string }>;
   release_check_error: boolean;
   release_check_failures?: Array<{
-    source: 'github' | 'dockerhub';
+    source: 'github' | 'dockerhub' | 'docker_registry';
     reason:
       'timeout' | 'dns' | 'tls' | 'network' | 'rate_limited' | 'http' | 'invalid_response' | 'proxy_configuration';
     http_status?: number;

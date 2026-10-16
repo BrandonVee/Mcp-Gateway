@@ -146,6 +146,10 @@ location / {
 
 ## 更新、日志和备份
 
+后台版本检测并行查询 GitHub Releases、Docker Hub API 和 Docker Registry，任一来源成功即可显示版本。源码仓库为私有仓库，匿名 GitHub 查询返回 404 不代表没有新版本；Registry 使用公开镜像的匿名拉取权限，无需配置 GitHub Token。Registry 备用来源按版本号排序并保留最近 20 个稳定版本，通过 manifest 的不可变 digest 固定更新目标。
+
+如果版本检查失败，`release_check_failures` 会分别报告各来源的失败原因。`update_available: null` 表示暂时无法判断更新状态。请从应用容器内检查对 `hub.docker.com`、`auth.docker.io` 和 `registry-1.docker.io` 的 HTTPS 出站连接；宿主机能拉取镜像不代表容器内能访问这些接口。需要代理时，为应用容器配置 `HTTPS_PROXY` / `HTTP_PROXY`（支持 `http://` 或 `https://` 地址）及适当的 `NO_PROXY`，重建容器后重试。Docker daemon 拉取镜像的代理需在 daemon 中单独配置。
+
 旧版统一应用容器可能名为 `mcp-gateway-mcp-server-1`。更新 Compose 配置后重新部署，Compose 会重建为 `mcp-gateway-server`；一键部署执行 `./scripts/deploy.sh --yes`，沿用现有配置。后台镜像更新会保留当前容器名称，不会仅因镜像升级而改名。希望立即改名且不中断服务时，可执行：
 
 ```bash

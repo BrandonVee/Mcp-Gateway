@@ -78,7 +78,7 @@ export function parseImageTags(data: unknown): UpdateRelease[] {
 export type ReleaseFailureReason =
   'timeout' | 'dns' | 'tls' | 'network' | 'rate_limited' | 'http' | 'invalid_response' | 'proxy_configuration';
 export interface ReleaseCheckFailure {
-  source: 'github' | 'dockerhub';
+  source: 'github' | 'dockerhub' | 'docker_registry';
   reason: ReleaseFailureReason;
   http_status?: number;
 }
@@ -135,6 +135,65 @@ export function createReleaseDispatcher(env: NodeJS.ProcessEnv = process.env): D
 }
 let dispatcher: Dispatcher | undefined;
 
+type ReleaseRequest = (url: string, init?: RequestInit) => Promise<Response>;
+const registryRepository = 'https://registry-1.docker.io/v2/brandonvee/mcp-gateway';
+const manifestTypes = [
+  'application/vnd.oci.image.index.v1+json',
+  'application/vnd.docker.distribution.manifest.list.v2+json',
+  'application/vnd.oci.image.manifest.v1+json',
+  'application/vnd.docker.distribution.manifest.v2+json',
+];
+
+/** Public pull access works independently of the Hub API and private GitHub releases. */
+async function fetchRegistryReleases(request: ReleaseRequest): Promise<UpdateRelease[]> {
+  const auth = await request(
+    'https://auth.docker.io/token?service=registry.docker.io&scope=repository:brandonvee/mcp-gateway:pull',
+  );
+  const credentials = (await auth.json()) as { token?: unknown } | null;
+  if (typeof credentials?.token !== 'string' || !credentials.token || /[\r\n]/.test(credentials.token))
+    throw new SyntaxError('invalid registry token');
+  const headers = { Authorization: `Bearer ${credentials.token}` };
+  const versions = new Set<string>();
+  let last = '';
+  for (let page = 0; ; page++) {
+    if (page === 10) throw new SyntaxError('registry tag pagination limit');
+    const response = await request(
+      `${registryRepository}/tags/list?n=1000${last ? `&last=${encodeURIComponent(last)}` : ''}`,
+      { headers },
+    );
+    const data = (await response.json()) as { tags?: unknown } | null;
+    if (!Array.isArray(data?.tags) || !data.tags.every((tag) => typeof tag === 'string'))
+      throw new SyntaxError('invalid registry tags');
+    for (const tag of data.tags) {
+      const version = stableVersion(tag);
+      if (version && tag === `v${version}`) versions.add(version);
+    }
+    if (!/rel="?next"?/.test(response.headers.get('link') ?? '')) break;
+    const next = data.tags.at(-1);
+    if (!next || next === last) throw new SyntaxError('invalid registry pagination');
+    // Construct the cursor locally; never forward the pull token to a Link URL.
+    last = next;
+  }
+  // Bound requests while retaining recent rollback targets. HEAD does not pull image layers.
+  return Promise.all(
+    [...versions]
+      .sort((a, b) => compareVersions(b, a))
+      .slice(0, 20)
+      .map(async (version) => {
+        const response = await request(`${registryRepository}/manifests/v${version}`, {
+          method: 'HEAD',
+          headers: { ...headers, Accept: manifestTypes.join(', ') },
+        });
+        const digest = response.headers.get('docker-content-digest');
+        const contentType = response.headers.get('content-type')?.split(';')[0].trim();
+        await response.body?.cancel();
+        if (!digest || !/^sha256:[a-f\d]{64}$/.test(digest) || !manifestTypes.includes(contentType ?? ''))
+          throw new SyntaxError('invalid registry manifest');
+        return { tag: `v${version}`, version, digest };
+      }),
+  );
+}
+
 export async function fetchPublishedReleases(fetchImpl: typeof fetch = fetch): Promise<UpdateRelease[]> {
   const sources = [
     {
@@ -147,9 +206,11 @@ export async function fetchPublishedReleases(fetchImpl: typeof fetch = fetch): P
       url: 'https://hub.docker.com/v2/namespaces/brandonvee/repositories/mcp-gateway/tags?page_size=100&name=v',
       parse: parseImageTags,
     },
+    { source: 'docker_registry' as const, load: fetchRegistryReleases },
   ];
   const controllers = sources.map(() => new AbortController());
-  const tasks = sources.map(async ({ source, url, parse }, index) => {
+  const tasks = sources.map(async (entry, index) => {
+    const { source } = entry;
     let transport: Dispatcher;
     try {
       transport = dispatcher ??= createReleaseDispatcher();
@@ -165,34 +226,45 @@ export async function fetchPublishedReleases(fetchImpl: typeof fetch = fetch): P
         },
         signal: AbortSignal.any([AbortSignal.timeout(15_000), controllers[index].signal]),
         dispatcher: transport,
+        redirect: 'error',
       };
-      const response = await fetchImpl(url, options);
-      if (!response.ok) {
-        await response.body?.cancel();
-        throw new SourceLookupError({
-          source,
-          reason:
-            response.status === 429 || response.headers.get('x-ratelimit-remaining') === '0' ? 'rate_limited' : 'http',
-          http_status: response.status,
+      const request: ReleaseRequest = async (url, init) => {
+        const response = await fetchImpl(url, {
+          ...options,
+          ...init,
+          headers: { ...options.headers, ...init?.headers },
         });
+        if (!response.ok) {
+          await response.body?.cancel();
+          throw new SourceLookupError({
+            source,
+            reason:
+              response.status === 429 || response.headers.get('x-ratelimit-remaining') === '0'
+                ? 'rate_limited'
+                : 'http',
+            http_status: response.status,
+          });
+        }
+        return response;
+      };
+      let releases: UpdateRelease[];
+      if (entry.load) releases = await entry.load(request);
+      else {
+        const data: unknown = await (await request(entry.url)).json();
+        try {
+          releases = entry.parse(data);
+        } catch {
+          throw new SyntaxError('invalid release metadata');
+        }
       }
-      let data: unknown;
-      try {
-        data = await response.json();
-      } catch (error) {
-        if (error instanceof SyntaxError) throw new SourceLookupError({ source, reason: 'invalid_response' });
-        throw error;
-      }
-      try {
-        const releases = parse(data);
-        if (!releases.length) throw new Error('no published images');
-        return releases;
-      } catch {
-        throw new SourceLookupError({ source, reason: 'invalid_response' });
-      }
+      if (!releases.length) throw new SyntaxError('no published images');
+      return releases;
     } catch (error) {
       if (error instanceof SourceLookupError) throw error;
+      if (error instanceof SyntaxError) throw new SourceLookupError({ source, reason: 'invalid_response' });
       throw new SourceLookupError({ source, reason: releaseFailureReason(error) });
+    } finally {
+      controllers[index].abort();
     }
   });
   try {

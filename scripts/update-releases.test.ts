@@ -132,7 +132,7 @@ test('status, cached release checks and selected updates use the running image a
     assert.equal(status.update_available, true);
     assert.equal(status.release_check_error, false);
     await getUpdateStatus(env);
-    assert.equal(checks, 2);
+    assert.equal(checks, 3);
     currentDigest = digest;
     assert.equal((await getUpdateStatus(env)).update_available, false);
     await assert.rejects(startUpdate(env, 'v999.0.0'), /invalid_update_version/);
@@ -187,7 +187,7 @@ test('GitHub failures fall back to published Docker Hub digests without requirin
     calls.push(String(url));
     return calls.length === 1 ? new Response('{}', { status: 403 }) : new Response(JSON.stringify(hub));
   });
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.match(calls[1], /^https:\/\/hub\.docker\.com\//);
   assert.deepEqual(
     releases.map((release) => release.tag),
@@ -199,7 +199,7 @@ test('GitHub failures fall back to published Docker Hub digests without requirin
     fetchPublishedReleases(async () => new Response('{}', { status: 429 })),
     (error: unknown) =>
       error instanceof ReleaseLookupError &&
-      error.failures.length === 2 &&
+      error.failures.length === 3 &&
       error.failures.every((failure) => failure.reason === 'rate_limited' && failure.http_status === 429),
   );
   await assert.rejects(
@@ -208,9 +208,130 @@ test('GitHub failures fall back to published Docker Hub digests without requirin
     }),
     (error: unknown) =>
       error instanceof ReleaseLookupError &&
-      error.failures.length === 2 &&
+      error.failures.length === 3 &&
       error.failures.every((failure) => failure.reason === 'network'),
   );
+});
+
+test('private GitHub and timed-out Hub API fall back to sorted, digest-pinned registry releases', async () => {
+  const registry = 'https://registry-1.docker.io/v2/brandonvee/mcp-gateway';
+  const calls: string[] = [];
+  const signals = new Set<AbortSignal>();
+  const releases = await fetchPublishedReleases(async (input, init) => {
+    const url = String(input);
+    calls.push(url);
+    const headers = new Headers(init?.headers);
+    assert.equal(init?.redirect, 'error');
+    if (!url.startsWith(registry)) assert.equal(headers.has('Authorization'), false);
+    if (url.includes('api.github.com')) return new Response('{}', { status: 404 });
+    if (url.includes('hub.docker.com')) throw new DOMException('timed out', 'TimeoutError');
+    signals.add(init!.signal!);
+    if (url.startsWith('https://auth.docker.io/token?')) return Response.json({ token: 'public-pull-token' });
+    assert.equal(headers.get('Authorization'), 'Bearer public-pull-token');
+    if (url === `${registry}/tags/list?n=1000`)
+      return Response.json(
+        { tags: ['latest', 'v0.9.0', 'v0.14.0-beta', '0.15.0', 'v01.2.3'] },
+        { headers: { Link: '<https://untrusted.example/tags>; rel="next"' } },
+      );
+    if (url === `${registry}/tags/list?n=1000&last=v01.2.3`)
+      return Response.json({ tags: ['v0.14.0', 'v0.9.0', 'v0.13.3'] });
+    assert.equal(init?.method, 'HEAD');
+    assert.match(headers.get('Accept')!, /application\/vnd\.oci\.image\.index\.v1\+json/);
+    assert.match(url, /\/manifests\/v0\.(9\.0|13\.3|14\.0)$/);
+    return new Response(null, {
+      headers: {
+        'Docker-Content-Digest': url.endsWith('v0.14.0') ? digest : oldDigest,
+        'Content-Type': 'application/vnd.oci.image.index.v1+json',
+      },
+    });
+  });
+  assert.deepEqual(releases, [
+    { tag: 'v0.14.0', version: '0.14.0', digest },
+    { tag: 'v0.13.3', version: '0.13.3', digest: oldDigest },
+    { tag: 'v0.9.0', version: '0.9.0', digest: oldDigest },
+  ]);
+  assert.equal(calls.length, 8);
+  assert.equal(signals.size, 1, 'the entire registry lookup shares one deadline and cancellation signal');
+  assert.equal([...signals][0].aborted, true);
+});
+
+test('registry fallback bounds manifest lookups to the newest 20 stable versions', async () => {
+  const manifests: string[] = [];
+  const releases = await fetchPublishedReleases(async (input) => {
+    const url = String(input);
+    if (url.includes('api.github.com') || url.includes('hub.docker.com')) return new Response('{}', { status: 404 });
+    if (url.includes('auth.docker.io')) return Response.json({ token: 'public-pull-token' });
+    if (url.includes('/tags/list')) return Response.json({ tags: Array.from({ length: 25 }, (_, i) => `v0.${i}.0`) });
+    manifests.push(url);
+    return new Response(null, {
+      headers: {
+        'Docker-Content-Digest': digest,
+        'Content-Type': 'application/vnd.docker.distribution.manifest.list.v2+json',
+      },
+    });
+  });
+  assert.equal(manifests.length, 20);
+  assert.equal(releases.length, 20);
+  assert.equal(releases[0].version, '0.24.0');
+  assert.equal(releases.at(-1)?.version, '0.5.0');
+});
+
+test('registry fallback rejects invalid metadata and preserves safe HTTP failure details', async (t) => {
+  for (const scenario of ['token', 'tags', 'empty', 'pagination', 'digest', 'type', 'rate_limit']) {
+    await t.test(scenario, async () => {
+      await assert.rejects(
+        fetchPublishedReleases(async (input) => {
+          const url = String(input);
+          if (url.includes('api.github.com') || url.includes('hub.docker.com'))
+            return new Response('{}', { status: 404 });
+          if (url.includes('auth.docker.io')) return Response.json({ token: scenario === 'token' ? null : 'secret' });
+          if (url.includes('/tags/list'))
+            return Response.json(
+              { tags: scenario === 'tags' ? [null] : scenario === 'empty' ? ['latest'] : ['v0.14.0'] },
+              { headers: scenario === 'pagination' ? { Link: '</tags>; rel="next"' } : {} },
+            );
+          return new Response(null, {
+            status: scenario === 'rate_limit' ? 429 : 200,
+            headers: {
+              'Docker-Content-Digest': scenario === 'digest' ? 'invalid' : digest,
+              'Content-Type': scenario === 'type' ? 'application/json' : 'application/vnd.oci.image.index.v1+json',
+            },
+          });
+        }),
+        (error: unknown) => {
+          assert.ok(error instanceof ReleaseLookupError);
+          assert.deepEqual(error.failures, [
+            { source: 'github', reason: 'http', http_status: 404 },
+            { source: 'dockerhub', reason: 'http', http_status: 404 },
+            {
+              source: 'docker_registry',
+              reason: scenario === 'rate_limit' ? 'rate_limited' : 'invalid_response',
+              ...(scenario === 'rate_limit' ? { http_status: 429 } : {}),
+            },
+          ]);
+          return true;
+        },
+      );
+    });
+  }
+});
+
+test('a successful Hub catalog cancels a pending registry request', async () => {
+  let cancelled = false;
+  const releases = await fetchPublishedReleases(async (input, init) => {
+    const url = String(input);
+    if (url.includes('api.github.com')) return new Response('{}', { status: 404 });
+    if (url.includes('hub.docker.com'))
+      return Response.json({ results: [{ name: 'v0.14.0', tag_status: 'active', digest }] });
+    return new Promise<Response>((_resolve, reject) => {
+      init!.signal!.addEventListener('abort', () => {
+        cancelled = true;
+        reject(new DOMException('aborted', 'AbortError'));
+      });
+    });
+  });
+  assert.equal(releases[0].version, '0.14.0');
+  assert.equal(cancelled, true);
 });
 
 test('worker status distinguishes running, failed, removed and unrelated Docker containers', async () => {
