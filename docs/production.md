@@ -225,7 +225,7 @@ curl --fail https://YOUR_DOMAIN/gateway/health
 
 1. `ci.yml` 的类型检查、单元测试、MCP/OAuth/监控测试和单机升级备份演练全部通过后，`release` 任务按 conventional commits 算出下一个版本号（首版 `v0.1.0`；之后普通提交递增补丁版本，`feat:` 递增次版本，`!` 或 `BREAKING CHANGE:` 递增主版本）。
 2. 该任务用 `workflow_dispatch` 调用 `release.yml` 并传入版本号与提交。用 `GITHUB_TOKEN` 创建的标签不会再触发工作流，所以不能用“打标签再等触发”的方式。
-3. `release.yml` 解析要发布的提交，并从默认分支读取发布脚本（旧标签也能用当前脚本重发）。两个原生 Runner 分别构建 `Dockerfile.production` 的 `app` 目标并按 digest 推送；两者全部成功后才合并清单、写入镜像标签。校验清单同时包含两个架构后，由 `github-actions[bot]` 创建版本标签和 [GitHub Release](https://github.com/BrandonVee/Mcp-Gateway/releases)，记录镜像 digest 和部署命令。
+3. `release.yml` 解析要发布的提交，并从默认分支读取发布脚本（旧标签也能用当前脚本重发）。两个原生 Runner 分别构建 `Dockerfile.production` 的 `app` 目标并按 digest 推送，通过各架构独立的任务输出传递摘要，不依赖 GitHub Actions 产物存储；两者全部成功后才合并清单、写入镜像标签。校验清单同时包含两个架构后，由 `github-actions[bot]` 创建版本标签和 [GitHub Release](https://github.com/BrandonVee/Mcp-Gateway/releases)，记录镜像 digest 和部署命令。
 4. 发布成功后 `sync-version` 任务在 `main` 上补一个 `chore(release): vX.Y.Z [skip ci]` 提交，把产品 `package.json` 的版本写成已发布的版本。因此打标签那一刻仓库里的 `package.json` 还停留在上一版。
 
 构建使用 Docker 官方 Actions 与 Buildx，`linux/amd64` 在 `ubuntu-24.04` 上运行，`linux/arm64` 在 `ubuntu-24.04-arm` 上运行，依赖安装和编译均原生执行。每个架构的构建限时 30 分钟，分别复用缓存并生成 SBOM 和最小构建来源证明。发布任务串行执行，避免同时覆盖标签。`dry_run` 也会验证两个架构，但不推送镜像、写入版本或创建 Release。
