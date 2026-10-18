@@ -44,6 +44,27 @@ export function callLogQuery(c: Context, userId?: number) {
     params.push(userId);
     clauses.push(`user_id=$${params.length}`);
   }
+  const start = c.req.query('start');
+  const end = c.req.query('end');
+  if (start !== undefined || end !== undefined) {
+    const from = Number(start),
+      to = Number(end);
+    if (
+      start === undefined ||
+      end === undefined ||
+      start.trim() === '' ||
+      end.trim() === '' ||
+      !Number.isSafeInteger(from) ||
+      !Number.isSafeInteger(to) ||
+      from < 0 ||
+      to < from ||
+      to > 8640000000000000
+    )
+      throw new Error('invalid time range');
+    params[0] = from;
+    params.push(to);
+    clauses.push(`started_at <= $${params.length}`);
+  }
   const cursor = c.req.query('cursor');
   if (cursor) {
     try {

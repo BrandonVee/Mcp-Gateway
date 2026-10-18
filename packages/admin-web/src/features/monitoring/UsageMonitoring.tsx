@@ -29,7 +29,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/web/api';
 import { useI18n } from '@/web/i18n';
-import type { AlertEvent, UsageCall, UsageFilters, UsageSummary } from '@/web/types';
+import type { AlertEvent, UsageCall, UsageCollectionStatus, UsageFilters, UsageSummary } from '@/web/types';
 
 function Trend({ data, bucket }: { data: UsageSummary['trend']; bucket: number }) {
   const { t, language } = useI18n();
@@ -112,7 +112,15 @@ function Trend({ data, bucket }: { data: UsageSummary['trend']; bucket: number }
   );
 }
 
-export function UsageMonitoring({ mode }: { mode: 'overview' | 'logs' }) {
+export function UsageMonitoring({
+  mode,
+  collectionStatus,
+  onCollectionStatus,
+}: {
+  mode: 'overview' | 'logs';
+  collectionStatus?: UsageCollectionStatus | null;
+  onCollectionStatus?: (status: UsageCollectionStatus) => void;
+}) {
   const { t, language } = useI18n();
   const [form] = Form.useForm<UsageFilters>();
   const [filters, setFilters] = useState<UsageFilters>({ hours: 24 });
@@ -156,6 +164,7 @@ export function UsageMonitoring({ mode }: { mode: 'overview' | 'logs' }) {
           const summary = await api.usageSummary(filters, dimension);
           if (!active) return;
           setData(summary);
+          onCollectionStatus?.(summary);
           api
             .usageAlerts()
             .then((result) => active && setAlertEvents(result.events))
@@ -182,7 +191,7 @@ export function UsageMonitoring({ mode }: { mode: 'overview' | 'logs' }) {
       active = false;
       window.clearInterval(timer);
     };
-  }, [filtersKey, dimension, tab, revision, mode]);
+  }, [filtersKey, dimension, tab, revision, mode, onCollectionStatus]);
 
   const loadMore = async () => {
     if (!cursor || loadingMore || loading) return;
@@ -248,7 +257,9 @@ export function UsageMonitoring({ mode }: { mode: 'overview' | 'logs' }) {
     filters.method ||
     filters.request_id,
   );
-  const collectionProblem = Boolean(data?.collection.lastError);
+  const status = mode === 'overview' ? data : collectionStatus;
+  const collectionProblem = Boolean(status?.collection.lastError);
+  const logsDisabled = mode === 'logs' && status?.enabled && status.logs_enabled === false;
   const emptyTable = (title: string) => (
     <Empty
       image={Empty.PRESENTED_IMAGE_SIMPLE}
@@ -429,10 +440,11 @@ export function UsageMonitoring({ mode }: { mode: 'overview' | 'logs' }) {
           </span>
         </div>
       )}
-      {(error || (data && !data.enabled) || collectionProblem) && (
+      {(error || (status && !status.enabled) || collectionProblem || logsDisabled) && (
         <div className="usage-notices">
           {error && <Alert type="error" showIcon message={error} />}
-          {data && !data.enabled && <Alert type="info" showIcon message={t('usage.disabled')} />}
+          {status && !status.enabled && <Alert type="info" showIcon message={t('usage.disabled')} />}
+          {logsDisabled && <Alert type="info" showIcon message={t('usage.logsDisabled')} />}
           {collectionProblem && <Alert type="warning" showIcon message={t('usage.collectionError')} />}
         </div>
       )}

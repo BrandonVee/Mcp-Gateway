@@ -150,7 +150,7 @@ export function ServersPage(props: ServersPageProps) {
                     <Alert
                       type="warning"
                       showIcon
-                      className="dialog-alert"
+                      className="server-availability-alert"
                       message={t(
                         server.instances.some((instance) => instance.enabled)
                           ? 'servers.allInstancesBlocked'

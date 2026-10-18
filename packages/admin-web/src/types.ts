@@ -236,6 +236,8 @@ export type SystemSettingsInput = Omit<
 
 export interface UsageFilters {
   hours: number;
+  start?: number;
+  end?: number;
   server?: string;
   tool?: string;
   user_id?: string;
@@ -255,15 +257,18 @@ export interface UsageStat {
   avg_ms: number | null;
   p95_ms: number | null;
 }
-export interface UsageSummary {
+export interface UsageCollectionStatus {
   enabled: boolean;
+  logs_enabled: boolean;
+  collection: { lastProcessedAt: number; lastError: string; queued: number | null; dropped: number | null };
+}
+export interface UsageSummary extends UsageCollectionStatus {
   summary: UsageStat & { requests: number; active_users: number; peak_per_minute: number };
   ranking: UsageStat[];
   trend: { time: number; calls: number; failed: number }[];
   bucket_ms: number;
   alerts: { server: string; type: string; value: number; threshold: number }[];
   alert_events: AlertEvent[];
-  collection: { lastProcessedAt: number; lastError: string; queued: number | null; dropped: number | null };
 }
 
 export interface AlertEvent {

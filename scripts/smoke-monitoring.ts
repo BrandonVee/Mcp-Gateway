@@ -28,17 +28,36 @@ const admin = async (path: string, method = 'GET', body?: unknown) => {
   return { response, data: await response.json() };
 };
 const upstream = createServer(async (req, res) => {
+  if (req.method !== 'POST') {
+    res.writeHead(405);
+    res.end();
+    return;
+  }
   let body = '';
   for await (const chunk of req) body += chunk;
   const request = JSON.parse(body);
+  if (request.id === undefined) {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
   const result = {
     jsonrpc: '2.0',
     id: request.id,
-    result: {
-      isError: request.params?.name === 'fail',
-      content: [{ type: 'text', text: 'monitoring test output' }],
-      api_key: secret,
-    },
+    result:
+      request.method === 'initialize'
+        ? {
+            protocolVersion: request.params?.protocolVersion ?? '2025-03-26',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'monitoring-fixture', version: '1' },
+          }
+        : request.method === 'tools/list'
+          ? { tools: [] }
+          : {
+              isError: request.params?.name === 'fail',
+              content: [{ type: 'text', text: 'monitoring test output' }],
+              api_key: secret,
+            },
   };
   if (request.params?.name === 'unknown') {
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -112,6 +131,8 @@ async function main() {
     const summary = async () => (await admin('/monitoring/summary?server=' + name)).data;
     await waitFor(async () => (await summary()).summary.calls === 23);
     const data = await summary();
+    assert.equal(data.enabled, true);
+    assert.equal(data.logs_enabled, true);
     assert.equal(data.summary.success, 2);
     assert.equal(data.summary.failed, 20);
     assert.equal(data.summary.unknown, 1);
@@ -169,6 +190,7 @@ async function main() {
     await save({ monitoring_logs_enabled: false });
     await call('ok');
     await waitFor(async () => (await summary()).summary.calls === 24);
+    assert.equal((await summary()).logs_enabled, false, 'the log query can distinguish disabled details from no calls');
     assert.equal(
       (await admin('/monitoring/calls?server=' + name)).data.events.length,
       23,
@@ -178,6 +200,7 @@ async function main() {
     await call('ok');
     await new Promise((done) => setTimeout(done, 1200));
     assert.equal((await summary()).summary.calls, 24, 'collection switch stops new events');
+    assert.equal((await summary()).enabled, false);
     await save({ monitoring_enabled: true, monitoring_logs_enabled: true });
     for (let i = 0; i < 55; i++) await call('ok');
     await waitFor(async () => (await summary()).summary.calls === 79);
@@ -192,8 +215,25 @@ async function main() {
       new Set([...first.events, ...next.events].map((event: any) => event.id)).size,
       first.events.length + next.events.length,
     );
+    for (const method of ['initialize', 'tools/list']) {
+      const response = await fetch(GW + '/mcp/' + name, {
+        method: 'POST',
+        headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 2, method }),
+      });
+      assert.equal(response.status, 200, await response.text());
+    }
+    await waitFor(async () => (await summary()).summary.requests === 81);
+    assert.equal((await summary()).summary.calls, 79, 'protocol requests do not inflate tool call counts');
+    const probe = await admin('/servers/test-connection', 'POST', {
+      url: `http://${process.env.SIGNUP_UPSTREAM_HOST ?? '127.0.0.1'}:${address.port}/mcp`,
+    });
+    assert.equal(probe.response.status, 200);
+    assert.equal(probe.data.ok, true);
+    await new Promise((done) => setTimeout(done, 1200));
+    assert.equal((await summary()).summary.requests, 81, 'connection tests do not generate MCP call records');
     console.log(
-      'PASS: JSON/SSE tool results, HTTP-200 errors, unknown outcomes, input/output capture and credential redaction, duplicate delivery, rankings, alerts, filters, cursor pagination and monitoring switches',
+      'PASS: JSON/SSE tool results, HTTP-200 errors, unknown outcomes, input/output capture and credential redaction, duplicate delivery, rankings, alerts, filters, cursor pagination, monitoring switches and exclusion of connection tests from call counts',
     );
   } finally {
     if (original === undefined) await pool.query("DELETE FROM meta WHERE key='system_settings'");

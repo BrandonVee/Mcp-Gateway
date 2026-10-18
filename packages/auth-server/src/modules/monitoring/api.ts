@@ -110,6 +110,7 @@ export function registerMonitoringRoutes(router: AdminRouter) {
       trendRows.push(observed.get(time) ?? { time, calls: 0, failed: 0 });
     return c.json({
       enabled: settings.monitoring_enabled,
+      logs_enabled: settings.monitoring_logs_enabled,
       summary: {
         ...statistics(total.rows[0]),
         requests: number(requests.rows[0].requests),

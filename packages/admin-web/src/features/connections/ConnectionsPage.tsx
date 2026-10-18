@@ -6,6 +6,7 @@ import {
   CopyOutlined,
   DashboardOutlined,
   DisconnectOutlined,
+  FileTextOutlined,
   KeyOutlined,
   LinkOutlined,
   LogoutOutlined,
@@ -42,6 +43,7 @@ export function ConnectionsPage({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [servers, setServers] = useState<ConnectionServer[]>([]);
+  const [activeTab, setActiveTab] = useState<'services' | 'logs'>('services');
   const [selected, setSelected] = useState<ConnectionServer | null>(null);
   const [key, setKey] = useState('');
   const [resource, setResource] = useState('');
@@ -241,198 +243,251 @@ export function ConnectionsPage({
         </div>
       </header>
 
-      {loadError ? (
-        <DataLoadError
-          message={loadError}
-          loading={busy}
-          onRetry={() => {
-            setBusy(true);
-            void load()
-              .catch(() => undefined)
-              .finally(() => setBusy(false));
-          }}
-        />
-      ) : (
-        <section className="connections-content">
-          <div className="connections-intro">
-            <div>
-              <span className="connections-eyebrow">{t('connections.integrationsEyebrow')}</span>
-              <h1>{t('connections.letEveryToolWorkYou')}</h1>
-              <p>{t('connections.credentialsUsedRelevantServicePlatform')}</p>
-            </div>
-            <div className="connections-intro-actions">
-              <Button
-                icon={<ReloadOutlined />}
-                loading={busy}
-                onClick={() => {
-                  setBusy(true);
-                  void load()
-                    .catch(() => message.error(t('common.refreshFailed')))
-                    .finally(() => setBusy(false));
-                }}
-              >
-                {t('connections.refreshStatus')}
-              </Button>
-              <Button
-                type="primary"
-                icon={<CopyOutlined />}
-                disabled={!servers.length}
-                onClick={() => copyMcpConfig(servers)}
-              >
-                {t('connections.copyAllMcpConfig')}
-              </Button>
-            </div>
-          </div>
-          {servers.length ? (
-            <div className="connections-grid">
-              {servers.map((server, index) => (
-                <Card key={server.name} className="connection-card" bordered={false}>
-                  <div className="connection-top">
-                    <span className="connection-index">{String(index + 1).padStart(2, '0')}</span>
-                    <Tag
-                      color={
-                        server.connection_status === 'rejected'
-                          ? 'error'
-                          : server.connection_status === 'saved'
-                            ? 'processing'
-                            : server.connection_status === 'connected'
-                              ? 'success'
-                              : server.connection_status === 'expired'
-                                ? 'warning'
-                                : 'default'
-                      }
+      <section className="connections-content">
+        {loadError ? (
+          <DataLoadError
+            message={loadError}
+            loading={busy}
+            onRetry={() => {
+              setBusy(true);
+              void load()
+                .catch(() => undefined)
+                .finally(() => setBusy(false));
+            }}
+          />
+        ) : (
+          <div className="connections-layout">
+            <aside className="connections-sidebar">
+              <div className="connections-nav-group">
+                <span className="connections-nav-heading">{t('nav.workspace')}</span>
+                <button
+                  type="button"
+                  className={`connections-sidebar-item ${activeTab === 'services' ? 'is-active' : ''}`}
+                  onClick={() => setActiveTab('services')}
+                >
+                  <span className="connections-item-icon">
+                    <ApiOutlined />
+                  </span>
+                  <div className="connections-item-text">
+                    <strong>{t('connections.tabServices')}</strong>
+                    <small>{t('connections.tabServicesDesc')}</small>
+                  </div>
+                  {servers.length > 0 && <span className="connections-item-count">{servers.length}</span>}
+                </button>
+                <button
+                  type="button"
+                  className={`connections-sidebar-item ${activeTab === 'logs' ? 'is-active' : ''}`}
+                  onClick={() => setActiveTab('logs')}
+                >
+                  <span className="connections-item-icon">
+                    <FileTextOutlined />
+                  </span>
+                  <div className="connections-item-text">
+                    <strong>{t('connections.tabLogs')}</strong>
+                    <small>{t('connections.tabLogsDesc')}</small>
+                  </div>
+                </button>
+              </div>
+            </aside>
+
+            <section className="connections-main">
+              <div className="connections-tab-panel" style={{ display: activeTab === 'services' ? 'block' : 'none' }}>
+                <div className="connections-tab-toolbar">
+                  <div className="connections-tab-meta">
+                    <strong>{t('connections.tabServices')}</strong>
+                    <small>{t('connections.tabServicesDesc')}</small>
+                  </div>
+                  <div className="connections-tab-actions">
+                    <Button
+                      icon={<ReloadOutlined />}
+                      loading={busy}
+                      onClick={() => {
+                        setBusy(true);
+                        void load()
+                          .catch(() => message.error(t('common.refreshFailed')))
+                          .finally(() => setBusy(false));
+                      }}
                     >
-                      {t(
-                        server.connection_status === 'rejected'
-                          ? 'connections.rejected'
-                          : server.connection_status === 'saved'
-                            ? 'connections.saved'
-                            : server.connection_status === 'connected'
-                              ? 'status.connected'
-                              : server.connection_status === 'not_required'
-                                ? 'connections.noConnectionNeeded'
-                                : server.connection_status === 'expired'
-                                  ? 'status.expired'
-                                  : 'connections.notConnected',
-                      )}
-                    </Tag>
-                  </div>
-                  <h2>{server.display_name}</h2>
-                  {server.endpoint_display_name && (
-                    <Typography.Text type="secondary">{server.endpoint_display_name}</Typography.Text>
-                  )}
-                  <dl className="connection-details">
-                    <div>
-                      <dt>{t('connections.serverName')}</dt>
-                      <dd>
-                        <code>{server.name}</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{t('connections.mcpUrl')}</dt>
-                      <dd>
-                        <code>
-                          {resource
-                            ? mcpServerUrl(server.endpoint_name ?? server.name, resource)
-                            : t('connections.urlUnavailable')}
-                        </code>
-                      </dd>
-                    </div>
-                  </dl>
-                  <ServiceDescription description={server.description} />
-                  {testResults[server.name] && (
-                    <Alert
-                      showIcon
-                      type={testResults[server.name].ok ? 'success' : 'warning'}
-                      message={t(upstreamTestMessages[testResults[server.name].reason], {
-                        status: testResults[server.name].http_status ?? '—',
-                      })}
-                    />
-                  )}
-                  <div className="connection-bottom">
-                    <span>
-                      {t(
-                        server.auth_mode === 'system_oauth'
-                          ? 'serverDialog.systemOauth'
-                          : server.auth_mode === 'system_api_key'
-                            ? 'serverDialog.systemApiKey'
-                            : server.auth_mode === 'api_key'
-                              ? 'connections.modeApiKey'
-                              : server.auth_mode === 'oauth'
-                                ? 'connections.modeOAuth'
-                                : 'connections.modePlatform',
-                      )}
-                    </span>
-                    <Button icon={<CopyOutlined />} onClick={() => copyMcpConfig([server])}>
-                      {t('connections.copyMcpConfig')}
+                      {t('connections.refreshStatus')}
                     </Button>
-                    {(server.auth_mode === 'api_key' ||
-                      server.auth_mode === 'oauth' ||
-                      (server.auth_mode === 'system_oauth' && isAdmin)) &&
-                      server.connection_status !== 'not_connected' && (
-                        <Button disabled={busy} icon={<ReloadOutlined />} onClick={() => void testConnection(server)}>
-                          {t('connections.testConnection')}
-                        </Button>
-                      )}
-                    {server.auth_mode === 'api_key' && (
-                      <Button
-                        disabled={busy}
-                        type="primary"
-                        icon={<KeyOutlined />}
-                        onClick={() => {
-                          setKey('');
-                          setSelected(server);
-                        }}
-                      >
-                        {t(
-                          server.connection_status !== 'not_connected'
-                            ? 'connections.updateKey'
-                            : 'connections.configureKey',
-                        )}
-                      </Button>
-                    )}
-                    {(server.auth_mode === 'oauth' || (server.auth_mode === 'system_oauth' && isAdmin)) && (
-                      <Button
-                        type="primary"
-                        icon={<LinkOutlined />}
-                        loading={busy}
-                        onClick={() => connectOAuth(server)}
-                      >
-                        {t(
-                          server.connection_status !== 'not_connected'
-                            ? 'connections.reauthorize'
-                            : 'connections.connectAccount',
-                        )}
-                      </Button>
-                    )}
-                    {(server.auth_mode === 'oauth' ||
-                      server.auth_mode === 'api_key' ||
-                      (server.auth_mode === 'system_oauth' && isAdmin)) &&
-                      server.connection_status !== 'not_required' &&
-                      server.connection_status !== 'not_connected' && (
-                        <Button
-                          disabled={busy}
-                          danger
-                          type="text"
-                          icon={<DisconnectOutlined />}
-                          onClick={() => disconnect(server)}
-                        >
-                          {t('connections.disconnectAction')}
-                        </Button>
-                      )}
+                    <Button
+                      type="primary"
+                      icon={<CopyOutlined />}
+                      disabled={!servers.length}
+                      onClick={() => copyMcpConfig(servers)}
+                    >
+                      {t('connections.copyAllMcpConfig')}
+                    </Button>
                   </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Empty description={t('connections.noMcpServersBeenAssigned')} />
-          )}
-          <Typography.Text className="connections-note">
-            {t('connections.serversGrantedAdministratorAppearHere')}
-          </Typography.Text>
-          <Typography.Text className="connections-note">{t('connections.mcpConfigHint')}</Typography.Text>
-        </section>
-      )}
+                </div>
+
+                {servers.length ? (
+                  <div className="connections-grid">
+                    {servers.map((server, index) => (
+                      <Card key={server.name} className="connection-card" bordered={false}>
+                        <div className="connection-top">
+                          <span className="connection-index">{String(index + 1).padStart(2, '0')}</span>
+                          <Tag
+                            color={
+                              server.connection_status === 'rejected'
+                                ? 'error'
+                                : server.connection_status === 'saved'
+                                  ? 'processing'
+                                  : server.connection_status === 'connected'
+                                    ? 'success'
+                                    : server.connection_status === 'expired'
+                                      ? 'warning'
+                                      : 'default'
+                            }
+                          >
+                            {t(
+                              server.connection_status === 'rejected'
+                                ? 'connections.rejected'
+                                : server.connection_status === 'saved'
+                                  ? 'connections.saved'
+                                  : server.connection_status === 'connected'
+                                    ? 'status.connected'
+                                    : server.connection_status === 'not_required'
+                                      ? 'connections.noConnectionNeeded'
+                                      : server.connection_status === 'expired'
+                                        ? 'status.expired'
+                                        : 'connections.notConnected',
+                            )}
+                          </Tag>
+                        </div>
+                        <h2>{server.display_name}</h2>
+                        {server.endpoint_display_name && (
+                          <Typography.Text type="secondary">{server.endpoint_display_name}</Typography.Text>
+                        )}
+                        <dl className="connection-details">
+                          <div>
+                            <dt>{t('connections.serverName')}</dt>
+                            <dd>
+                              <code>{server.name}</code>
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>{t('connections.mcpUrl')}</dt>
+                            <dd>
+                              <code>
+                                {resource
+                                  ? mcpServerUrl(server.endpoint_name ?? server.name, resource)
+                                  : t('connections.urlUnavailable')}
+                              </code>
+                            </dd>
+                          </div>
+                        </dl>
+                        <ServiceDescription description={server.description} />
+                        {testResults[server.name] && (
+                          <Alert
+                            showIcon
+                            type={testResults[server.name].ok ? 'success' : 'warning'}
+                            message={t(upstreamTestMessages[testResults[server.name].reason], {
+                              status: testResults[server.name].http_status ?? '—',
+                            })}
+                          />
+                        )}
+                        <div className="connection-bottom">
+                          <span>
+                            {t(
+                              server.auth_mode === 'system_oauth'
+                                ? 'serverDialog.systemOauth'
+                                : server.auth_mode === 'system_api_key'
+                                  ? 'serverDialog.systemApiKey'
+                                  : server.auth_mode === 'api_key'
+                                    ? 'connections.modeApiKey'
+                                    : server.auth_mode === 'oauth'
+                                      ? 'connections.modeOAuth'
+                                      : 'connections.modePlatform',
+                            )}
+                          </span>
+                          <Button icon={<CopyOutlined />} onClick={() => copyMcpConfig([server])}>
+                            {t('connections.copyMcpConfig')}
+                          </Button>
+                          {(server.auth_mode === 'api_key' ||
+                            server.auth_mode === 'oauth' ||
+                            (server.auth_mode === 'system_oauth' && isAdmin)) &&
+                            server.connection_status !== 'not_connected' && (
+                              <Button
+                                disabled={busy}
+                                icon={<ReloadOutlined />}
+                                onClick={() => void testConnection(server)}
+                              >
+                                {t('connections.testConnection')}
+                              </Button>
+                            )}
+                          {server.auth_mode === 'api_key' && (
+                            <Button
+                              disabled={busy}
+                              type="primary"
+                              icon={<KeyOutlined />}
+                              onClick={() => {
+                                setKey('');
+                                setSelected(server);
+                              }}
+                            >
+                              {t(
+                                server.connection_status !== 'not_connected'
+                                  ? 'connections.updateKey'
+                                  : 'connections.configureKey',
+                              )}
+                            </Button>
+                          )}
+                          {(server.auth_mode === 'oauth' || (server.auth_mode === 'system_oauth' && isAdmin)) && (
+                            <Button
+                              type="primary"
+                              icon={<LinkOutlined />}
+                              loading={busy}
+                              onClick={() => connectOAuth(server)}
+                            >
+                              {t(
+                                server.connection_status !== 'not_connected'
+                                  ? 'connections.reauthorize'
+                                  : 'connections.connectAccount',
+                              )}
+                            </Button>
+                          )}
+                          {(server.auth_mode === 'oauth' ||
+                            server.auth_mode === 'api_key' ||
+                            (server.auth_mode === 'system_oauth' && isAdmin)) &&
+                            server.connection_status !== 'not_required' &&
+                            server.connection_status !== 'not_connected' && (
+                              <Button
+                                disabled={busy}
+                                danger
+                                type="text"
+                                icon={<DisconnectOutlined />}
+                                onClick={() => disconnect(server)}
+                              >
+                                {t('connections.disconnectAction')}
+                              </Button>
+                            )}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty description={t('connections.noMcpServersBeenAssigned')} />
+                )}
+                <Typography.Text className="connections-note">
+                  {t('connections.serversGrantedAdministratorAppearHere')}
+                </Typography.Text>
+                <Typography.Text className="connections-note">{t('connections.mcpConfigHint')}</Typography.Text>
+              </div>
+
+              <div className="connections-tab-panel" style={{ display: activeTab === 'logs' ? 'block' : 'none' }}>
+                <div className="connections-tab-toolbar">
+                  <div className="connections-tab-meta">
+                    <strong>{t('connections.tabLogs')}</strong>
+                    <small>{t('connections.tabLogsDesc')}</small>
+                  </div>
+                </div>
+                <MyCallLogs session={session} />
+              </div>
+            </section>
+          </div>
+        )}
+      </section>
 
       <Modal
         title={t('connections.configureApiKeyServer', { server: selected?.display_name ?? '' })}
@@ -461,7 +516,6 @@ export function ConnectionsPage({
         />
         {key && !isValidApiKey(key) && <Typography.Text type="danger">{t('api.invalidApiKey')}</Typography.Text>}
       </Modal>
-      <MyCallLogs session={session} />
     </main>
   );
 }

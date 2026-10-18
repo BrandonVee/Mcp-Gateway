@@ -32,11 +32,57 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-y: scroll;
+}
+
 html,
 body,
 #root {
   min-height: 100%;
   margin: 0;
+}
+
+/* Refined custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(140, 160, 190, 0.25);
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 160, 190, 0.45);
+}
+
+/* Global status pulse animation for live indicators */
+@keyframes status-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(32, 217, 154, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(32, 217, 154, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(32, 217, 154, 0);
+  }
+}
+
+.ant-badge-status-processing {
+  animation: status-pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+/* Button & interactive element feedback */
+.ant-btn {
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+}
+.ant-btn:active {
+  transform: scale(0.98);
 }
 
 body {
@@ -90,17 +136,29 @@ code,
 }
 
 .brand-symbol {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
   color: #ffffff;
-  background: linear-gradient(145deg, #1688ef, #0753a5);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(11, 107, 203, 0.35);
-  font-size: 18px;
+  background: linear-gradient(135deg, #1d92ff 0%, #085cc0 100%);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 11px;
+  box-shadow:
+    0 8px 24px rgba(11, 107, 203, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  font-size: 19px;
+  transition:
+    transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.brand:hover .brand-symbol {
+  transform: translateY(-1px) scale(1.03);
+  box-shadow:
+    0 10px 28px rgba(11, 107, 203, 0.48),
+    0 0 18px rgba(47, 140, 255, 0.4);
 }
 
 .brand-copy {
@@ -203,6 +261,14 @@ code,
   color: #607088;
   background: #f2f5f9;
   border: 1px solid #e1e7ef;
+  border-radius: 9px;
+  display: inline-grid;
+  place-items: center;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.collapse-button:hover {
+  transform: translateY(-1px);
 }
 
 .page-heading {
@@ -263,6 +329,15 @@ code,
 .metric-card {
   position: relative;
   overflow: hidden;
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(11, 107, 203, 0.08);
 }
 
 .skeleton-card {
@@ -408,6 +483,16 @@ code,
   border: 1px solid #2b3a52;
   border-radius: 12px;
   box-shadow: 0 15px 35px rgba(16, 26, 45, 0.16);
+  transition:
+    transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.route-origin:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 20px 42px rgba(16, 26, 45, 0.25),
+    0 0 24px rgba(47, 140, 255, 0.2);
 }
 
 .route-origin::after {
@@ -465,14 +550,14 @@ code,
 .route-node {
   position: relative;
   min-height: 58px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   background: #f7f9fc;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  transition: 0.18s ease;
+  border-radius: 9px;
+  transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .route-node::before {
@@ -487,7 +572,8 @@ code,
 .route-node:hover {
   background: #f1f7fd;
   border-color: #b9d3ef;
-  transform: translateX(2px);
+  transform: translateX(4px);
+  box-shadow: 0 4px 16px rgba(11, 107, 203, 0.08);
 }
 
 .route-node > span:nth-child(2) {
@@ -860,6 +946,21 @@ code,
 
 .dialog-alert {
   margin-bottom: 18px;
+}
+
+.server-card .server-availability-alert {
+  margin: 16px var(--space-card);
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.server-availability-alert .ant-alert-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.server-availability-alert .ant-alert-icon {
+  margin-top: 4px;
 }
 
 .permission-actions {
@@ -1554,9 +1655,9 @@ input:-webkit-autofill:active {
 .connections-header {
   position: relative;
   z-index: 1;
-  max-width: 1180px;
+  max-width: none;
   margin: auto;
-  padding: 26px 32px;
+  padding: 24px 36px;
   display: flex;
   align-items: center;
   gap: 15px;
@@ -1619,9 +1720,9 @@ input:-webkit-autofill:active {
 .connections-content {
   position: relative;
   z-index: 1;
-  max-width: 1180px;
+  max-width: none;
   margin: 0 auto;
-  padding: 72px 32px 90px;
+  padding: 40px 36px 80px;
 }
 .connections-intro {
   display: flex;

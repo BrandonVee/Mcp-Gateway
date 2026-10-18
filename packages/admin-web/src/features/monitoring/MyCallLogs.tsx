@@ -1,13 +1,26 @@
+import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Drawer, Form, Input, Select, Space, Table, Typography } from 'antd';
+import { Alert, Button, Card, DatePicker, Drawer, Form, Input, Select, Space, Table, Typography } from 'antd';
 import { apiForSession } from '@/web/api';
 import { useI18n } from '@/web/i18n';
 import type { PlatformSession, UsageCall, UsageFilters } from '@/web/types';
 
+type CallLogForm = Omit<UsageFilters, 'hours' | 'start' | 'end'> & { timeRange: [Dayjs, Dayjs] };
+
+function recentRange(hours = 24): [Dayjs, Dayjs] {
+  const end = dayjs();
+  return [end.subtract(hours, 'hour'), end];
+}
+
+function queryFilters({ timeRange, ...values }: CallLogForm): UsageFilters {
+  return { ...values, hours: 24, start: timeRange[0].valueOf(), end: timeRange[1].valueOf() };
+}
+
 export function MyCallLogs({ session }: { session: PlatformSession }) {
   const { t, language } = useI18n();
-  const [form] = Form.useForm<UsageFilters>();
-  const [filters, setFilters] = useState<UsageFilters>({ hours: 24 });
+  const [initialRange] = useState(() => recentRange());
+  const [form] = Form.useForm<CallLogForm>();
+  const [filters, setFilters] = useState<UsageFilters>(() => queryFilters({ timeRange: initialRange }));
   const [rows, setRows] = useState<UsageCall[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [detail, setDetail] = useState<UsageCall | null>(null);
@@ -38,19 +51,22 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
     };
   }, [JSON.stringify(filters), session.user_id, session.auth_version]);
   return (
-    <Card title={t('usage.logs')}>
+    <Card className="my-call-logs-card" title={t('usage.logs')}>
       <Form
-        style={{ rowGap: 12, marginBottom: 20 }}
+        className="my-call-logs-form"
+        style={{ rowGap: 14, marginBottom: 20 }}
         form={form}
         layout="inline"
-        initialValues={{ hours: 24 }}
-        onFinish={setFilters}
+        initialValues={{ timeRange: initialRange }}
+        onFinish={(values) => setFilters(queryFilters(values))}
       >
-        <Form.Item name="hours" label={t('usage.period')}>
-          <Select
-            style={{ width: 100 }}
-            options={[1, 24, 168, 720, 8760].map((hours) => ({
-              value: hours,
+        <Form.Item name="timeRange" label={t('usage.timeRange')}>
+          <DatePicker.RangePicker
+            allowClear={false}
+            showTime
+            format="YYYY-MM-DD HH:mm:ss"
+            style={{ width: '100%' }}
+            presets={[1, 24, 168, 720, 8760].map((hours) => ({
               label: t(
                 hours === 1
                   ? 'usage.hour'
@@ -62,6 +78,7 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
                         ? 'usage.month'
                         : 'usage.year',
               ),
+              value: () => recentRange(hours),
             }))}
           />
         </Form.Item>
@@ -99,7 +116,9 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
           <Button
             onClick={() => {
               form.resetFields();
-              setFilters({ hours: 24 });
+              const timeRange = recentRange();
+              form.setFieldsValue({ timeRange });
+              setFilters(queryFilters({ timeRange }));
             }}
           >
             {t('usage.reset')}
@@ -129,8 +148,33 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
           {
             title: t('usage.result'),
             dataIndex: 'outcome',
-            render: (value) =>
-              t(value === 'success' ? 'usage.success' : value === 'failed' ? 'usage.failed' : 'usage.unknown'),
+            render: (value) => (
+              <span
+                style={{
+                  display: 'inline-block',
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  background:
+                    value === 'success'
+                      ? 'rgba(32, 217, 154, 0.12)'
+                      : value === 'failed'
+                        ? 'rgba(255, 93, 115, 0.12)'
+                        : 'rgba(140, 160, 190, 0.12)',
+                  color: value === 'success' ? '#20d99a' : value === 'failed' ? '#ff5d73' : '#8fa0ba',
+                  border: `1px solid ${
+                    value === 'success'
+                      ? 'rgba(32, 217, 154, 0.25)'
+                      : value === 'failed'
+                        ? 'rgba(255, 93, 115, 0.25)'
+                        : 'rgba(140, 160, 190, 0.2)'
+                  }`,
+                }}
+              >
+                {t(value === 'success' ? 'usage.success' : value === 'failed' ? 'usage.failed' : 'usage.unknown')}
+              </span>
+            ),
           },
           {
             title: t('usage.duration'),
