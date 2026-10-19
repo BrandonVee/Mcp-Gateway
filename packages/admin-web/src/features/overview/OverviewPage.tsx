@@ -8,7 +8,7 @@ import {
   SafetyCertificateOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Alert, Avatar, Badge, Button, Card, Col, Empty, Flex, List, Row, Statistic, Tag, Typography } from 'antd';
+import { Alert, Avatar, Badge, Card, Col, Empty, Flex, List, Row, Statistic, Tag } from 'antd';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { api as platformApi } from '@/web/api';
 import type { AdminUser, McpServer, SystemSettings, UsageSummary, View } from '@/web/types';
@@ -62,12 +62,6 @@ export function OverviewPage({ users, servers, settings, api, onNavigate }: Over
     if (servers.some((server) => server.enabled && server.name === alert.server)) attentionServers.add(alert.server);
   const number = (value: number | null | undefined, suffix = '') =>
     value == null ? '—' : new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(value) + suffix;
-  const callDetail =
-    usage?.enabled === false
-      ? t('usage.disabled')
-      : usage
-        ? t('overview.failedCalls24h', { count: number(usage.summary.failed) })
-        : t('monitoring.checking');
   const recentUsers = [...users].sort((a, b) => b.created_at - a.created_at).slice(0, 5);
 
   return (
@@ -78,38 +72,38 @@ export function OverviewPage({ users, servers, settings, api, onNavigate }: Over
           title={t('overview.calls24h')}
           value={number(stats?.calls)}
           icon={<BarChartOutlined />}
-          detail={callDetail}
+          detailLabel={t('usage.failed')}
+          detailValue={number(stats?.failed)}
           tone="blue"
-          action={t('overview.viewCalls')}
           onClick={() => onNavigate('monitoring')}
         />
         <MetricCard
           title={t('overview.successRate24h')}
           value={number(stats?.success_rate, '%')}
           icon={<CheckCircleFilled />}
-          detail={
-            stats ? t('overview.knownResults', { count: number(stats.success + stats.failed) }) : t('usage.successHint')
-          }
+          detailLabel={t('usage.unknown')}
+          detailValue={number(stats?.unknown)}
           tone={stats?.failed ? 'amber' : 'green'}
-          action={t('overview.viewCalls')}
           onClick={() => onNavigate('monitoring')}
         />
         <MetricCard
           title={t('overview.p95Latency24h')}
           value={number(stats?.p95_ms, ' ms')}
           icon={<ClockCircleOutlined />}
-          detail={t('usage.latencyHint')}
+          detailLabel={t('usage.average')}
+          detailValue={number(stats?.avg_ms, ' ms')}
           tone="cyan"
-          action={t('overview.viewCalls')}
           onClick={() => onNavigate('monitoring')}
         />
         <MetricCard
           title={t('overview.servicesNeedAttention')}
           value={attentionServers.size}
           icon={<WarningOutlined />}
-          detail={t('overview.servicesNeedAttentionHelp')}
+          detailLabel={t('overview.routableServices')}
+          detailValue={number(
+            servers.filter((server) => server.enabled && routableInstances(server, settings).length > 0).length,
+          )}
           tone={attentionServers.size ? 'red' : 'green'}
-          action={t('overview.viewServices')}
           onClick={() => onNavigate('servers')}
         />
       </Row>
@@ -118,13 +112,7 @@ export function OverviewPage({ users, servers, settings, api, onNavigate }: Over
         <Col xs={24} xl={16}>
           <Card
             className="dashboard-card route-card"
-            title={
-              <CardTitle
-                icon={<DeploymentUnitOutlined />}
-                title={t('overview.liveRouteTopology')}
-                subtitle={t('overview.routingSubtitle')}
-              />
-            }
+            title={<CardTitle icon={<DeploymentUnitOutlined />} title={t('overview.liveRouteTopology')} />}
           >
             <div className="route-map">
               <div className="route-origin">
@@ -186,13 +174,7 @@ export function OverviewPage({ users, servers, settings, api, onNavigate }: Over
         <Col xs={24} xl={8}>
           <Card
             className="dashboard-card identity-card"
-            title={
-              <CardTitle
-                icon={<TeamOutlined />}
-                title={t('overview.recentUsers')}
-                subtitle={t('overview.identitySubtitle')}
-              />
-            }
+            title={<CardTitle icon={<TeamOutlined />} title={t('overview.recentUsers')} />}
           >
             <List
               dataSource={recentUsers}
@@ -226,42 +208,53 @@ function MetricCard({
   title,
   value,
   icon,
-  detail,
+  detailLabel,
+  detailValue,
   tone,
-  action,
   onClick,
 }: {
   title: string;
   value: string | number;
   icon: ReactNode;
-  detail: string;
+  detailLabel: string;
+  detailValue: string;
   tone: string;
-  action: string;
   onClick: () => void;
 }) {
   return (
     <Col xs={24} sm={12} xl={6}>
-      <Card className={`metric-card metric-${tone}`}>
+      <Card
+        className={`metric-card metric-card-link metric-${tone}`}
+        role="link"
+        tabIndex={0}
+        aria-label={title}
+        onClick={onClick}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onClick();
+          }
+        }}
+      >
         <Flex justify="space-between" align="flex-start">
           <Statistic title={title} value={value} />
           <span className="metric-icon">{icon}</span>
         </Flex>
-        <div className="metric-detail">{detail}</div>
-        <Button type="link" size="small" onClick={onClick} style={{ paddingInline: 0, marginTop: 8 }}>
-          {action}
-        </Button>
+        <div className="metric-detail metric-parameter">
+          <span>{detailLabel}</span>
+          <strong>{detailValue}</strong>
+        </div>
       </Card>
     </Col>
   );
 }
 
-function CardTitle({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
+function CardTitle({ icon, title }: { icon: ReactNode; title: string }) {
   return (
     <Flex align="center" gap={12}>
       <span className="card-title-icon">{icon}</span>
       <span className="card-title-copy">
         <strong>{title}</strong>
-        <small>{subtitle}</small>
       </span>
     </Flex>
   );

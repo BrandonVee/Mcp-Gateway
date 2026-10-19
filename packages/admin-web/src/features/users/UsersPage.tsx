@@ -179,9 +179,6 @@ export function UsersPage({ users, busy, onCreate, onEdit, onAssign, onPassword,
   return (
     <div className="page-stack page-enter">
       <PageToolbar
-        eyebrow="users.eyebrow"
-        title="users.whoAccessCapability"
-        description="users.controlSignMcpAccessMaintain"
         primaryAction={
           <Button disabled={busy} type="primary" icon={<PlusOutlined />} onClick={onCreate}>
             {t('userDialog.createUser')}

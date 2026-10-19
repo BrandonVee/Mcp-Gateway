@@ -35,8 +35,6 @@ function SettingsModule({
   hidden,
   icon,
   title,
-  description,
-  number,
   tone,
   children,
 }: {
@@ -45,7 +43,6 @@ function SettingsModule({
   icon: ReactNode;
   title: string;
   description: string;
-  number: string;
   tone: string;
   children: ReactNode;
 }) {
@@ -61,11 +58,7 @@ function SettingsModule({
         </span>
         <div>
           <h3 id={id}>{title}</h3>
-          <p>{description}</p>
         </div>
-        <span className="settings-module-number" aria-hidden>
-          {number}
-        </span>
       </header>
       <div className="settings-module-body">{children}</div>
     </section>
@@ -336,7 +329,6 @@ export function SettingsPage({
             icon={<GlobalOutlined />}
             title={t('settings.accessModule')}
             description={t('settings.accessDescription')}
-            number="01"
             tone="blue"
           >
             <Form.Item
@@ -365,7 +357,6 @@ export function SettingsPage({
             icon={<TeamOutlined />}
             title={t('settings.registrationModule')}
             description={t('settings.registrationDescription')}
-            number="02"
             tone="purple"
           >
             <SettingToggle
@@ -394,7 +385,6 @@ export function SettingsPage({
             icon={<MailOutlined />}
             title={t('settings.smtpModule')}
             description={t('settings.smtpDescription')}
-            number="03"
             tone="orange"
           >
             <div className="settings-field-grid">
@@ -494,7 +484,6 @@ export function SettingsPage({
             icon={<SafetyCertificateOutlined />}
             title={t('settings.upstreamModule')}
             description={t('settings.upstreamDescription')}
-            number="04"
             tone="cyan"
           >
             <SettingToggle
@@ -531,7 +520,6 @@ export function SettingsPage({
             icon={<BarChartOutlined />}
             title={t('settings.collectionModule')}
             description={t('settings.collectionDescription')}
-            number="05"
             tone="green"
           >
             <SettingToggle
@@ -575,7 +563,6 @@ export function SettingsPage({
               icon={<BellOutlined />}
               title={t('settings.alertModule')}
               description={t('settings.alertDescription')}
-              number="06"
               tone="amber"
             >
               <div className="settings-alert-layout">
@@ -636,7 +623,6 @@ export function SettingsPage({
                 icon={<CloudUploadOutlined />}
                 title={t('settings.updateModule')}
                 description={t('settings.updateDescription')}
-                number="07"
                 tone="slate"
               >
                 <div className="settings-alert-layout">

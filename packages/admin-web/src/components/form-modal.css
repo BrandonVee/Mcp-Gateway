@@ -1,0 +1,100 @@
+.form-modal.ant-modal {
+  top: 24px;
+  max-width: calc(100vw - 32px);
+  margin: 0 auto;
+  padding-bottom: 24px;
+}
+
+.form-modal .ant-modal-container {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+}
+
+.form-modal .ant-modal-header,
+.form-modal .ant-modal-footer {
+  flex-shrink: 0;
+}
+
+.form-modal .ant-modal-header {
+  padding-right: 28px;
+}
+
+.form-modal .ant-modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  padding-right: 8px;
+}
+
+.form-modal .ant-modal-footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.dialog-form-grid,
+.dialog-form-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 24px;
+  align-items: start;
+}
+
+.dialog-form-grid > *,
+.dialog-form-columns > * {
+  min-width: 0;
+}
+
+.dialog-form-grid > .ant-form-item,
+.dialog-form-grid > .dialog-alert {
+  margin-bottom: 0;
+}
+
+.dialog-field-full {
+  grid-column: 1 / -1;
+}
+
+.instance-form-columns {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+}
+
+.form-modal .ant-input-textarea-show-count {
+  margin-bottom: 20px;
+}
+
+.dialog-form-columns .permission-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: min(42dvh, 360px);
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.access-modal .access-user-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+}
+
+.access-modal .access-user-list .ant-empty {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 767px) {
+  .form-modal.ant-modal {
+    top: 12px;
+    max-width: calc(100vw - 24px);
+    padding-bottom: 12px;
+  }
+
+  .form-modal .ant-modal-container {
+    max-height: calc(100dvh - 24px);
+  }
+
+  .dialog-form-grid,
+  .dialog-form-columns,
+  .dialog-form-columns .permission-grid,
+  .access-modal .access-user-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

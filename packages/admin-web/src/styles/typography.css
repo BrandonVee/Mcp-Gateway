@@ -31,14 +31,12 @@ textarea {
 }
 
 .page-heading h2.ant-typography,
-.page-toolbar-heading h3.ant-typography,
 .section-intro h3.ant-typography,
 .monitor-section-heading h3 {
   font-weight: 600;
   line-height: 1.35;
 }
 
-.page-toolbar-heading h3.ant-typography,
 .section-intro h3.ant-typography {
   margin: 8px 0;
   font-size: 20px;
@@ -68,7 +66,6 @@ textarea {
   margin-top: 16px;
 }
 
-.page-toolbar-heading .ant-typography,
 .section-intro .ant-typography,
 .ant-form-item-extra,
 .ant-form-item-explain {
@@ -104,8 +101,7 @@ textarea {
   padding: 12px var(--space-card);
 }
 
-.section-intro,
-.page-toolbar-heading > .ant-flex {
+.section-intro {
   flex-wrap: wrap;
   row-gap: 16px;
 }

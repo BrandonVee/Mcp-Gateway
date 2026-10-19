@@ -1,6 +1,6 @@
 import { MyCallLogs } from '@/web/features/monitoring/MyCallLogs';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, App, Button, Card, Empty, Input, Modal, Tag, Typography } from 'antd';
+import { Alert, App, Button, Card, Empty, Input, Tag, Typography } from 'antd';
 import {
   ApiOutlined,
   CopyOutlined,
@@ -17,6 +17,7 @@ import type { ConnectionServer, PlatformSession, UpstreamTestResult } from '@/we
 import { DataLoadError } from '@/web/components/DataLoadState';
 import { useI18n } from '@/web/i18n';
 import { ServiceDescription } from '@/web/components/ServiceDescription';
+import { FormModal } from '@/web/components/FormModal';
 import { LanguageSwitcher } from '@/web/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/web/components/ThemeSwitcher';
 import { mcpConfig, mcpServerUrl } from '@/web/features/connections/mcp-config';
@@ -323,10 +324,9 @@ export function ConnectionsPage({
 
                 {servers.length ? (
                   <div className="connections-grid">
-                    {servers.map((server, index) => (
+                    {servers.map((server) => (
                       <Card key={server.name} className="connection-card" bordered={false}>
                         <div className="connection-top">
-                          <span className="connection-index">{String(index + 1).padStart(2, '0')}</span>
                           <Tag
                             color={
                               server.connection_status === 'rejected'
@@ -360,12 +360,6 @@ export function ConnectionsPage({
                           <Typography.Text type="secondary">{server.endpoint_display_name}</Typography.Text>
                         )}
                         <dl className="connection-details">
-                          <div>
-                            <dt>{t('connections.serverName')}</dt>
-                            <dd>
-                              <code>{server.name}</code>
-                            </dd>
-                          </div>
                           <div>
                             <dt>{t('connections.mcpUrl')}</dt>
                             <dd>
@@ -489,7 +483,7 @@ export function ConnectionsPage({
         )}
       </section>
 
-      <Modal
+      <FormModal
         title={t('connections.configureApiKeyServer', { server: selected?.display_name ?? '' })}
         open={!!selected}
         okText={t('connections.saveAndVerify')}
@@ -515,7 +509,7 @@ export function ConnectionsPage({
           onChange={(event) => setKey(event.target.value)}
         />
         {key && !isValidApiKey(key) && <Typography.Text type="danger">{t('api.invalidApiKey')}</Typography.Text>}
-      </Modal>
+      </FormModal>
     </main>
   );
 }

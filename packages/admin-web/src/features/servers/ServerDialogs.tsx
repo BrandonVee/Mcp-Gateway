@@ -10,7 +10,7 @@ import {
   SearchOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Alert, Button, Checkbox, Empty, Form, Input, InputNumber, Modal, Segmented, Select, Switch } from 'antd';
+import { Alert, Button, Checkbox, Empty, Form, Input, InputNumber, Segmented, Select, Switch } from 'antd';
 import { useMemo, useState } from 'react';
 import type {
   AddInstanceInput,
@@ -25,6 +25,7 @@ import type {
   UpstreamTestAuthInput,
   ServerPolicyInput,
 } from '@/web/types';
+import { FormModal } from '@/web/components/FormModal';
 import { submitDialog } from '@/web/utils/operations';
 import { validationRule } from '@/web/utils/validation';
 import { untrustedUpstreamHost } from '@/web/features/servers/upstream-allowlist';
@@ -140,11 +141,9 @@ function CreateServerDialog({
   };
 
   return (
-    <Modal
+    <FormModal
       open
-      width={560}
-      style={{ top: 24 }}
-      styles={{ body: { maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' } }}
+      wide
       title={
         <ModalTitle
           icon={<CloudServerOutlined />}
@@ -173,6 +172,7 @@ function CreateServerDialog({
         form={form}
         disabled={busy}
         layout="vertical"
+        className="dialog-form-grid"
         requiredMark={false}
         initialValues={{
           signup_access: false,
@@ -185,35 +185,40 @@ function CreateServerDialog({
           user_max_concurrent: 5,
         }}
       >
-        <Form.Item
-          name="name"
-          label={t('serverDialog.serverId')}
-          rules={[
-            { required: true, message: t('serverDialog.enterServerId') },
-            {
-              pattern: /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/,
-              message: t('serverDialog.useLettersNumbersPeriodsUnderscores'),
-            },
-          ]}
-        >
-          <Input prefix={<DeploymentUnitOutlined />} placeholder="external-search" autoFocus />
-        </Form.Item>
-        <Form.Item name="displayName" label={t('serverDialog.displayName')}>
-          <Input placeholder={t('serverDialog.exampleExternalSearch')} />
-        </Form.Item>
-        <DescriptionField />
-        <Form.Item
-          name="signup_access"
-          label={t('serverDialog.signupAccess')}
-          valuePropName="checked"
-          extra={t('serverDialog.signupAccessHelp')}
-        >
-          <Switch />
-        </Form.Item>
-        <Alert type="info" showIcon message={t('serverDialog.endpointGroupHelp')} />
-        <ServerPolicyFields />
+        <div className="dialog-form-grid">
+          <Form.Item
+            name="name"
+            label={t('serverDialog.serverId')}
+            rules={[
+              { required: true, message: t('serverDialog.enterServerId') },
+              {
+                pattern: /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/,
+                message: t('serverDialog.useLettersNumbersPeriodsUnderscores'),
+              },
+            ]}
+          >
+            <Input prefix={<DeploymentUnitOutlined />} placeholder="external-search" autoFocus />
+          </Form.Item>
+          <Form.Item name="displayName" label={t('serverDialog.displayName')}>
+            <Input placeholder={t('serverDialog.exampleExternalSearch')} />
+          </Form.Item>
+          <DescriptionField />
+          <Form.Item
+            name="signup_access"
+            className="dialog-field-full"
+            label={t('serverDialog.signupAccess')}
+            valuePropName="checked"
+            extra={t('serverDialog.signupAccessHelp')}
+          >
+            <Switch />
+          </Form.Item>
+        </div>
+        <div className="dialog-form-grid">
+          <ServerPolicyFields />
+          <Alert className="dialog-field-full" type="info" showIcon message={t('serverDialog.endpointGroupHelp')} />
+        </div>
       </Form>
-    </Modal>
+    </FormModal>
   );
 }
 
@@ -278,6 +283,7 @@ function DescriptionField() {
   return (
     <Form.Item
       name="description"
+      className="dialog-field-full"
       label={t('serverDialog.description')}
       extra={t('serverDialog.descriptionHelp')}
       rules={[{ max: 2000, message: t('serverDialog.descriptionMax') }]}
@@ -303,11 +309,9 @@ function EditServerDialog({
     }
   >();
   return (
-    <Modal
+    <FormModal
       open
-      width={560}
-      style={{ top: 24 }}
-      styles={{ body: { maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' } }}
+      wide
       title={t('serverDialog.editServer')}
       okText={t('serverDialog.saveSettings')}
       cancelText={t('common.cancel')}
@@ -336,6 +340,7 @@ function EditServerDialog({
         form={form}
         disabled={busy}
         layout="vertical"
+        className="dialog-form-grid"
         requiredMark={false}
         initialValues={{
           name: server.name,
@@ -348,52 +353,56 @@ function EditServerDialog({
           user_max_concurrent: server.user_max_concurrent ?? 5,
         }}
       >
-        <Form.Item
-          name="name"
-          label={t('serverDialog.serverId')}
-          extra={t('serverDialog.serverIdEditable')}
-          rules={[
-            { required: true, message: t('serverDialog.enterServerId') },
-            { pattern: /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/, message: t('serverDialog.serverIdFormat') },
-          ]}
-        >
-          <Input prefix={<DeploymentUnitOutlined />} maxLength={64} />
-        </Form.Item>
-        <Form.Item noStyle shouldUpdate={(previous, next) => previous.name !== next.name}>
-          {({ getFieldValue }) => (
-            <div className="server-route-preview">
-              <span>{t('serverDialog.routePreview')}</span>
-              <code>{`/mcp/${getFieldValue('name') || ''}`}</code>
-              {getFieldValue('name')?.trim() !== server.name && (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message={t('serverDialog.renameHelp')}
-                  description={server.auth_mode === 'oauth' ? t('serverDialog.renameOAuthHelp') : undefined}
-                />
-              )}
-            </div>
-          )}
-        </Form.Item>
-        <Form.Item
-          name="display_name"
-          label={t('serverDialog.displayName')}
-          rules={[{ required: true, whitespace: true, message: t('serverDialog.enterDisplayName') }]}
-        >
-          <Input autoFocus />
-        </Form.Item>
-        <DescriptionField />
-        <Form.Item name="routing_mode" label={t('serverDialog.routingMode')}>
-          <Select
-            options={[
-              { value: 'aggregate', label: t('serverDialog.aggregateMode') },
-              { value: 'pool', label: t('serverDialog.poolMode') },
+        <div className="dialog-form-grid">
+          <Form.Item
+            name="name"
+            label={t('serverDialog.serverId')}
+            extra={t('serverDialog.serverIdEditable')}
+            rules={[
+              { required: true, message: t('serverDialog.enterServerId') },
+              { pattern: /^(?!\.{1,2}$)[a-zA-Z0-9._-]{1,64}$/, message: t('serverDialog.serverIdFormat') },
             ]}
-          />
-        </Form.Item>
-        <ServerPolicyFields />
+          >
+            <Input prefix={<DeploymentUnitOutlined />} maxLength={64} />
+          </Form.Item>
+          <Form.Item
+            name="display_name"
+            label={t('serverDialog.displayName')}
+            rules={[{ required: true, whitespace: true, message: t('serverDialog.enterDisplayName') }]}
+          >
+            <Input autoFocus />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate={(previous, next) => previous.name !== next.name}>
+            {({ getFieldValue }) => (
+              <div className="server-route-preview dialog-field-full">
+                <span>{t('serverDialog.routePreview')}</span>
+                <code>{`/mcp/${getFieldValue('name') || ''}`}</code>
+                {getFieldValue('name')?.trim() !== server.name && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message={t('serverDialog.renameHelp')}
+                    description={server.auth_mode === 'oauth' ? t('serverDialog.renameOAuthHelp') : undefined}
+                  />
+                )}
+              </div>
+            )}
+          </Form.Item>
+          <DescriptionField />
+        </div>
+        <div className="dialog-form-grid">
+          <Form.Item name="routing_mode" label={t('serverDialog.routingMode')} className="dialog-field-full">
+            <Select
+              options={[
+                { value: 'aggregate', label: t('serverDialog.aggregateMode') },
+                { value: 'pool', label: t('serverDialog.poolMode') },
+              ]}
+            />
+          </Form.Item>
+          <ServerPolicyFields />
+        </div>
       </Form>
-    </Modal>
+    </FormModal>
   );
 }
 
@@ -452,9 +461,9 @@ function EditInstanceDialog({
   const { t } = useI18n();
   const [form] = Form.useForm<ServerFormValues>();
   return (
-    <Modal
+    <FormModal
       open
-      width={560}
+      wide
       title={t('serverDialog.editInstance')}
       okText={t('serverDialog.saveSettings')}
       cancelText={t('common.cancel')}
@@ -478,6 +487,7 @@ function EditInstanceDialog({
         form={form}
         disabled={busy}
         layout="vertical"
+        className="dialog-form-columns instance-form-columns"
         requiredMark={false}
         initialValues={{
           ...instance,
@@ -488,28 +498,35 @@ function EditInstanceDialog({
           api_key_prefix: instance.api_key_prefix ?? 'Bearer ',
         }}
       >
-        <Form.Item name="displayName" label={t('serverDialog.displayName')}>
-          <Input />
-        </Form.Item>
-        <Form.Item label={t('serverDialog.instanceId')}>
-          <Input value={instance.id} disabled />
-        </Form.Item>
-        <Form.Item
-          name="url"
-          label={t('serverDialog.endpointUrl')}
-          extra={t('serverDialog.endpointChangeHelp')}
-          rules={[
-            { required: true, message: t('serverDialog.enterEndpointUrl') },
-            endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl')),
-          ]}
-        >
-          <Input prefix={<LinkOutlined />} autoFocus />
-        </Form.Item>
-        <UpstreamAllowlistHint {...allowlist} busy={busy} />
-        <UpstreamConnectionTest {...allowlist} busy={busy} instanceId={instance.id} />
-        <AuthFormFields server={{ ...server, ...instance } as McpServer} />
+        <div className="dialog-form-grid">
+          <Form.Item name="displayName" label={t('serverDialog.displayName')}>
+            <Input />
+          </Form.Item>
+          <Form.Item label={t('serverDialog.instanceId')}>
+            <Input value={instance.id} disabled />
+          </Form.Item>
+          <Form.Item
+            name="url"
+            className="dialog-field-full"
+            label={t('serverDialog.endpointUrl')}
+            extra={t('serverDialog.endpointChangeHelp')}
+            rules={[
+              { required: true, message: t('serverDialog.enterEndpointUrl') },
+              endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl')),
+            ]}
+          >
+            <Input prefix={<LinkOutlined />} autoFocus />
+          </Form.Item>
+          <div className="dialog-field-full">
+            <UpstreamAllowlistHint {...allowlist} busy={busy} />
+            <UpstreamConnectionTest {...allowlist} busy={busy} instanceId={instance.id} />
+          </div>
+        </div>
+        <div>
+          <AuthFormFields server={{ ...server, ...instance } as McpServer} />
+        </div>
       </Form>
-    </Modal>
+    </FormModal>
   );
 }
 
@@ -539,8 +556,8 @@ export function authFields(values: ServerFormValues): ServerAuthInput {
 function AuthFormFields({ server }: { server?: McpServer } = {}) {
   const { t } = useI18n();
   return (
-    <>
-      <Form.Item name="auth_mode" label={t('serverDialog.userConnectionMethod')}>
+    <div className="dialog-form-grid dialog-field-full">
+      <Form.Item name="auth_mode" label={t('serverDialog.userConnectionMethod')} className="dialog-field-full">
         <Select
           options={[
             { value: 'none', label: t('serverDialog.noAdditionalAuth') },
@@ -587,10 +604,20 @@ function AuthFormFields({ server }: { server?: McpServer } = {}) {
                       placeholder={server?.system_api_key_configured ? t('serverDialog.keepSystemApiKey') : undefined}
                     />
                   </Form.Item>
-                  <Alert type="info" showIcon message={t('serverDialog.systemApiKeyHelp')} />
+                  <Alert
+                    className="dialog-field-full"
+                    type="info"
+                    showIcon
+                    message={t('serverDialog.systemApiKeyHelp')}
+                  />
                 </>
               ) : (
-                <Alert type="info" showIcon message={t('serverDialog.usersEnterOwnKeyConnections')} />
+                <Alert
+                  className="dialog-field-full"
+                  type="info"
+                  showIcon
+                  message={t('serverDialog.usersEnterOwnKeyConnections')}
+                />
               )}
             </>
           ) : ['oauth', 'system_oauth'].includes(getFieldValue('auth_mode')) ? (
@@ -675,17 +702,23 @@ function AuthFormFields({ server }: { server?: McpServer } = {}) {
               </Form.Item>
               <Form.Item
                 name="oauth_issuer"
+                className="dialog-field-full"
                 label={t('serverDialog.responseIssuerOptionalUseWhen')}
                 rules={[validationRule(isOAuthUrl, t('api.invalidOAuthIssuer'), true)]}
               >
                 <Input placeholder="https://provider.example" />
               </Form.Item>
-              <Alert type="info" showIcon message={t('serverDialog.registerCallbackProviderHttpsAuth')} />
+              <Alert
+                className="dialog-field-full"
+                type="info"
+                showIcon
+                message={t('serverDialog.registerCallbackProviderHttpsAuth')}
+              />
             </>
           ) : null
         }
       </Form.Item>
-    </>
+    </div>
   );
 }
 
@@ -698,9 +731,9 @@ function ConfigureAuthDialog({
   const { t } = useI18n();
   const [form] = Form.useForm<ServerFormValues>();
   return (
-    <Modal
+    <FormModal
       open
-      width={600}
+      wide
       title={t('serverDialog.configureUserConnectionServer', { server: server.display_name })}
       okText={t('serverDialog.saveSettings')}
       cancelText={t('common.cancel')}
@@ -733,7 +766,7 @@ function ConfigureAuthDialog({
         <Alert type="warning" showIcon className="dialog-alert" message={t('serverDialog.authChangeHelp')} />
         <AuthFormFields server={server} />
       </Form>
-    </Modal>
+    </FormModal>
   );
 }
 
@@ -789,9 +822,10 @@ function ConfigureUsersDialog({
   };
 
   return (
-    <Modal
+    <FormModal
       open
-      width={660}
+      wide
+      className="access-modal"
       title={
         <ModalTitle
           icon={<TeamOutlined />}
@@ -923,7 +957,7 @@ function ConfigureUsersDialog({
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('serverDialog.noMatchingUsers')} />
         )}
       </div>
-    </Modal>
+    </FormModal>
   );
 }
 
@@ -941,8 +975,9 @@ function AddInstanceDialog({
   const [form] = Form.useForm<ServerFormValues & { id?: string }>();
 
   return (
-    <Modal
+    <FormModal
       open
+      wide
       title={
         <ModalTitle
           icon={<DeploymentUnitOutlined />}
@@ -973,34 +1008,42 @@ function AddInstanceDialog({
         form={form}
         disabled={busy}
         layout="vertical"
+        className="dialog-form-columns instance-form-columns"
         requiredMark={false}
         initialValues={{ auth_mode: 'none', api_key_header: 'authorization', api_key_prefix: 'Bearer ' }}
       >
-        <Form.Item name="displayName" label={t('serverDialog.displayName')}>
-          <Input />
-        </Form.Item>
-        <Form.Item
-          name="id"
-          label={t('serverDialog.instanceIdOptional')}
-          rules={[{ max: 256, message: t('api.invalidInstancePayload') }]}
-        >
-          <Input placeholder={t('serverDialog.leaveBlankGenerateUuid')} autoFocus />
-        </Form.Item>
-        <Form.Item
-          name="url"
-          label={t('serverDialog.endpointUrl')}
-          rules={[
-            { required: true, message: t('serverDialog.enterEndpointUrl') },
-            endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl')),
-          ]}
-        >
-          <Input prefix={<LinkOutlined />} placeholder="https://host.example/mcp" />
-        </Form.Item>
-        <UpstreamAllowlistHint {...allowlist} busy={busy} />
-        <UpstreamConnectionTest {...allowlist} busy={busy} />
-        <AuthFormFields />
+        <div className="dialog-form-grid">
+          <Form.Item name="displayName" label={t('serverDialog.displayName')}>
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="id"
+            label={t('serverDialog.instanceIdOptional')}
+            rules={[{ max: 256, message: t('api.invalidInstancePayload') }]}
+          >
+            <Input placeholder={t('serverDialog.leaveBlankGenerateUuid')} autoFocus />
+          </Form.Item>
+          <Form.Item
+            name="url"
+            className="dialog-field-full"
+            label={t('serverDialog.endpointUrl')}
+            rules={[
+              { required: true, message: t('serverDialog.enterEndpointUrl') },
+              endpointUrlRule(t('serverDialog.enterValidHttpHttpsUrl')),
+            ]}
+          >
+            <Input prefix={<LinkOutlined />} placeholder="https://host.example/mcp" />
+          </Form.Item>
+          <div className="dialog-field-full">
+            <UpstreamAllowlistHint {...allowlist} busy={busy} />
+            <UpstreamConnectionTest {...allowlist} busy={busy} />
+          </div>
+        </div>
+        <div>
+          <AuthFormFields />
+        </div>
       </Form>
-    </Modal>
+    </FormModal>
   );
 }
 

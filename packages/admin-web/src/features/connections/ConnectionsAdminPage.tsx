@@ -191,9 +191,6 @@ export function ConnectionsAdminPage({ users, servers, connections, busy, onRevo
   return (
     <div className="page-stack page-enter">
       <PageToolbar
-        eyebrow="connectionsAdmin.eyebrow"
-        title="connectionsAdmin.externalServiceConnections"
-        description="connectionsAdmin.reviewUserConnectionsExternalMcp"
         primaryAction={
           <Button href="/connections" icon={<LinkOutlined />}>
             {t('connectionsAdmin.openPersonalConnections')}

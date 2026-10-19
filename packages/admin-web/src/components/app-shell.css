@@ -2,6 +2,25 @@
   display: none;
 }
 
+.sider-footer .sidebar-toggle.ant-btn {
+  height: 36px;
+  margin-top: 12px;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.sider-footer .sidebar-toggle.ant-btn:hover {
+  color: var(--ink);
+  background: var(--surface-soft);
+}
+
+.sider-footer .sidebar-toggle.ant-btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
 @media (max-width: 480px) {
   .app-header .header-preferences .language-trigger.ant-btn {
     width: 40px;

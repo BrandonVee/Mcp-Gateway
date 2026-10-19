@@ -284,7 +284,7 @@ code,
 }
 
 .page-heading h2.ant-typography {
-  margin: 5px 0 0;
+  margin: 0;
   color: var(--ink);
   font-size: 24px;
   letter-spacing: -0.02em;
@@ -638,6 +638,11 @@ code,
 
 /* Directory pages */
 .page-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 18px;
   overflow: hidden;
   background: #ffffff;
   border: 1px solid var(--line);
@@ -645,29 +650,15 @@ code,
   box-shadow: 0 4px 18px rgba(24, 41, 72, 0.035);
 }
 
-.page-toolbar-heading {
-  min-height: 100px;
-  padding: var(--space-card);
-}
-
-.page-toolbar-heading h3.ant-typography {
-  margin: 7px 0 3px;
-  color: var(--ink);
-  font-size: 22px;
-  letter-spacing: -0.015em;
-}
-
-.page-toolbar-heading .ant-typography {
-  margin-bottom: 0;
-  font-size: 12px;
-}
-
 .page-toolbar-filters {
-  width: 100%;
-  min-height: 58px;
-  padding: 12px var(--space-card);
-  background: #f8fafc;
-  border-top: 1px solid #e8edf3;
+  flex: 1 1 560px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.page-toolbar-actions {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .toolbar-search {
@@ -681,6 +672,7 @@ code,
 .filter-result-count {
   margin-left: 3px;
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .section-intro {
@@ -1313,8 +1305,7 @@ code,
 .story-steps > div {
   padding: 17px 14px 0 0;
   display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 9px;
+  grid-template-columns: 1fr;
 }
 
 .story-steps > div > span {
@@ -1328,7 +1319,7 @@ code,
 }
 
 .story-steps small {
-  grid-column: 2;
+  grid-column: 1;
   margin-top: 5px;
   color: #687b98;
   font-size: 10px;
@@ -1812,4 +1803,28 @@ input:-webkit-autofill:active {
   .connections-user {
     gap: 8px;
   }
+}
+
+.metric-card-link {
+  cursor: pointer;
+}
+
+.metric-card-link:focus-visible {
+  outline: 2px solid var(--ant-color-primary, #1677ff);
+  outline-offset: 3px;
+}
+
+.metric-parameter {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ant-color-border-secondary, #d9e2ef);
+}
+
+.metric-parameter strong {
+  color: var(--ant-color-text, inherit);
+  font-variant-numeric: tabular-nums;
 }

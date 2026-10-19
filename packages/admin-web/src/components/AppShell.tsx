@@ -17,7 +17,7 @@ import {
   ReloadOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Button, Dropdown, Flex, Layout, Menu, Space, Typography } from 'antd';
+import { Button, Dropdown, Layout, Menu, Space, Tooltip, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import type { View } from '@/web/types';
 import { CommandPalette } from '@/web/components/CommandPalette';
@@ -29,39 +29,15 @@ import '@/web/components/app-shell.css';
 
 const { Header, Sider, Content } = Layout;
 
-const titles: Record<View, { eyebrow: MessageKey; title: MessageKey; description: MessageKey }> = {
-  settings: { eyebrow: 'settings.eyebrow', title: 'settings.title', description: 'settings.description' },
-  overview: {
-    eyebrow: 'nav.overview.eyebrow',
-    title: 'nav.overview.title',
-    description: 'nav.overview.description',
-  },
-  users: {
-    eyebrow: 'nav.users.eyebrow',
-    title: 'nav.users.title',
-    description: 'nav.users.description',
-  },
-  servers: {
-    eyebrow: 'nav.servers.eyebrow',
-    title: 'nav.servers.title',
-    description: 'nav.servers.description',
-  },
-  credentials: {
-    eyebrow: 'nav.connections.eyebrow',
-    title: 'nav.connections.title',
-    description: 'nav.connections.description',
-  },
-  monitoring: {
-    eyebrow: 'nav.monitoring.eyebrow',
-    title: 'nav.monitoring.title',
-    description: 'nav.monitoring.description',
-  },
-  audit: { eyebrow: 'nav.audit.eyebrow', title: 'nav.audit.title', description: 'nav.audit.description' },
-  topology: {
-    eyebrow: 'nav.topology.eyebrow',
-    title: 'nav.topology.title',
-    description: 'nav.topology.description',
-  },
+const titles: Record<View, MessageKey> = {
+  settings: 'settings.title',
+  overview: 'nav.overview.label',
+  users: 'nav.users.label',
+  servers: 'nav.servers.label',
+  credentials: 'nav.connections.title',
+  monitoring: 'nav.monitoring.title',
+  audit: 'nav.audit.title',
+  topology: 'nav.topology.label',
 };
 
 interface AppShellProps {
@@ -171,27 +147,27 @@ export function AppShell({
           >
             {!collapsed && t('nav.signOut')}
           </Button>
+          <Tooltip title={collapsed ? t('nav.expandSidebar') : undefined} placement="right">
+            <Button
+              type="text"
+              block
+              className="sidebar-toggle"
+              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              onClick={() => setCollapsed((value) => !value)}
+              aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
+              aria-expanded={!collapsed}
+            >
+              {!collapsed && t('nav.collapseSidebar')}
+            </Button>
+          </Tooltip>
         </div>
       </Sider>
 
       <Layout className="site-layout">
         <Header className="app-header">
-          <Flex align="center" gap={14} className="desktop-page-heading">
-            <Button
-              type="text"
-              className="collapse-button"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed((value) => !value)}
-              aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
-            />
-            <div className="page-heading">
-              <Typography.Text className="page-eyebrow">{t(current.eyebrow)}</Typography.Text>
-              <Flex align="baseline" gap={12} wrap>
-                <Typography.Title level={2}>{t(current.title)}</Typography.Title>
-                <Typography.Text type="secondary">{t(current.description)}</Typography.Text>
-              </Flex>
-            </div>
-          </Flex>
+          <div className="page-heading desktop-page-heading">
+            <Typography.Title level={2}>{t(current)}</Typography.Title>
+          </div>
 
           <Dropdown
             open={mobileMenuOpen}
@@ -239,7 +215,7 @@ export function AppShell({
               aria-expanded={mobileMenuOpen}
               aria-haspopup="menu"
             >
-              <span className="mobile-navigation-title">{t(current.title)}</span>
+              <span className="mobile-navigation-title">{t(current)}</span>
               <DownOutlined className="mobile-navigation-chevron" />
             </Button>
           </Dropdown>

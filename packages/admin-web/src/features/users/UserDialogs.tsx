@@ -1,6 +1,7 @@
 import { useI18n } from '@/web/i18n';
 import { EditOutlined, InfoCircleOutlined, LockOutlined, MailOutlined, UserAddOutlined } from '@ant-design/icons';
-import { Alert, Button, Checkbox, Form, Input, Modal, Radio, Select, Switch } from 'antd';
+import { Alert, Button, Checkbox, Form, Input, Radio, Select, Switch } from 'antd';
+import { FormModal } from '@/web/components/FormModal';
 import { submitDialog } from '@/web/utils/operations';
 import type { AdminUser, CreateUserInput, DialogState, McpServer, UpdateUserInput } from '@/web/types';
 
@@ -47,8 +48,9 @@ function CreateUserDialog({
   const allServers = Form.useWatch('all_servers', form) ?? false;
 
   return (
-    <Modal
+    <FormModal
       open
+      wide
       title={
         <ModalTitle
           icon={<UserAddOutlined />}
@@ -81,42 +83,45 @@ function CreateUserDialog({
         form={form}
         disabled={busy}
         layout="vertical"
+        className={role === 'user' ? 'dialog-form-columns' : undefined}
         requiredMark={false}
         initialValues={{ role: 'user', servers: [], all_servers: false }}
       >
-        <Form.Item
-          name="username"
-          normalize={(value: string) => value.trim()}
-          label={t('auth.signup.emailLabel')}
-          rules={[
-            { required: true, message: t('connections.enterUsername') },
-            { type: 'email', message: t('auth.signup.emailRule') },
-          ]}
-        >
-          <Input placeholder={t('auth.signup.emailPlaceholder')} autoFocus />
-        </Form.Item>
-        <Form.Item
-          name="password"
-          label={t('userDialog.initialPassword')}
-          rules={[
-            { required: true, message: t('userDialog.enterInitialPassword') },
-            { min: 12, max: 256, message: t('auth.signup.passwordRule') },
-          ]}
-        >
-          <Input.Password
-            autoComplete="new-password"
-            prefix={<LockOutlined />}
-            placeholder={t('userDialog.least12Characters')}
-          />
-        </Form.Item>
-        <Form.Item name="role" label={t('common.role')}>
-          <Radio.Group optionType="button" buttonStyle="solid">
-            <Radio.Button value="user">{t('common.standardUser')}</Radio.Button>
-            <Radio.Button value="admin">{t('common.administrator')}</Radio.Button>
-          </Radio.Group>
-        </Form.Item>
+        <div>
+          <Form.Item
+            name="username"
+            normalize={(value: string) => value.trim()}
+            label={t('auth.signup.emailLabel')}
+            rules={[
+              { required: true, message: t('connections.enterUsername') },
+              { type: 'email', message: t('auth.signup.emailRule') },
+            ]}
+          >
+            <Input placeholder={t('auth.signup.emailPlaceholder')} autoFocus />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            label={t('userDialog.initialPassword')}
+            rules={[
+              { required: true, message: t('userDialog.enterInitialPassword') },
+              { min: 12, max: 256, message: t('auth.signup.passwordRule') },
+            ]}
+          >
+            <Input.Password
+              autoComplete="new-password"
+              prefix={<LockOutlined />}
+              placeholder={t('userDialog.least12Characters')}
+            />
+          </Form.Item>
+          <Form.Item name="role" label={t('common.role')}>
+            <Radio.Group optionType="button" buttonStyle="solid">
+              <Radio.Button value="user">{t('common.standardUser')}</Radio.Button>
+              <Radio.Button value="admin">{t('common.administrator')}</Radio.Button>
+            </Radio.Group>
+          </Form.Item>
+        </div>
         {role === 'user' && (
-          <>
+          <div>
             <Form.Item name="all_servers" valuePropName="checked" className="wildcard-grant">
               <Checkbox>{t('userDialog.serversIncludingFutureServers')}</Checkbox>
             </Form.Item>
@@ -157,10 +162,10 @@ function CreateUserDialog({
                 </Form.Item>
               </>
             )}
-          </>
+          </div>
         )}
       </Form>
-    </Modal>
+    </FormModal>
   );
 }
 
@@ -176,8 +181,9 @@ function EditUserDialog({
   const [form] = Form.useForm<{ username: string; email: string; role: 'admin' | 'user'; email_verified: boolean }>();
 
   return (
-    <Modal
+    <FormModal
       open
+      wide
       title={
         <ModalTitle
           icon={<EditOutlined />}
@@ -210,6 +216,7 @@ function EditUserDialog({
         form={form}
         disabled={busy}
         layout="vertical"
+        className="dialog-form-grid"
         requiredMark={false}
         initialValues={{
           username: user.username,
@@ -257,7 +264,7 @@ function EditUserDialog({
           <Switch />
         </Form.Item>
       </Form>
-    </Modal>
+    </FormModal>
   );
 }
 
@@ -275,7 +282,7 @@ function AssignUserDialog({
   const allServers = Form.useWatch('all_servers', form) ?? user.servers.includes('*');
 
   return (
-    <Modal
+    <FormModal
       open
       title={
         <ModalTitle
@@ -327,7 +334,7 @@ function AssignUserDialog({
           </Form.Item>
         )}
       </Form>
-    </Modal>
+    </FormModal>
   );
 }
 
@@ -343,7 +350,7 @@ function ResetPasswordDialog({
   const [form] = Form.useForm<{ password: string }>();
 
   return (
-    <Modal
+    <FormModal
       open
       title={
         <ModalTitle
@@ -381,7 +388,7 @@ function ResetPasswordDialog({
           />
         </Form.Item>
       </Form>
-    </Modal>
+    </FormModal>
   );
 }
 

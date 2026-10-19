@@ -88,9 +88,6 @@ export function ServersPage(props: ServersPageProps) {
   return (
     <div className="page-stack page-enter server-registry">
       <PageToolbar
-        eyebrow="servers.eyebrow"
-        title="servers.oneRegistryInternalExternalServers"
-        description="servers.registerStreamableHttpEndpointsGateway"
         primaryAction={
           <Button disabled={props.busy} type="primary" icon={<PlusOutlined />} onClick={props.onCreate}>
             {t('servers.registerServer')}

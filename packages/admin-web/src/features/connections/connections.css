@@ -46,6 +46,50 @@
 }
 
 /* Layout with left sidebar navigation */
+@media (min-width: 901px) {
+  .connections-page {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .connections-page .connections-header {
+    flex-shrink: 0;
+    width: 100%;
+    margin: 0;
+  }
+
+  .connections-page .connections-content {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+
+  .connections-page .connections-layout {
+    height: 100%;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .connections-page .connections-sidebar {
+    position: static;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 32px;
+  }
+
+  .connections-page .connections-main {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+    padding: 0 8px 48px 0;
+  }
+}
+
 .connections-layout {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);

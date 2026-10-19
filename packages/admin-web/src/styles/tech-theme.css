@@ -525,8 +525,7 @@ body {
 }
 
 .page-heading h2.ant-typography,
-.section-intro h3.ant-typography,
-.page-toolbar-heading h3.ant-typography {
+.section-intro h3.ant-typography {
   color: #edf5ff;
 }
 
@@ -871,7 +870,6 @@ body {
   box-shadow: 0 0 18px rgba(47, 140, 255, 0.2);
 }
 
-.page-toolbar-filters,
 .table-summary,
 .server-card-footer {
   background: rgba(7, 13, 23, 0.55);
@@ -1173,7 +1171,6 @@ body {
 .metric-card .ant-statistic-title,
 .metric-detail,
 .page-heading .ant-typography-secondary,
-.page-toolbar-heading .ant-typography,
 .section-intro .ant-typography,
 .filter-result-count,
 .table-summary,

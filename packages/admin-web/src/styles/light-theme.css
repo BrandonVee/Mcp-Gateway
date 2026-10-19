@@ -169,7 +169,6 @@
 /* Titles and essential values. */
 :root[data-theme='light'] .page-heading h2.ant-typography,
 :root[data-theme='light'] .section-intro h3.ant-typography,
-:root[data-theme='light'] .page-toolbar-heading h3.ant-typography,
 :root[data-theme='light'] .metric-card .ant-statistic-content,
 :root[data-theme='light'] .card-title-copy strong,
 :root[data-theme='light'] .route-origin strong,
@@ -322,7 +321,6 @@
   box-shadow: 0 12px 36px rgba(35, 57, 88, 0.12);
   transform: translateY(-2px);
 }
-:root[data-theme='light'] .page-toolbar-filters,
 :root[data-theme='light'] .table-summary,
 :root[data-theme='light'] .server-card-footer,
 :root[data-theme='light'] .server-policy,

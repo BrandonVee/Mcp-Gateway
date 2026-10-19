@@ -1,6 +1,5 @@
 import {
   ArrowRightOutlined,
-  CheckCircleFilled,
   CloudServerOutlined,
   LockOutlined,
   MailOutlined,
@@ -120,31 +119,22 @@ export function LoginPage({
         </div>
 
         <div className="story-content">
-          <Typography.Text className="story-index">{t('auth.controlSurfaceStep')}</Typography.Text>
           <Typography.Title>
             {t('auth.oneEntryPointControlEvery')}
             <em>{t('auth.capabilityPath')}</em>
           </Typography.Title>
-          <Typography.Paragraph>{t('auth.unifyIdentityServerRoutingInstance')}</Typography.Paragraph>
           <div className="story-steps">
-            {(
-              [
-                ['auth.stepAuthentication', 'auth.unifiedIdentity'],
-                ['auth.stepRouting', 'auth.dynamicRouting'],
-                ['auth.stepObservability', 'auth.liveObservability'],
-              ] as const
-            ).map(([label, description], index) => (
+            {([
+              ['auth.stepAuthentication', 'auth.stepAuthenticationDescription'],
+              ['auth.stepRouting', 'auth.stepRoutingDescription'],
+              ['auth.stepObservability', 'auth.stepObservabilityDescription'],
+            ] as const).map(([label, description]) => (
               <div key={label}>
-                <span>{String(index + 1).padStart(2, '0')}</span>
                 <strong>{t(label)}</strong>
                 <small>{t(description)}</small>
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="story-status">
-          <CheckCircleFilled /> PostgreSQL · Redis · OAuth 2.1
         </div>
       </section>
 
@@ -161,9 +151,6 @@ export function LoginPage({
             <Typography.Title level={2}>
               {mode === 'login' ? t('auth.login.title') : t('auth.signup.title')}
             </Typography.Title>
-            <Typography.Text type="secondary">
-              {mode === 'login' ? t('auth.login.subtitle') : t('auth.signup.subtitle')}
-            </Typography.Text>
           </Space>
 
           <Divider />
@@ -317,10 +304,6 @@ export function LoginPage({
                 {t('auth.signup.switchToSignup')}
               </Button>
             ) : null}
-          </div>
-
-          <div className="login-hint">
-            <LockOutlined /> {t('auth.adminSessionsUseSecureHttponly')}
           </div>
         </Card>
       </section>
