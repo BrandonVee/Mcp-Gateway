@@ -8,7 +8,6 @@ import {
   EditOutlined,
   PlusOutlined,
   PoweroffOutlined,
-  SafetyCertificateOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
 import {
@@ -34,6 +33,7 @@ import { ServiceDescription } from '@/web/components/ServiceDescription';
 import { PageToolbar } from '@/web/components/PageToolbar';
 import type { AdminUser, McpInstance, McpServer, SystemSettings } from '@/web/types';
 import { untrustedUpstreamHost } from '@/web/features/servers/upstream-allowlist';
+import '@/web/features/servers/servers.css';
 
 interface ServersPageProps {
   servers: McpServer[];
@@ -86,7 +86,7 @@ export function ServersPage(props: ServersPageProps) {
   };
 
   return (
-    <div className="page-stack page-enter">
+    <div className="page-stack page-enter server-registry">
       <PageToolbar
         eyebrow="servers.eyebrow"
         title="servers.oneRegistryInternalExternalServers"
@@ -122,27 +122,31 @@ export function ServersPage(props: ServersPageProps) {
       />
 
       {filteredServers.length ? (
-        <Row gutter={[16, 16]}>
-          {filteredServers.map((server, index) => (
+        <Row gutter={[12, 12]}>
+          {filteredServers.map((server) => (
             <Col xs={24} xl={12} key={server.name}>
               <Card className="server-card" bordered={false}>
                 <header className="server-card-header">
-                  <span className="server-number">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="server-heading">
-                    <small>{t('servers.logicalEndpoint')}</small>
-                    <strong title={server.display_name}>{server.display_name}</strong>
-                    <code title={`/mcp/${server.name}`}>/mcp/{server.name}</code>
-                  </span>
-                  <Switch
-                    disabled={props.busy}
-                    checked={server.enabled}
-                    checkedChildren={t('status.routable')}
-                    unCheckedChildren={t('status.paused')}
-                    onChange={() => props.onToggle(server)}
-                  />
+                  <div className="server-heading">
+                    <div className="server-title-row">
+                      <strong title={server.display_name}>{server.display_name}</strong>
+                      <Switch
+                        size="small"
+                        disabled={props.busy}
+                        checked={server.enabled}
+                        checkedChildren={t('status.routable')}
+                        unCheckedChildren={t('status.paused')}
+                        onChange={() => props.onToggle(server)}
+                      />
+                    </div>
+                    <div className="server-route-line">
+                      <small>{t('servers.logicalEndpoint')}</small>
+                      <code title={`/mcp/${server.name}`}>/mcp/{server.name}</code>
+                    </div>
+                    <ServiceDescription description={server.description} compact />
+                  </div>
                 </header>
 
-                <ServiceDescription description={server.description} />
                 {server.enabled &&
                   !server.instances.some(
                     (instance) => instance.enabled && !untrustedUpstreamHost(instance.url, props.settings),
@@ -159,12 +163,17 @@ export function ServersPage(props: ServersPageProps) {
                     />
                   )}
                 <div className="server-policy">
-                  <div>
+                  <div className="server-policy-summary">
                     <small>{t('servers.accessGrants')}</small>
                     <strong>{t('servers.countUsers', { count: server.user_count })}</strong>
                     {server.signup_access && <Tag color="blue">{t('servers.signupAccess')}</Tag>}
                   </div>
-                  <Button disabled={props.busy} icon={<TeamOutlined />} onClick={() => props.onConfigureUsers(server)}>
+                  <Button
+                    size="small"
+                    disabled={props.busy}
+                    icon={<TeamOutlined />}
+                    onClick={() => props.onConfigureUsers(server)}
+                  >
                     {t('servers.assignAccess')}
                   </Button>
                 </div>
@@ -176,7 +185,7 @@ export function ServersPage(props: ServersPageProps) {
                       return (
                         <div className="instance-row" key={instance.id}>
                           <div className="instance-copy">
-                            <Flex align="center" gap={8}>
+                            <Flex align="center" gap={6} wrap>
                               <Badge status={!instance.enabled ? 'default' : blockedHost ? 'warning' : 'success'} />
                               <strong title={instance.id}>{instance.display_name || instance.id}</strong>
                               <Tag bordered={false} color={blockedHost && instance.enabled ? 'warning' : undefined}>
@@ -188,23 +197,23 @@ export function ServersPage(props: ServersPageProps) {
                                       : 'servers.instanceEnabled',
                                 )}
                               </Tag>
+                              <Tag>
+                                {t(
+                                  instance.auth_mode === 'system_api_key'
+                                    ? 'serverDialog.systemApiKey'
+                                    : instance.auth_mode === 'system_oauth'
+                                      ? 'serverDialog.systemOauth'
+                                      : instance.auth_mode === 'api_key'
+                                        ? 'serverDialog.userApiKey'
+                                        : instance.auth_mode === 'oauth'
+                                          ? 'serverDialog.userOauth'
+                                          : 'serverDialog.noAdditionalAuth',
+                                )}
+                              </Tag>
                             </Flex>
                             <Typography.Text>{instance.url}</Typography.Text>
-                            <Tag>
-                              {t(
-                                instance.auth_mode === 'system_api_key'
-                                  ? 'serverDialog.systemApiKey'
-                                  : instance.auth_mode === 'system_oauth'
-                                    ? 'serverDialog.systemOauth'
-                                    : instance.auth_mode === 'api_key'
-                                      ? 'serverDialog.userApiKey'
-                                      : instance.auth_mode === 'oauth'
-                                        ? 'serverDialog.userOauth'
-                                        : 'serverDialog.noAdditionalAuth',
-                              )}
-                            </Tag>
                             {instance.auth_mode === 'system_oauth' && (
-                              <Button type="link" onClick={() => props.onSystemOAuth(instance)}>
+                              <Button size="small" type="link" onClick={() => props.onSystemOAuth(instance)}>
                                 {t(
                                   instance.system_oauth_connected
                                     ? 'connections.reauthorize'
@@ -242,7 +251,7 @@ export function ServersPage(props: ServersPageProps) {
                               </div>
                             )}
                           </div>
-                          <Space size={2} wrap>
+                          <Space className="instance-actions" size={2} wrap>
                             <Tooltip title={t('servers.editInstance')}>
                               <Button
                                 type="text"
@@ -286,7 +295,7 @@ export function ServersPage(props: ServersPageProps) {
                       );
                     })
                   ) : (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('servers.noUpstreamInstances')} />
+                    <Empty image={false} description={t('servers.noUpstreamInstances')} />
                   )}
                 </div>
 
@@ -299,6 +308,7 @@ export function ServersPage(props: ServersPageProps) {
                   </span>
                   <Space size={4} wrap>
                     <Button
+                      size="small"
                       disabled={props.busy}
                       type="link"
                       icon={<EditOutlined />}
@@ -307,6 +317,7 @@ export function ServersPage(props: ServersPageProps) {
                       {t('servers.editInfo')}
                     </Button>
                     <Button
+                      size="small"
                       disabled={props.busy}
                       type="link"
                       icon={<PlusOutlined />}
@@ -315,6 +326,7 @@ export function ServersPage(props: ServersPageProps) {
                       {t('servers.addInstance')}
                     </Button>
                     <Button
+                      size="small"
                       disabled={props.busy}
                       type="link"
                       danger

@@ -11,18 +11,21 @@ import {
   AuditOutlined,
   ShareAltOutlined,
   MenuFoldOutlined,
+  MenuOutlined,
   MenuUnfoldOutlined,
+  DownOutlined,
   ReloadOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Button, Flex, Layout, Menu, Space, Typography } from 'antd';
-import { useState } from 'react';
+import { Button, Dropdown, Flex, Layout, Menu, Space, Typography } from 'antd';
+import { useEffect, useState } from 'react';
 import type { View } from '@/web/types';
 import { CommandPalette } from '@/web/components/CommandPalette';
 import { LanguageSwitcher } from '@/web/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/web/components/ThemeSwitcher';
 import { useColorMode } from '@/web/color-mode';
 import { useI18n, type MessageKey } from '@/web/i18n';
+import '@/web/components/app-shell.css';
 
 const { Header, Sider, Content } = Layout;
 
@@ -85,9 +88,19 @@ export function AppShell({
   onLogout,
 }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useI18n();
   const { mode } = useColorMode();
   const current = titles[currentView];
+
+  useEffect(() => {
+    const viewport = window.matchMedia('(max-width: 820px)');
+    const closeMenuOnDesktop = () => {
+      if (!viewport.matches) setMobileMenuOpen(false);
+    };
+    viewport.addEventListener('change', closeMenuOnDesktop);
+    return () => viewport.removeEventListener('change', closeMenuOnDesktop);
+  }, []);
 
   const menuItems = [
     { key: 'overview', icon: <DashboardOutlined />, label: t('nav.overview.label') },
@@ -163,7 +176,7 @@ export function AppShell({
 
       <Layout className="site-layout">
         <Header className="app-header">
-          <Flex align="center" gap={14}>
+          <Flex align="center" gap={14} className="desktop-page-heading">
             <Button
               type="text"
               className="collapse-button"
@@ -179,6 +192,57 @@ export function AppShell({
               </Flex>
             </div>
           </Flex>
+
+          <Dropdown
+            open={mobileMenuOpen}
+            onOpenChange={setMobileMenuOpen}
+            trigger={['click']}
+            placement="bottomLeft"
+            overlayClassName="mobile-navigation-menu"
+            menu={{
+              selectedKeys: [currentView],
+              items: [
+                ...menuItems,
+                { type: 'divider' },
+                {
+                  key: 'personal-connections',
+                  icon: <LinkOutlined />,
+                  label: <a href="/connections">{t('nav.personalConnections')}</a>,
+                },
+                {
+                  key: 'refresh',
+                  icon: <ReloadOutlined spin={refreshing} />,
+                  label: t('common.refresh'),
+                  disabled: refreshing,
+                },
+                {
+                  key: 'logout',
+                  icon: <LogoutOutlined />,
+                  label: t('nav.signOut'),
+                  danger: true,
+                  disabled: loggingOut || refreshing,
+                },
+              ],
+              onClick: ({ key }) => {
+                setMobileMenuOpen(false);
+                if (key === 'logout') onLogout();
+                else if (key === 'refresh') onRefresh();
+                else if (key in titles) onNavigate(key as View);
+              },
+            }}
+          >
+            <Button
+              type="text"
+              className="mobile-navigation-trigger"
+              icon={<MenuOutlined />}
+              aria-label={t('nav.navigationMenu')}
+              aria-expanded={mobileMenuOpen}
+              aria-haspopup="menu"
+            >
+              <span className="mobile-navigation-title">{t(current.title)}</span>
+              <DownOutlined className="mobile-navigation-chevron" />
+            </Button>
+          </Dropdown>
 
           <Space size={10} className="header-actions">
             <div className="header-preferences">

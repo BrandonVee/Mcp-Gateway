@@ -1556,13 +1556,6 @@ input:-webkit-autofill:active {
     padding: var(--space-page);
   }
 
-  .app-sider.ant-layout-sider {
-    max-width: 64px !important;
-    min-width: 64px !important;
-    width: 64px !important;
-    flex: 0 0 64px !important;
-  }
-
   .brand {
     height: 72px;
   }

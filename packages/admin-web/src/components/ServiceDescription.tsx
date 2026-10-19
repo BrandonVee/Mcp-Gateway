@@ -4,7 +4,7 @@ import { FileTextOutlined } from '@ant-design/icons';
 import { useI18n } from '@/web/i18n';
 import '@/web/components/service-description.css';
 
-export function ServiceDescription({ description }: { description?: string }) {
+export function ServiceDescription({ description, compact = false }: { description?: string; compact?: boolean }) {
   const { t } = useI18n();
   const text = description?.trim() ?? '';
   const paragraph = useRef<HTMLParagraphElement>(null);
@@ -20,17 +20,21 @@ export function ServiceDescription({ description }: { description?: string }) {
     observer.observe(element);
     measure();
     return () => observer.disconnect();
-  }, [text, expanded]);
+  }, [text, expanded, compact]);
+
+  if (compact && !text) return null;
 
   return (
     <section
-      className={`service-description${text ? '' : ' service-description-empty'}`}
+      className={`service-description${text ? '' : ' service-description-empty'}${compact ? ' service-description-compact' : ''}`}
       aria-label={t('connections.description')}
     >
-      <div className="service-description-heading">
-        <FileTextOutlined />
-        <span>{t('connections.description')}</span>
-      </div>
+      {!compact && (
+        <div className="service-description-heading">
+          <FileTextOutlined />
+          <span>{t('connections.description')}</span>
+        </div>
+      )}
       <p ref={paragraph} className={expanded ? 'is-expanded' : 'is-collapsed'}>
         {text || t('connections.noDescription')}
       </p>

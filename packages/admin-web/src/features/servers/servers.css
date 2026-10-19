@@ -1,0 +1,166 @@
+.server-registry.page-stack {
+  gap: 16px;
+}
+
+.server-registry .page-toolbar-heading {
+  padding: 16px 18px;
+}
+
+.server-registry .page-toolbar-filters {
+  padding: 10px 18px;
+}
+
+.server-registry .server-card-header {
+  display: block;
+  min-height: 0;
+  padding: 16px 18px;
+}
+
+.server-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.server-registry .server-heading strong {
+  min-width: 0;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.server-registry .server-card-header .ant-switch {
+  min-width: 72px;
+  margin: 3px 0 0;
+}
+
+.server-route-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-top: 6px;
+}
+
+.server-registry .server-heading small {
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0;
+}
+
+.server-registry .server-heading code {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.server-registry .server-card-header .service-description.service-description-compact {
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.server-registry .service-description-compact p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.server-registry .service-description-compact p.is-collapsed {
+  -webkit-line-clamp: 2;
+}
+
+.server-registry .service-description-compact .ant-btn {
+  height: auto;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.server-registry .server-card .server-availability-alert {
+  margin: 10px 18px;
+}
+
+.server-registry .server-policy {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 8px 18px;
+}
+
+.server-policy-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.server-registry .server-policy small,
+.server-registry .server-policy strong {
+  display: inline;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.server-registry .server-policy .ant-btn {
+  min-width: 0;
+}
+
+.server-registry .instance-list {
+  min-height: 0;
+  padding: 0 18px;
+}
+
+.server-registry .instance-row {
+  min-height: 0;
+  padding-block: 10px;
+  gap: 8px;
+}
+
+.server-registry .instance-copy > .ant-typography {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.server-registry .instance-copy .ant-tag {
+  margin-inline-end: 0;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.server-registry .instance-actions .ant-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.server-registry .instance-list .ant-empty {
+  margin-block: 16px;
+}
+
+.server-registry .instance-list .ant-empty-image {
+  display: none;
+}
+
+.server-registry .server-card-footer {
+  min-height: 0;
+  gap: 8px;
+  padding: 8px 18px;
+}
+
+.server-registry .server-card-footer > span {
+  font-size: 11px;
+}
+
+.server-registry .server-card-footer .ant-btn {
+  padding-inline: 4px;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .server-registry .instance-row {
+    gap: 6px;
+  }
+}

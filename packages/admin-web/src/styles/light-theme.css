@@ -188,10 +188,7 @@
 :root[data-theme='light'] .settings-subsection-heading > span,
 :root[data-theme='light'] .settings-update-note strong,
 :root[data-theme='light'] .settings-save-status strong,
-:root[data-theme='light'] .usage-collection-strip strong,
-:root[data-theme='light'] .usage-collection-status,
 :root[data-theme='light'] .usage-metric > strong,
-:root[data-theme='light'] .usage-secondary-metrics strong,
 :root[data-theme='light'] .usage-card-heading h4,
 :root[data-theme='light'] .usage-alert-rules h4,
 :root[data-theme='light'] .usage-alert-card h4,
@@ -254,13 +251,8 @@
 :root[data-theme='light'] .settings-update-note p,
 :root[data-theme='light'] .settings-update-action p,
 :root[data-theme='light'] .settings-save-status p,
-:root[data-theme='light'] .usage-description,
-:root[data-theme='light'] .usage-refresh-status,
 :root[data-theme='light'] .usage-filters .ant-form-item-label > label,
-:root[data-theme='light'] .usage-collection-strip,
 :root[data-theme='light'] .usage-metric-heading,
-:root[data-theme='light'] .usage-metric > small,
-:root[data-theme='light'] .usage-secondary-metrics span,
 :root[data-theme='light'] .usage-card-heading p,
 :root[data-theme='light'] .usage-alert-rules p,
 :root[data-theme='light'] .usage-chart-legend span,
@@ -339,7 +331,6 @@
 :root[data-theme='light'] .settings-hosts-field.is-inactive textarea,
 :root[data-theme='light'] .settings-update-note,
 :root[data-theme='light'] .usage-panel .usage-filters,
-:root[data-theme='light'] .usage-secondary-metrics,
 :root[data-theme='light'] .usage-info-note,
 :root[data-theme='light'] .usage-alert-rules,
 :root[data-theme='light'] .usage-detail-summary,
@@ -358,7 +349,6 @@
 :root[data-theme='light'] .monitor-log-row,
 :root[data-theme='light'] .usage-card-heading,
 :root[data-theme='light'] .usage-table-footer,
-:root[data-theme='light'] .usage-secondary-metrics > div,
 :root[data-theme='light'] .access-user-list,
 :root[data-theme='light'] .access-user-row,
 :root[data-theme='light'] .access-user-list .ant-checkbox-wrapper.access-user-row {
@@ -501,7 +491,7 @@
 }
 :root[data-theme='light'] .usage-metric {
   --metric-color: var(--blue);
-  background: var(--surface-soft);
+  background: transparent;
   border-color: var(--line);
 }
 :root[data-theme='light'] .usage-metric-green {

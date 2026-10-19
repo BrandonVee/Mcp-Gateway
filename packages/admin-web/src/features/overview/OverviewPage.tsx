@@ -125,7 +125,6 @@ export function OverviewPage({ users, servers, settings, api, onNavigate }: Over
                 subtitle={t('overview.routingSubtitle')}
               />
             }
-            extra={<Badge status="processing" text={t('overview.liveSync')} />}
           >
             <div className="route-map">
               <div className="route-origin">
