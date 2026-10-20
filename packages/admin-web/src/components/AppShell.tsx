@@ -43,8 +43,6 @@ const titles: Record<View, MessageKey> = {
 interface AppShellProps {
   children: ReactNode;
   currentView: View;
-  userCount: number;
-  serverCount: number;
   refreshing: boolean;
   loggingOut: boolean;
   onNavigate: (view: View) => void;
@@ -55,8 +53,6 @@ interface AppShellProps {
 export function AppShell({
   children,
   currentView,
-  userCount,
-  serverCount,
   refreshing,
   loggingOut,
   onNavigate,
@@ -84,13 +80,11 @@ export function AppShell({
       key: 'users',
       icon: <TeamOutlined />,
       label: t('nav.users.label'),
-      extra: <span className="menu-count">{userCount}</span>,
     },
     {
       key: 'servers',
       icon: <CloudServerOutlined />,
       label: t('nav.servers.label'),
-      extra: <span className="menu-count">{serverCount}</span>,
     },
     { key: 'credentials', icon: <KeyOutlined />, label: t('nav.connections.title') },
     { key: 'topology', icon: <ShareAltOutlined />, label: t('nav.topology.label') },
@@ -103,8 +97,8 @@ export function AppShell({
     <Layout className="app-layout">
       <Sider
         className="app-sider"
-        width={248}
-        collapsedWidth={80}
+        width={208}
+        collapsedWidth={64}
         collapsed={collapsed}
         trigger={null}
         theme={mode}
@@ -133,7 +127,15 @@ export function AppShell({
         />
 
         <div className="sider-footer">
-          <Button type="text" block href="/connections" icon={<LinkOutlined />} className="connections-nav-button">
+          <Button
+            type="text"
+            block
+            href="/connections"
+            icon={<LinkOutlined />}
+            className="connections-nav-button"
+            aria-label={t('nav.personalConnections')}
+            title={collapsed ? t('nav.personalConnections') : undefined}
+          >
             {!collapsed && t('nav.personalConnections')}
           </Button>
           <Button
@@ -144,6 +146,8 @@ export function AppShell({
             loading={loggingOut}
             disabled={refreshing}
             onClick={onLogout}
+            aria-label={t('nav.signOut')}
+            title={collapsed ? t('nav.signOut') : undefined}
           >
             {!collapsed && t('nav.signOut')}
           </Button>

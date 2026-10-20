@@ -386,16 +386,11 @@ body {
 .app-sider {
   background: linear-gradient(180deg, rgba(8, 15, 28, 0.97), rgba(5, 9, 17, 0.99)), #070b13 !important;
   border-right-color: #152239;
-  box-shadow: 14px 0 50px rgba(0, 0, 0, 0.26);
+  box-shadow: none;
 }
 
 .app-sider::after {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 220px;
-  pointer-events: none;
-  background: radial-gradient(circle at 25% 0%, rgba(47, 140, 255, 0.15), transparent 66%);
+  display: none;
 }
 
 .brand {
@@ -452,21 +447,15 @@ body {
   display: none;
 }
 
-.menu-count {
-  color: #7185a4;
-  background: #111d30;
-  border: 1px solid #1c2b42;
-}
-
 .sider-footer {
   border-top-color: #142139;
 }
 
 .connections-nav-button {
-  margin-bottom: 12px;
-  color: #9fcef2 !important;
-  border: 1px solid #214164 !important;
-  background: rgba(47, 140, 255, 0.08) !important;
+  margin-bottom: 4px;
+  color: var(--muted) !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
 }
 
 .connections-nav-button:hover {
@@ -493,18 +482,11 @@ body {
   z-index: 10;
   background: rgba(7, 12, 22, 0.82);
   border-bottom-color: #17253a;
-  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.16);
+  box-shadow: none;
 }
 
 .app-header::after {
-  content: '';
-  position: absolute;
-  right: 28px;
-  bottom: -1px;
-  width: 180px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #22d3ee);
-  box-shadow: 0 0 12px rgba(34, 211, 238, 0.6);
+  display: none;
 }
 
 .collapse-button {
@@ -531,27 +513,11 @@ body {
 
 .app-content {
   position: relative;
-  isolation: isolate;
-  background:
-    linear-gradient(rgba(43, 76, 117, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(43, 76, 117, 0.055) 1px, transparent 1px),
-    radial-gradient(circle at 72% 8%, rgba(38, 107, 226, 0.12), transparent 25%),
-    radial-gradient(circle at 25% 88%, rgba(21, 180, 202, 0.06), transparent 22%), #070b13;
-  background-size:
-    40px 40px,
-    40px 40px,
-    auto,
-    auto,
-    auto;
+  background: var(--canvas);
 }
 
 .app-content::before {
-  content: '';
-  position: fixed;
-  inset: 88px 0 0 248px;
-  z-index: -1;
-  pointer-events: none;
-  background: linear-gradient(115deg, transparent 47%, rgba(47, 140, 255, 0.025) 48%, transparent 49%);
+  display: none;
 }
 
 .command-trigger {
@@ -1154,7 +1120,6 @@ body {
   letter-spacing: 0.06em;
 }
 
-.menu-count,
 .route-origin small,
 .route-node .ant-tag,
 .scope-tag,

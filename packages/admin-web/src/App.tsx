@@ -225,8 +225,6 @@ function ControlPlane({
   return (
     <AppShell
       currentView={view}
-      userCount={controlPlane.users.length}
-      serverCount={controlPlane.servers.length}
       refreshing={controlPlane.busy}
       loggingOut={controlPlane.loggingOut}
       onNavigate={navigate}

@@ -1,6 +1,7 @@
 import dayjs, { type Dayjs } from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, DatePicker, Drawer, Form, Input, Select, Space, Table, Typography } from 'antd';
+import { Alert, Button, Card, DatePicker, Drawer, Form, Input, Select, Space, Table, Tag, Typography } from 'antd';
+import { DownOutlined, ReloadOutlined } from '@ant-design/icons';
 import { apiForSession } from '@/web/api';
 import { useI18n } from '@/web/i18n';
 import type { PlatformSession, UsageCall, UsageFilters } from '@/web/types';
@@ -26,6 +27,7 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
   const [detail, setDetail] = useState<UsageCall | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [advancedFilters, setAdvancedFilters] = useState(false);
   const generation = useRef(0);
   const load = async (more = false) => {
     const version = more ? generation.current : ++generation.current;
@@ -51,16 +53,15 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
     };
   }, [JSON.stringify(filters), session.user_id, session.auth_version]);
   return (
-    <Card className="my-call-logs-card" title={t('usage.logs')}>
+    <Card className="my-call-logs-card" bordered={false}>
       <Form
         className="my-call-logs-form"
-        style={{ rowGap: 14, marginBottom: 20 }}
         form={form}
-        layout="inline"
+        layout="vertical"
         initialValues={{ timeRange: initialRange }}
         onFinish={(values) => setFilters(queryFilters(values))}
       >
-        <Form.Item name="timeRange" label={t('usage.timeRange')}>
+        <Form.Item name="timeRange" label={t('usage.timeRange')} className="my-call-logs-time-range">
           <DatePicker.RangePicker
             allowClear={false}
             showTime
@@ -82,10 +83,11 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
             }))}
           />
         </Form.Item>
-        {(['server', 'tool', 'method', 'client_id', 'request_id', 'q'] as const).map((key) => (
+        {(['server', 'tool', 'method', 'client_id', 'request_id', 'q'] as const).map((key, index) => (
           <Form.Item
             key={key}
             name={key}
+            hidden={index > 0 && !advancedFilters}
             label={t(
               key === 'q'
                 ? 'usage.contentSearch'
@@ -102,14 +104,13 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
         <Form.Item name="outcome" label={t('usage.result')}>
           <Select
             allowClear
-            style={{ width: 110 }}
             options={(['success', 'failed', 'unknown'] as const).map((value) => ({
               value,
               label: t(`usage.${value}`),
             }))}
           />
         </Form.Item>
-        <Space>
+        <Space wrap className="my-call-logs-actions">
           <Button htmlType="submit" type="primary">
             {t('monitoring.search')}
           </Button>
@@ -123,77 +124,61 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
           >
             {t('usage.reset')}
           </Button>
-          <Button disabled={loading} onClick={() => void load()}>
+          <Button disabled={loading} icon={<ReloadOutlined spin={loading} />} onClick={() => void load()}>
             {t('monitoring.refreshEvents')}
+          </Button>
+          <Button type="text" aria-expanded={advancedFilters} onClick={() => setAdvancedFilters((value) => !value)}>
+            {t(advancedFilters ? 'connections.fewerFilters' : 'connections.moreFilters')}
+            <DownOutlined rotate={advancedFilters ? 180 : 0} />
           </Button>
         </Space>
       </Form>
-      {error && <Alert type="error" showIcon title={error} />}
-      <Table
-        rowKey="id"
-        loading={loading}
-        dataSource={rows}
-        pagination={false}
-        scroll={{ x: 850 }}
-        onRow={(row) => ({ onClick: () => setDetail(row), style: { cursor: 'pointer' } })}
-        columns={[
-          {
-            title: t('monitoring.time'),
-            dataIndex: 'started_at',
-            render: (value) => new Date(value).toLocaleString(language),
-          },
-          { title: t('usage.user'), dataIndex: 'username' },
-          { title: t('usage.server'), dataIndex: 'server' },
-          { title: t('usage.tool'), render: (_, row) => row.tool || row.method },
-          {
-            title: t('usage.result'),
-            dataIndex: 'outcome',
-            render: (value) => (
-              <span
-                style={{
-                  display: 'inline-block',
-                  padding: '2px 8px',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  background:
-                    value === 'success'
-                      ? 'rgba(32, 217, 154, 0.12)'
-                      : value === 'failed'
-                        ? 'rgba(255, 93, 115, 0.12)'
-                        : 'rgba(140, 160, 190, 0.12)',
-                  color: value === 'success' ? '#20d99a' : value === 'failed' ? '#ff5d73' : '#8fa0ba',
-                  border: `1px solid ${
-                    value === 'success'
-                      ? 'rgba(32, 217, 154, 0.25)'
-                      : value === 'failed'
-                        ? 'rgba(255, 93, 115, 0.25)'
-                        : 'rgba(140, 160, 190, 0.2)'
-                  }`,
-                }}
-              >
-                {t(value === 'success' ? 'usage.success' : value === 'failed' ? 'usage.failed' : 'usage.unknown')}
-              </span>
-            ),
-          },
-          {
-            title: t('usage.duration'),
-            dataIndex: 'duration_ms',
-            render: (value) => (value === null ? '—' : `${value} ms`),
-          },
-          {
-            title: t('monitoring.requestId'),
-            dataIndex: 'request_id',
-            render: (value) => <Typography.Text copyable>{value}</Typography.Text>,
-          },
-        ]}
-      />
-      {cursor && (
-        <Button disabled={loading} onClick={() => void load(true)}>
-          {t('monitoring.loadOlderEvents')}
-        </Button>
-      )}
-      <p>{t('usage.privacy')}</p>
+      <div className="my-call-logs-results" role="region" aria-label={t('connections.tabLogs')} tabIndex={0}>
+        {error && <Alert type="error" showIcon title={error} />}
+        <Table
+          sticky
+          rowKey="id"
+          loading={loading}
+          dataSource={rows}
+          pagination={false}
+          scroll={{ x: 850 }}
+          onRow={(row) => ({ onClick: () => setDetail(row), style: { cursor: 'pointer' } })}
+          columns={[
+            {
+              title: t('monitoring.time'),
+              dataIndex: 'started_at',
+              render: (value) => new Date(value).toLocaleString(language),
+            },
+            { title: t('usage.server'), dataIndex: 'server' },
+            { title: t('usage.tool'), render: (_, row) => row.tool || row.method },
+            {
+              title: t('usage.result'),
+              dataIndex: 'outcome',
+              render: (value) => (
+                <Tag color={value === 'success' ? 'success' : value === 'failed' ? 'error' : 'default'}>
+                  {t(value === 'success' ? 'usage.success' : value === 'failed' ? 'usage.failed' : 'usage.unknown')}
+                </Tag>
+              ),
+            },
+            {
+              title: t('usage.duration'),
+              dataIndex: 'duration_ms',
+              render: (value) => (value === null ? '—' : `${value} ms`),
+            },
+            {
+              title: t('monitoring.requestId'),
+              dataIndex: 'request_id',
+              render: (value) => <Typography.Text copyable>{value}</Typography.Text>,
+            },
+          ]}
+        />
+        {cursor && (
+          <Button disabled={loading} onClick={() => void load(true)}>
+            {t('monitoring.loadOlderEvents')}
+          </Button>
+        )}
+        <p>{t('usage.privacy')}</p>
+      </div>
       <Drawer open={!!detail} onClose={() => setDetail(null)} title={t('usage.detail')} size="min(680px, 100vw)">
         {detail && (
           <>

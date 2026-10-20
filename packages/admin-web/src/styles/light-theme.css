@@ -100,7 +100,7 @@
 :root[data-theme='light'] .app-sider {
   background: var(--surface) !important;
   border-color: var(--line);
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 :root[data-theme='light'] .app-sider::after {
   opacity: 0.3;
@@ -108,7 +108,7 @@
 :root[data-theme='light'] .app-header {
   background: rgba(255, 255, 255, 0.94);
   border-color: var(--line);
-  box-shadow: 0 3px 16px rgba(35, 57, 88, 0.04);
+  box-shadow: none;
 }
 :root[data-theme='light'] .app-header::after {
   box-shadow: none;
@@ -122,15 +122,6 @@
 }
 :root[data-theme='light'] .brand-copy {
   color: var(--ink);
-}
-:root[data-theme='light'] .menu-count {
-  background: var(--surface-soft);
-  color: var(--muted);
-  border-color: var(--line);
-}
-:root[data-theme='light'] .ant-menu-item-selected .menu-count {
-  color: var(--blue);
-  background: #d2e4fb;
 }
 :root[data-theme='light'] .logout-button {
   color: var(--muted) !important;
