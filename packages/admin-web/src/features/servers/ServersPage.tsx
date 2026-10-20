@@ -163,6 +163,13 @@ export function ServersPage(props: ServersPageProps) {
                   <div className="server-policy-summary">
                     <small>{t('servers.accessGrants')}</small>
                     <strong>{t('servers.countUsers', { count: server.user_count })}</strong>
+                    <Tag title={t('serverDialog.gatewayAuth')}>
+                      {server.access_auth_mode === 'none'
+                        ? t('serverDialog.gatewayNone')
+                        : server.access_auth_mode === 'api_key'
+                          ? t('serverDialog.gatewayApiKey')
+                          : 'OAuth'}
+                    </Tag>
                     {server.signup_access && <Tag color="blue">{t('servers.signupAccess')}</Tag>}
                   </div>
                   <Button

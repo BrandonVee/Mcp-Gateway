@@ -22,6 +22,7 @@ import type {
   UpdateUserInput,
   UpstreamTestResult,
   UpstreamTestAuthInput,
+  UserApiKey,
 } from '@/web/types';
 import { getCurrentLanguage, getTranslation, type Language, type MessageKey } from '@/web/i18n';
 
@@ -37,6 +38,9 @@ export function apiErrorMessage(status: number, body: unknown, language: Languag
   if (code?.startsWith('unknown server: ') || code?.startsWith('unknown or disabled server: '))
     return getTranslation('api.unknownServer', language, { server: code.slice(code.indexOf(': ') + 2) });
   const known: Record<string, MessageKey> = {
+    anonymous_requires_system_credentials: 'api.anonymousRequiresSystemCredentials',
+    api_key_limit_reached: 'keys.limitReached',
+    invalid_api_key_name: 'keys.invalidName',
     invalid_user_payload: 'api.invalidUserPayload',
     invalid_instance_payload: 'api.invalidInstancePayload',
     instance_already_exists: 'api.instanceExists',
@@ -180,7 +184,26 @@ async function sendRequest<T>(url: string, init?: RequestInit, identity?: string
 export function apiForSession(session?: PlatformSession) {
   const identity = session ? `${session.user_id}:${session.auth_version}` : undefined;
   const request = <T>(url: string, init?: RequestInit) => sendRequest<T>(url, init, identity);
+  const toolSuggestions = (scope: 'admin' | 'me', filters: UsageFilters, search: string) =>
+    request<{ tools: string[] }>(
+      `/api/${scope}/monitoring/tools?` +
+        new URLSearchParams(
+          Object.entries({ ...filters, tool: undefined, tool_match: undefined, tool_search: search })
+            .filter(([, value]) => value !== undefined && value !== '')
+            .map(([key, value]) => [key, String(value)]),
+        ),
+    );
   return {
+    myApiKeys: () => request<{ keys: UserApiKey[] }>('/api/me/api-keys'),
+    createMyApiKey: (name: string) =>
+      request<UserApiKey & { key: string }>('/api/me/api-keys', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+    revokeMyApiKey: (id: string) =>
+      request<{ ok: boolean }>(`/api/me/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    usageTools: (filters: UsageFilters, search: string) => toolSuggestions('admin', filters, search),
+    myUsageTools: (filters: UsageFilters, search: string) => toolSuggestions('me', filters, search),
     systemSettings: () => request<SystemSettings>('/api/admin/system-settings'),
     addUpstreamHost: (host: string) =>
       request<SystemSettings>('/api/admin/system-settings/upstream-hosts', {

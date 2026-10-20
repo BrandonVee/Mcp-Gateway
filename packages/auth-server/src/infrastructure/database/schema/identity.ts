@@ -58,6 +58,24 @@ export const loginSessions = pgTable('login_sessions', {
   expiresAt: epoch('expires_at'),
 });
 
+/** Gateway access keys are unrelated to credentials used to authenticate upstreams. */
+export const userApiKeys = pgTable(
+  'user_api_keys',
+  {
+    id: text('id').primaryKey(),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    keyHash: text('key_hash').notNull().unique(),
+    prefix: text('prefix').notNull(),
+    userAuthVersion: integer('user_auth_version').notNull(),
+    createdAt: epoch('created_at'),
+    lastUsedAt: bigint('last_used_at', { mode: 'number' }),
+  },
+  (table) => [index('idx_user_api_keys_user').on(table.userId)],
+);
+
 /** Pending verification belongs to an email address before an account exists. */
 export const signupEmailCodes = pgTable(
   'signup_email_codes',

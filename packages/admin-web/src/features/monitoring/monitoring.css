@@ -504,11 +504,9 @@
   color: #8498b4;
 }
 .usage-panel .usage-table .ant-table {
-  background: transparent;
   border-radius: 0;
 }
 .usage-panel .usage-table .ant-table-thead > tr > th {
-  background: rgba(18, 33, 53, 0.65);
   color: #92a8c4;
   padding: 9px 12px;
   font-size: 12px;

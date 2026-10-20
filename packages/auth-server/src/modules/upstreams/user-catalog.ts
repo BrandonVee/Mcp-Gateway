@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { db } from '@/auth/infrastructure/database/client.js';
 import {
   mcpServerInstances,
@@ -18,14 +18,15 @@ export async function listUpstreamConnections(user: User) {
     .from(userServerAccess)
     .where(eq(userServerAccess.userId, user.id));
   const names = grants.map((grant) => grant.name);
-  if (user.role !== 'admin' && !user.allServers && !names.length) return { servers: [] };
   const parents = await db
     .select()
     .from(mcpServers)
     .where(
       and(
         eq(mcpServers.enabled, true),
-        user.role === 'admin' || user.allServers ? undefined : inArray(mcpServers.name, names),
+        user.role === 'admin' || user.allServers
+          ? undefined
+          : or(eq(mcpServers.accessAuthMode, 'none'), inArray(mcpServers.name, names)),
       ),
     );
   if (!parents.length) return { servers: [] };
@@ -89,6 +90,7 @@ export async function listUpstreamConnections(user: User) {
           return {
             name: instance.id,
             endpoint_name: parent.name,
+            access_auth_mode: parent.accessAuthMode,
             endpoint_display_name: parent.displayName,
             display_name: instance.displayName || instance.id,
             description: parent.description,
@@ -104,6 +106,7 @@ export async function listUpstreamConnections(user: User) {
           return {
             name: `endpoint:${parent.name}`,
             endpoint_name: parent.name,
+            access_auth_mode: parent.accessAuthMode,
             endpoint_display_name: parent.displayName,
             display_name: parent.displayName,
             description: parent.description,

@@ -31,6 +31,7 @@ export const env = {
   registryUrl: config.gateway.registryUrl,
   credentialUrl: new URL('/internal/connector-credential', config.gateway.registryUrl).toString(),
   accessCheckUrl: new URL('/internal/mcp-access', config.gateway.registryUrl).toString(),
+  apiKeyAuthUrl: new URL('/internal/api-key-auth', config.gateway.registryUrl).toString(),
   credentialBrokerToken: process.env.CREDENTIAL_BROKER_TOKEN,
   get connectionsWebUrl() {
     return databaseSettingsEnabled()
@@ -97,6 +98,7 @@ async function fetchServerConfigs(): Promise<void> {
       system_settings?: SystemSettings;
       servers?: Array<{
         name: string;
+        accessAuthMode?: McpServerConfig['accessAuthMode'];
         authMode?: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
         monitoringLogsEnabled?: boolean;
         userLimits?: McpServerConfig['userLimits'];
@@ -126,6 +128,8 @@ async function fetchServerConfigs(): Promise<void> {
       if (!instances.length) continue;
       if (server.authMode && !['none', 'api_key', 'system_api_key', 'oauth', 'system_oauth'].includes(server.authMode))
         throw new Error(`invalid auth mode for ${server.name}`);
+      if (server.accessAuthMode && !['none', 'api_key', 'oauth'].includes(server.accessAuthMode))
+        throw new Error(`invalid access auth mode for ${server.name}`);
       const upstreams = server.upstreams?.flatMap((upstream) => {
         const url = normalizeUpstreamEndpoint(upstream.url);
         if (!upstream.id || !['none', 'api_key', 'system_api_key', 'oauth', 'system_oauth'].includes(upstream.authMode))
@@ -134,6 +138,7 @@ async function fetchServerConfigs(): Promise<void> {
       });
       next.set(server.name, {
         name: server.name,
+        accessAuthMode: server.accessAuthMode ?? 'oauth',
         authMode: server.authMode ?? 'none',
         monitoringLogsEnabled: server.monitoringLogsEnabled === true,
         userLimits: server.userLimits,

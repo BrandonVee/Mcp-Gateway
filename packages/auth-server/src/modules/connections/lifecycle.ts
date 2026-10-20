@@ -30,6 +30,12 @@ export async function lockAccessibleConnection(
   const server = await lockConnectionServer(tx, userId, serverName);
   if (!server || !server.enabled || (expectedRevision !== undefined && server.authRevision !== expectedRevision))
     return null;
+  if (userId === 0)
+    return expectedAuthVersion === 0 &&
+      server.accessAuthMode === 'none' &&
+      ['none', 'system_api_key'].includes(server.authMode)
+      ? server
+      : null;
   const [user] = await tx.select().from(users).where(eq(users.id, userId)).for('share').limit(1);
   if (!user || user.disabled || (expectedAuthVersion !== undefined && user.authVersion !== expectedAuthVersion))
     return null;

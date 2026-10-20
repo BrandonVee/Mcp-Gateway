@@ -39,6 +39,8 @@ export function registerEndpointsRoutes(router: AdminRouter) {
       return jsonError(c, 'upstream_auth_required');
     const auth = authSettings(body as Record<string, unknown>);
     if (auth.error) return jsonError(c, auth.error);
+    if (body.access_auth_mode === 'none' && !['none', 'system_api_key'].includes(auth.values?.authMode ?? 'none'))
+      return jsonError(c, 'anonymous_requires_system_credentials');
     const now = Date.now();
     const requestedInstances = body.instances ?? [];
     const normalizedInstances: Array<{ id: string; url: string }> = [];
@@ -59,9 +61,10 @@ export function registerEndpointsRoutes(router: AdminRouter) {
           enabled: true,
           signupAccess: body.signup_access ?? false,
           monitoringLogsEnabled: body.monitoring_logs_enabled ?? false,
-          userRateLimitPerMinute: body.user_rate_limit_per_minute ?? 120,
+          accessAuthMode: body.access_auth_mode ?? 'oauth',
+          userRateLimitPerMinute: body.user_rate_limit_per_minute ?? 0,
           userDailyQuota: body.user_daily_quota ?? 0,
-          userMaxConcurrent: body.user_max_concurrent ?? 5,
+          userMaxConcurrent: body.user_max_concurrent ?? 0,
           createdAt: now,
           updatedAt: now,
           ...auth.values,
@@ -100,9 +103,10 @@ export function registerEndpointsRoutes(router: AdminRouter) {
         enabled: true,
         signup_access: body.signup_access ?? false,
         monitoring_logs_enabled: body.monitoring_logs_enabled ?? false,
-        user_rate_limit_per_minute: body.user_rate_limit_per_minute ?? 120,
+        access_auth_mode: body.access_auth_mode ?? 'oauth',
+        user_rate_limit_per_minute: body.user_rate_limit_per_minute ?? 0,
         user_daily_quota: body.user_daily_quota ?? 0,
-        user_max_concurrent: body.user_max_concurrent ?? 5,
+        user_max_concurrent: body.user_max_concurrent ?? 0,
         auth_mode: auth.values?.authMode,
         instances: normalizedInstances,
       },
@@ -129,6 +133,7 @@ export function registerEndpointsRoutes(router: AdminRouter) {
           if (taken) return { error: 'server already exists', status: 409 as const };
         }
         const changes: Partial<typeof mcpServers.$inferInsert> = { name: nextName, updatedAt: Date.now() };
+        if (body.access_auth_mode !== undefined) changes.accessAuthMode = body.access_auth_mode;
         if (body.monitoring_logs_enabled !== undefined) changes.monitoringLogsEnabled = body.monitoring_logs_enabled;
         if (body.user_rate_limit_per_minute !== undefined)
           changes.userRateLimitPerMinute = body.user_rate_limit_per_minute;
@@ -159,11 +164,30 @@ export function registerEndpointsRoutes(router: AdminRouter) {
           );
           Object.assign(changes, auth.values);
         }
+        if (body.routing_mode !== undefined) changes.routingMode = body.routing_mode;
+        if ((changes.accessAuthMode ?? existing.accessAuthMode) === 'none') {
+          const routing = changes.routingMode ?? existing.routingMode;
+          if (routing === 'pool' && !['none', 'system_api_key'].includes(changes.authMode ?? existing.authMode))
+            return { error: 'anonymous_requires_system_credentials', status: 400 as const };
+          if (
+            routing === 'aggregate' &&
+            existing.routingMode === 'pool' &&
+            !['none', 'system_api_key', 'system_oauth'].includes(existing.authMode)
+          )
+            return { error: 'anonymous_requires_system_credentials', status: 400 as const };
+          const upstreams = await tx.select().from(mcpServerInstances).where(eq(mcpServerInstances.serverName, name));
+          if (
+            routing === 'aggregate' &&
+            upstreams.some(
+              (upstream) => upstream.enabled && !['none', 'system_api_key', 'system_oauth'].includes(upstream.authMode),
+            )
+          )
+            return { error: 'anonymous_requires_system_credentials', status: 400 as const };
+        }
         if (body.routing_mode === 'aggregate' && existing.routingMode === 'pool') {
           await convertEndpointToGroup(tx, existing);
           changes.authRevision = existing.authRevision + 1;
         }
-        if (body.routing_mode !== undefined) changes.routingMode = body.routing_mode;
         if (body.display_name !== undefined) changes.displayName = body.display_name.trim();
         if (body.description !== undefined) changes.description = body.description.trim();
         if (body.enabled !== undefined) changes.enabled = body.enabled;

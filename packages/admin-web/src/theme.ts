@@ -53,6 +53,7 @@ const darkTheme: ThemeConfig = {
       hoverBg: '#0d1625',
     },
     Menu: {
+      activeBarBorderWidth: 0,
       darkItemBg: 'transparent',
       darkItemColor: '#8090aa',
       darkItemHoverBg: 'rgba(47, 140, 255, 0.08)',
@@ -70,7 +71,7 @@ const darkTheme: ThemeConfig = {
       trackBg: '#09111d',
     },
     Table: {
-      colorBgContainer: 'transparent',
+      colorBgContainer: '#0d1422',
       headerBg: '#101a2a',
       headerColor: '#8fa0b8',
       rowHoverBg: 'rgba(47, 140, 255, 0.06)',
@@ -116,6 +117,7 @@ const lightTheme: ThemeConfig = {
     Button: { fontWeight: 500, primaryShadow: '0 4px 12px rgba(23, 105, 194, 0.18)' },
     Card: { headerBg: 'transparent', headerFontSize: 16 },
     Menu: {
+      activeBarBorderWidth: 0,
       itemBg: 'transparent',
       itemColor: '#53657b',
       itemHoverBg: '#edf4fd',
@@ -127,7 +129,7 @@ const lightTheme: ThemeConfig = {
     Modal: { contentBg: '#ffffff', headerBg: 'transparent' },
     Segmented: { itemSelectedBg: '#ffffff', trackBg: '#edf2f8' },
     Table: {
-      colorBgContainer: 'transparent',
+      colorBgContainer: '#ffffff',
       headerBg: '#f1f5fa',
       headerColor: '#53657b',
       rowHoverBg: '#edf4fd',

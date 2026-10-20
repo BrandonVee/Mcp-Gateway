@@ -4,7 +4,7 @@ import { pool } from '@/auth/infrastructure/database/client.js';
 import type { AdminRouter } from '@/auth/modules/admin/context.js';
 import { acknowledgeAlert, listAlertEvents } from '@/auth/modules/monitoring/alert-history.js';
 import { monitoringStatus } from '@/auth/modules/monitoring/collector.js';
-import { callLogQuery, monitoringFilters } from '@/auth/modules/monitoring/query.js';
+import { callLogQuery, monitoringFilters, toolNamesQuery } from '@/auth/modules/monitoring/query.js';
 
 const histogramSql =
   'ARRAY[' + Array.from({ length: 16 }, (_, i) => `COALESCE(sum(histogram[${i + 1}]),0)`).join(',') + ']';
@@ -127,6 +127,7 @@ export function registerMonitoringRoutes(router: AdminRouter) {
   router.get('/admin/monitoring/calls', async (c) => {
     return listMonitoringCalls(c);
   });
+  router.get('/admin/monitoring/tools', (c) => listMonitoringTools(c));
   router.get('/admin/monitoring/alerts', async (c) => {
     c.header('Cache-Control', 'no-store');
     const status = c.req.query('status') ?? 'open';
@@ -148,6 +149,21 @@ export function registerMonitoringRoutes(router: AdminRouter) {
     if (!event) return c.json({ error: 'alert_not_found' }, 404);
     return c.json({ event });
   });
+}
+
+export async function listMonitoringTools(c: Context, userId?: number) {
+  c.header('Cache-Control', 'no-store');
+  let query: ReturnType<typeof toolNamesQuery>;
+  try {
+    query = toolNamesQuery(c, userId);
+  } catch {
+    return c.json({ error: 'invalid_monitoring_filter' }, 400);
+  }
+  const result = await pool.query(
+    `SELECT DISTINCT tool FROM mcp_call_events WHERE ${query.clauses.join(' AND ')} ORDER BY tool LIMIT 30`,
+    query.params,
+  );
+  return c.json({ tools: result.rows.map((row) => String(row.tool)) });
 }
 
 /** userId is supplied by authenticated server identity, never by a query parameter. */

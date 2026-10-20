@@ -155,6 +155,13 @@
       "when": 1792077981649,
       "tag": "0021_gateway_reliability",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792474592906,
+      "tag": "0022_gateway_access",
+      "breakpoints": true
     }
   ]
 }

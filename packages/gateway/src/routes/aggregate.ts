@@ -6,19 +6,24 @@ import { env } from '@/gateway/config.js';
 import { redis } from '@/gateway/lb.js';
 import { AggregateConnection, AggregateError, upstreamRpc, type AggregateSession } from '@/gateway/aggregate.js';
 import { reserveUpstreamSlot } from '@/gateway/routes/capacity.js';
-import { tokenAuthVersion } from '@/gateway/auth.js';
+import { accessIdentity, tokenAuthVersion } from '@/gateway/auth.js';
 import { AggregateSessionStore } from '@/gateway/aggregate-session.js';
 import { reportCredentialStatus } from '@/gateway/credential-status.js';
 
 export async function aggregateRequest(req: FastifyRequest, reply: FastifyReply, cfg: McpServerConfig) {
-  const owner = req.mcpAuth?.uid,
+  const userId = req.mcpAuth?.uid,
     authVersion = tokenAuthVersion(req.mcpAuth);
-  if (typeof owner !== 'number' || authVersion === null) return reply.code(401).send({ error: 'new_login_required' });
+  const anonymous = req.mcpAccessMode === 'none';
+  if (typeof userId !== 'number' || authVersion === null || (anonymous ? userId !== 0 : userId <= 0))
+    return reply.code(401).send({ error: 'new_login_required' });
+  const owner = anonymous ? accessIdentity(req) : userId;
   // Live endpoint grants are checked even for pings, lists, DELETE and stateless members.
   const access = new URL(env.accessCheckUrl);
   access.searchParams.set('server', cfg.name);
-  access.searchParams.set('user_id', String(owner));
+  access.searchParams.set('user_id', String(userId));
   access.searchParams.set('auth_version', String(authVersion));
+  access.searchParams.set('access_auth_mode', req.mcpAccessMode ?? 'oauth');
+  if (anonymous) access.searchParams.set('anonymous', '1');
   try {
     const check = await fetch(access, {
       headers: { authorization: `Bearer ${env.internalApiToken}` },
@@ -97,8 +102,9 @@ export async function aggregateRequest(req: FastifyRequest, reply: FastifyReply,
       if (!upstream) throw new AggregateError('unknown_upstream', 404, id);
       url.searchParams.set('upstream_url', upstream.url);
       url.searchParams.set('endpoint', cfg.name);
-      url.searchParams.set('user_id', String(owner));
+      url.searchParams.set('user_id', String(userId));
       url.searchParams.set('auth_version', String(authVersion));
+      if (anonymous) url.searchParams.set('anonymous', '1');
       const response = await fetch(url, {
         headers: { authorization: `Bearer ${env.credentialBrokerToken}` },
         signal: AbortSignal.timeout(10_000),
@@ -132,12 +138,12 @@ export async function aggregateRequest(req: FastifyRequest, reply: FastifyReply,
         req.monitoring?.target(u.url);
         const saved = credentials.get(u.id);
         const report = async (status: 'verified' | 'rejected') => {
-          if (!saved?.credential_version || saved.validation_status === status) return;
+          if (anonymous || !saved?.credential_version || saved.validation_status === status) return;
           if (
             await reportCredentialStatus({
               instance_id: u.id,
               upstream_url: u.url,
-              user_id: owner,
+              user_id: userId,
               auth_version: authVersion,
               credential_version: saved.credential_version,
               status,

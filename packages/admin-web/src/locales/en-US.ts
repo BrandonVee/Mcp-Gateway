@@ -1,5 +1,35 @@
 // Semantic message keys shared by the control plane and personal connections.
 export const messages = {
+  'serverDialog.gatewayAuth': 'Gateway access authentication',
+  'serverDialog.gatewayAuthHelp':
+    'How clients authenticate to this Gateway MCP endpoint. Defaults to OAuth. Configure upstream authentication separately on each MCP server.',
+  'serverDialog.gatewayApiKey': 'User API Key',
+  'serverDialog.gatewayNone': 'No authentication',
+  'serverDialog.gatewayNoneHelp':
+    'Any client can access this endpoint. Upstreams must use no authentication or administrator-managed credentials. Limits are counted by source IP.',
+  'api.anonymousRequiresSystemCredentials':
+    'Public access requires upstreams with no authentication or administrator-managed credentials.',
+  'keys.title': 'Access keys',
+  'keys.help': 'Access this Gateway’s API Key endpoints. These keys are separate from upstream API keys.',
+  'keys.authorizationHelp':
+    'Keys inherit your account’s service permissions. Revocation or account disablement blocks subsequent requests immediately. Up to 20 keys per account.',
+  'keys.create': 'Create key',
+  'keys.name': 'Name',
+  'keys.namePlaceholder': 'For example: Local MCP client',
+  'keys.prefix': 'Key',
+  'keys.createdAt': 'Created',
+  'keys.lastUsedAt': 'Last used',
+  'keys.empty': 'No access keys',
+  'keys.revoke': 'Revoke',
+  'keys.revokeTitle': 'Revoke “{name}”?',
+  'keys.revokeHelp': 'Clients using this key will lose access. Create a new key to reconnect them.',
+  'keys.created': 'Key created',
+  'keys.once': 'The full key is shown only once. Copy and save it now.',
+  'keys.copy': 'Copy key',
+  'keys.headerExample': 'Authorization: Bearer <API Key>',
+  'keys.copied': 'Key copied',
+  'keys.limitReached': 'You can create up to 20 keys. Revoke unused keys first.',
+  'keys.invalidName': 'Enter a key name containing 1–80 characters.',
   'serverDialog.invalidLimit': 'Enter a whole number within the allowed range; use 0 for unlimited.',
   'serverDialog.userRateLimit': 'Requests per user per minute',
   'serverDialog.userDailyQuota': 'Daily tool calls per user',
@@ -643,7 +673,7 @@ export const messages = {
   'connections.mcpConfigCopied': 'mcpServers entries copied',
   'connections.mcpConfigCopyFailed': 'Copy failed. Check clipboard permission and Gateway status.',
   'connections.mcpConfigHint':
-    'The copied object contains only server entries; paste it into the mcpServers field. URLs point to the Gateway and contain no passwords or keys. Sign in when your client asks; connect services requiring separate credentials here first.',
+    'Paste the copied entries into mcpServers. For OAuth, sign in when prompted. For API Key, replace YOUR_API_KEY with an access key. Public endpoints need no credential. Connect upstreams requiring personal credentials here first.',
   'connections.noConnectionNeeded': 'No connection needed',
   'connections.notConnected': 'Not connected',
   'connections.updateKey': 'Update key',
@@ -692,7 +722,7 @@ export const messages = {
   'overview.failedCalls24h': '{count} failed calls',
   'overview.successRate24h': 'Success rate · 24h',
   'overview.knownResults': 'Based on {count} known outcomes',
-  'overview.p95Latency24h': 'P95 latency bound · 24h',
+  'overview.p95Latency24h': 'P95 bound · 24h',
   'overview.servicesNeedAttention': 'Services needing attention',
   'overview.servicesNeedAttentionHelp': 'No routable instance or a call alert in the last 5 minutes',
   'overview.routableServices': 'Routable services',

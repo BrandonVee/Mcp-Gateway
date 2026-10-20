@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { databaseSettingsEnabled, systemConfigured } from '@mcp/shared';
-import { env, refreshServerConfigs } from '@/gateway/config.js';
+import { env, getServerConfig, refreshServerConfigs } from '@/gateway/config.js';
 
 /**
  * Protected Resource Metadata (RFC 9728): tells MCP clients which
@@ -35,6 +35,9 @@ export function registerMetadataRoutes(app: FastifyInstance): void {
   app.get('/.well-known/oauth-protected-resource/mcp/:serverName', async (req, reply) => {
     if (!(await ready())) return reply.code(503).send({ error: 'system_not_configured' });
     const { serverName } = req.params as { serverName: string };
+    const server = getServerConfig(serverName);
+    if (!server) return reply.code(404).send({ error: 'server_not_found' });
+    if ((server.accessAuthMode ?? 'oauth') !== 'oauth') return reply.code(404).send({ error: 'oauth_not_enabled' });
     return reply.send(metadata(`${base()}/mcp/${encodeURIComponent(serverName)}`));
   });
 }

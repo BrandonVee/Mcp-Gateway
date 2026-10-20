@@ -1,8 +1,13 @@
 import { Hono } from 'hono';
 import { currentUser } from '@/auth/modules/identity/session-user.js';
-import { listMonitoringCalls } from '@/auth/modules/monitoring/api.js';
+import { listMonitoringCalls, listMonitoringTools } from '@/auth/modules/monitoring/api.js';
 /** Registers monitoring browser routes; write protection is applied by the parent router. */
 export function registerMonitoringRoutes(router: Hono) {
+  router.get('/me/monitoring/tools', async (c) => {
+    const user = await currentUser(c);
+    if (!user) return c.json({ error: 'unauthorized' }, 401);
+    return listMonitoringTools(c, user.role === 'admin' ? undefined : user.id);
+  });
   router.get('/me/monitoring/calls', async (c) => {
     const user = await currentUser(c);
     if (!user) return c.json({ error: 'unauthorized' }, 401);

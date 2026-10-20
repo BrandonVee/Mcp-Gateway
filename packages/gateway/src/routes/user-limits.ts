@@ -31,7 +31,7 @@ export type UserPermit = { release: () => Promise<void> } | { error: string; ret
 export async function reserveUserRequest(
   redis: Pick<Redis, 'eval' | 'zrem'>,
   server: McpServerConfig,
-  userId: number,
+  userId: number | string,
   toolCalls = 0,
   now = Date.now(),
 ): Promise<UserPermit> {

@@ -1,4 +1,5 @@
 import { MyCallLogs } from '@/web/features/monitoring/MyCallLogs';
+import { UserApiKeys } from '@/web/features/connections/UserApiKeys';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, App, Button, Card, Dropdown, Empty, Input, Select, Tag, Typography } from 'antd';
 import {
@@ -48,7 +49,7 @@ export function ConnectionsPage({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [servers, setServers] = useState<ConnectionServer[]>([]);
-  const [activeTab, setActiveTab] = useState<'services' | 'logs'>('services');
+  const [activeTab, setActiveTab] = useState<'services' | 'logs' | 'keys'>('services');
   const [keyword, setKeyword] = useState('');
   const [status, setStatus] = useState<ConnectionServer['connection_status'] | 'all'>('all');
   const [selected, setSelected] = useState<ConnectionServer | null>(null);
@@ -249,6 +250,15 @@ export function ConnectionsPage({
             <FileTextOutlined />
             <span>{t('connections.tabLogs')}</span>
           </button>
+          <button
+            type="button"
+            className={`connections-sidebar-item ${activeTab === 'keys' ? 'is-active' : ''}`}
+            aria-current={activeTab === 'keys' ? 'page' : undefined}
+            onClick={() => setActiveTab('keys')}
+          >
+            <KeyOutlined />
+            <span>{t('keys.title')}</span>
+          </button>
         </nav>
         <div className="connections-sidebar-footer">
           {isAdmin && (
@@ -426,6 +436,16 @@ export function ConnectionsPage({
                           )}
                           <dl className="connection-details">
                             <div>
+                              <dt>{t('serverDialog.gatewayAuth')}</dt>
+                              <dd>
+                                {server.access_auth_mode === 'none'
+                                  ? t('serverDialog.gatewayNone')
+                                  : server.access_auth_mode === 'api_key'
+                                    ? t('serverDialog.gatewayApiKey')
+                                    : 'OAuth'}
+                              </dd>
+                            </div>
+                            <div>
                               <dt>{t('connections.mcpUrl')}</dt>
                               <dd>
                                 <code>
@@ -449,6 +469,7 @@ export function ConnectionsPage({
                         </div>
                         <div className="connection-bottom">
                           <span>
+                            {t('connectionsAdmin.upstreamAuth')}:{' '}
                             {t(
                               server.auth_mode === 'system_oauth'
                                 ? 'serverDialog.systemOauth'
@@ -458,7 +479,7 @@ export function ConnectionsPage({
                                     ? 'connections.modeApiKey'
                                     : server.auth_mode === 'oauth'
                                       ? 'connections.modeOAuth'
-                                      : 'connections.modePlatform',
+                                      : 'connectionsAdmin.noAuthRequired',
                             )}
                           </span>
                           <Button icon={<CopyOutlined />} onClick={() => copyMcpConfig([server])}>
@@ -569,6 +590,11 @@ export function ConnectionsPage({
               </div>
               <MyCallLogs session={session} />
             </div>
+            {activeTab === 'keys' && (
+              <div className="connections-tab-panel">
+                <UserApiKeys api={api} onError={checkSession} />
+              </div>
+            )}
           </section>
         )}
       </section>

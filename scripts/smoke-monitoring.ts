@@ -1,6 +1,6 @@
 /** Use only a disposable, fixture-seeded local Auth/Gateway/PostgreSQL/Redis stack. */
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { getAccessToken } from '@/scripts/oauth-token.js';
@@ -154,10 +154,25 @@ async function main() {
         .every((event: any) => JSON.parse(event.output).api_key === '[REDACTED]'),
     );
     assert.equal((await admin('/monitoring/calls?server=' + name + '&outcome=failed')).data.events.length, 20);
+    assert.deepEqual((await admin('/monitoring/tools?server=' + name + '&tool_search=ss')).data.tools, ['sse']);
+    assert.equal(
+      (await admin('/monitoring/calls?server=' + name + '&tool=s&tool_match=contains')).data.events.length,
+      1,
+    );
+    assert.equal((await admin('/monitoring/calls?server=' + name + '&tool=s&tool_match=exact')).data.events.length, 0);
     const hourly = (await admin('/monitoring/summary?server=' + name + '&hours=1')).data;
     assert.ok(hourly.trend.length >= 60);
     assert.ok(hourly.trend.some((row: any) => row.calls === 0));
     assert.ok(logs.some((event: any) => event.error === 'tool_error' && event.http_status === 200));
+    await redis.xadd(
+      'mcp:monitoring:events',
+      '*',
+      'event',
+      JSON.stringify({ ...logs[0], id: randomUUID(), method: 'http/GET', tool: '', duration_ms: null, detail: true }),
+    );
+    await waitFor(async () => (await summary()).collection.queued === 0);
+    assert.equal((await summary()).summary.requests, 23, 'transport-only events from older gateways are ignored');
+    assert.equal((await admin('/monitoring/calls?server=' + name)).data.events.length, 23);
     await redis.xadd(
       'mcp:monitoring:events',
       '*',

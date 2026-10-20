@@ -127,6 +127,8 @@ jobs:
         run: |
           DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-upstream-groups.ts
           DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp pnpm exec tsx scripts/smoke-upstream-migration.ts
+      - name: Verify gateway OAuth, user access keys, public access and zero limits
+        run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-gateway-access.ts
       - name: Verify upstream OAuth lifecycle and revocation races
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-oauth-lifecycle.ts
       - name: Verify credential validation, concurrent sessions, user quotas and recurring alerts

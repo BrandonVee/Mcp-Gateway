@@ -14,10 +14,12 @@ import { api } from '@/web/api';
 import { UsageSummaryCards } from '@/web/features/monitoring/UsageSummaryCards';
 import { useI18n } from '@/web/i18n';
 import type { AlertEvent, UsageCall, UsageFilters, UsageSummary } from '@/web/types';
+import { ToolSearchInput } from '@/web/features/monitoring/ToolSearchInput';
 
 export function UsageMonitoring() {
   const { t, language } = useI18n();
   const [form] = Form.useForm<UsageFilters>();
+  const toolMatch = useRef<'exact' | 'contains'>('contains');
   const [filters, setFilters] = useState<UsageFilters>({ hours: 24 });
   const [dimension, setDimension] = useState('tool'),
     [tab, setTab] = useState('logs');
@@ -110,6 +112,7 @@ export function UsageMonitoring() {
   };
   const resetFilters = () => {
     form.resetFields();
+    toolMatch.current = 'contains';
     setFilters({ hours: 24 });
     setRevision((value) => value + 1);
   };
@@ -191,8 +194,12 @@ export function UsageMonitoring() {
           colon={false}
           size="small"
           initialValues={{ hours: 24 }}
+          onValuesChange={(changed) => {
+            if (Object.hasOwn(changed, 'tool')) toolMatch.current = 'contains';
+            if (['hours', 'server', 'outcome'].some((key) => Object.hasOwn(changed, key))) form.submit();
+          }}
           onFinish={(values) => {
-            setFilters(values);
+            setFilters({ ...values, tool_match: toolMatch.current });
             setRevision((value) => value + 1);
           }}
           className="usage-filters"
@@ -227,7 +234,15 @@ export function UsageMonitoring() {
               />
             </Form.Item>
             <Form.Item name="tool" label={t('usage.tool')}>
-              <Input allowClear maxLength={128} placeholder={t('usage.toolPlaceholder')} />
+              <ToolSearchInput
+                filters={filters}
+                loadTools={api.usageTools}
+                onCommit={(value, match) => {
+                  form.setFieldValue('tool', value);
+                  toolMatch.current = match;
+                  form.submit();
+                }}
+              />
             </Form.Item>
             <Form.Item name="outcome" label={t('usage.result')}>
               <Select

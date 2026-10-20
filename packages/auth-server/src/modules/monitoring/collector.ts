@@ -53,6 +53,8 @@ async function countTopologyFlow(event: CallEvent): Promise<void> {
 export async function storeCallEvent(input: unknown) {
   const event = validCallEvent(input);
   if (!event) return false;
+  // Consume transport-only events left by older gateways without persisting them.
+  if (/^http\//i.test(event.method)) return true;
   let fresh = false;
   await db.transaction(async (tx) => {
     const inserted = await tx

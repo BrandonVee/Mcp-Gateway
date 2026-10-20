@@ -56,6 +56,11 @@ export function registerUpstreamsRoutes(router: AdminRouter) {
       .transaction(async (tx) => {
         const [parent] = await tx.select().from(mcpServers).where(eq(mcpServers.name, serverName)).for('update');
         if (!parent) return [];
+        if (
+          parent.accessAuthMode === 'none' &&
+          !['none', 'system_api_key', 'system_oauth'].includes(auth.values?.authMode ?? 'none')
+        )
+          throw new Error('anonymous_requires_system_credentials');
         if (body.auth_mode !== undefined) await convertEndpointToGroup(tx, parent);
         const result = await tx
           .insert(mcpServerInstances)
@@ -75,9 +80,12 @@ export function registerUpstreamsRoutes(router: AdminRouter) {
         return result;
       })
       .catch((error) => {
+        if (error instanceof Error && error.message === 'anonymous_requires_system_credentials')
+          return 'anonymous_requires_system_credentials' as const;
         if (error instanceof Error && error.message === 'instance_already_exists') return [];
         throw error;
       });
+    if (typeof inserted === 'string') return jsonError(c, inserted);
     if (!inserted.length) return jsonError(c, 'instance_already_exists', 409);
     return c.json({ id, server_name: serverName, url, enabled: true }, 201);
   });
@@ -110,6 +118,12 @@ export function registerUpstreamsRoutes(router: AdminRouter) {
         if (auth.error) return { error: auth.error, status: 400 as const };
         Object.assign(changes, auth.values);
       }
+      if (
+        parent?.accessAuthMode === 'none' &&
+        (changes.enabled ?? instance.enabled) &&
+        !['none', 'system_api_key', 'system_oauth'].includes(changes.authMode ?? instance.authMode)
+      )
+        return { error: 'anonymous_requires_system_credentials', status: 400 as const };
       const authChanged = Object.keys(changes).some(
         (key) =>
           !['updatedAt', 'displayName'].includes(key) &&

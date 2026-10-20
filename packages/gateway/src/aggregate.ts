@@ -15,7 +15,7 @@ export type AggregateMember = {
   toolNames?: string[];
 };
 export type AggregateSession = {
-  owner: number;
+  owner: number | string;
   authVersion: number;
   members: Record<string, AggregateMember>;
   toolRoutes?: Record<string, ToolRoute>;

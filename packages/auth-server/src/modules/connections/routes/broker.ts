@@ -1,7 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '@/auth/infrastructure/database/client.js';
-import { users } from '@/auth/infrastructure/database/schema.js';
+import { mcpServers, users } from '@/auth/infrastructure/database/schema.js';
 import { internalTokenMatches } from '@/auth/shared/security/internal-token.js';
 import { accessibleServer, resolveCredential } from '@/auth/modules/connections/pool/service.js';
 /** Registers broker browser routes; write protection is applied by the parent router. */
@@ -16,6 +16,19 @@ export function registerBrokerRoutes(router: Hono) {
     const serverName = c.req.query('server') ?? '';
     const version = c.req.query('auth_version') ?? '0';
     const authVersion = Number(version);
+    if (c.req.query('anonymous') === '1') {
+      if (userId !== 0 || authVersion !== 0) return c.json({ error: 'invalid_user' }, 400);
+      const [server] = await db
+        .select()
+        .from(mcpServers)
+        .where(
+          and(eq(mcpServers.name, serverName), eq(mcpServers.enabled, true), eq(mcpServers.accessAuthMode, 'none')),
+        )
+        .limit(1);
+      if (!server || server.authMode !== 'system_api_key') return c.json({ error: 'access_denied' }, 403);
+      const credential = await resolveCredential(0, server, 0);
+      return credential ? c.json(credential) : c.json({ error: 'system_credential_unavailable' }, 503);
+    }
     if (!Number.isSafeInteger(userId) || userId <= 0) return c.json({ error: 'invalid_user' }, 400);
     if (!/^\d+$/.test(version) || !Number.isSafeInteger(authVersion)) return c.json({ error: 'user_unavailable' }, 403);
     const [row] = await db

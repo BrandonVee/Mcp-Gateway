@@ -17,16 +17,17 @@ export function registerBrokerRoutes(router: Hono) {
     c.header('Cache-Control', 'no-store');
     const id = Number(c.req.query('user_id')),
       version = Number(c.req.query('auth_version'));
+    const anonymous = c.req.query('anonymous') === '1';
     if (
       !Number.isSafeInteger(id) ||
-      id <= 0 ||
+      (anonymous ? id !== 0 || version !== 0 : id <= 0) ||
       !/^\d+$/.test(c.req.query('auth_version') ?? '') ||
       !Number.isSafeInteger(version)
     )
       return c.json({ error: 'invalid_user' }, 400);
     const result = await resolveUpstreamCredential(
       c.req.query('instance_id') ?? '',
-      { id, authVersion: version, role: 'user' },
+      { id, authVersion: version, role: 'user', anonymous },
       c.req.query('endpoint') ?? '',
       c.req.query('upstream_url') ?? '',
     );

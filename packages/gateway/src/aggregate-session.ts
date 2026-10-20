@@ -15,7 +15,7 @@ export class AggregateSessionStore {
   constructor(
     private redis: Pick<Redis, 'get' | 'set' | 'eval' | 'expire'>,
     readonly key: string,
-    private owner: number,
+    private owner: number | string,
     private authVersion: number,
     private ttl: number,
   ) {}

@@ -7,7 +7,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { env, getServerConfig, refreshServerConfigs } from '@/gateway/config.js';
 import { redis, pickInstance, bindSession, touchSession, removeSession, sessionOwnedBy } from '@/gateway/lb.js';
-import { forbidden, hasServerAccess, tokenAuthVersion, unauthorized } from '@/gateway/auth.js';
+import { accessIdentity, forbidden, hasServerAccess, tokenAuthVersion, unauthorized } from '@/gateway/auth.js';
 import { filterRequestHeaders, filterResponseHeaders } from '@/gateway/routes/headers.js';
 import { reserveUpstreamSlot } from '@/gateway/routes/capacity.js';
 import { mcpCorsHeaders } from '@/gateway/routes/origin.js';
@@ -59,7 +59,8 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
   }
 
   const userId = req.mcpAuth?.uid;
-  if (typeof userId !== 'number' || !Number.isSafeInteger(userId) || userId <= 0) {
+  const anonymous = req.mcpAccessMode === 'none';
+  if (typeof userId !== 'number' || !Number.isSafeInteger(userId) || (anonymous ? userId !== 0 : userId <= 0)) {
     await reply.code(401).send({ error: 'new_login_required' });
     return;
   }
@@ -70,7 +71,12 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
   }
 
   try {
-    const permit = await reserveUserRequest(redis, cfg, userId, toolCallCount(req.body));
+    const permit = await reserveUserRequest(
+      redis,
+      cfg,
+      anonymous ? accessIdentity(req) : userId,
+      toolCallCount(req.body),
+    );
     if ('error' in permit) {
       await reply
         .code(429)
@@ -89,14 +95,15 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
     return;
   }
 
-  // Servers without upstream credentials still need a live access check;
-  // otherwise an old JWT could outlive an admin's disable/revoke action.
-  if (cfg.authMode === 'none') {
+  // Recheck the entry policy as well as mutable account/grant state.
+  {
     try {
       const accessUrl = new URL(env.accessCheckUrl);
       accessUrl.searchParams.set('server', serverName);
       accessUrl.searchParams.set('user_id', String(userId));
       accessUrl.searchParams.set('auth_version', String(authVersion));
+      accessUrl.searchParams.set('access_auth_mode', req.mcpAccessMode ?? 'oauth');
+      if (anonymous) accessUrl.searchParams.set('anonymous', '1');
       const result = await fetch(accessUrl, {
         headers: { authorization: `Bearer ${env.internalApiToken}` },
         signal: AbortSignal.timeout(10_000),
@@ -126,6 +133,7 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
       credentialUrl.searchParams.set('server', serverName);
       credentialUrl.searchParams.set('user_id', String(userId));
       credentialUrl.searchParams.set('auth_version', String(authVersion));
+      if (anonymous) credentialUrl.searchParams.set('anonymous', '1');
       const result = await fetch(credentialUrl, {
         headers: { authorization: `Bearer ${env.credentialBrokerToken}` },
         signal: AbortSignal.timeout(10_000),
@@ -160,7 +168,7 @@ async function proxyRequest(req: FastifyRequest, reply: FastifyReply): Promise<v
 
   const incomingSessionId =
     typeof req.headers['mcp-session-id'] === 'string' ? req.headers['mcp-session-id'] : undefined;
-  const sessionOwner = String(req.mcpAuth?.uid ?? req.mcpAuth?.sub ?? '');
+  const sessionOwner = accessIdentity(req);
   if (incomingSessionId && !(await sessionOwnedBy(serverName, incomingSessionId, sessionOwner))) {
     await reply.code(404).send({ error: 'session_not_found' });
     return;

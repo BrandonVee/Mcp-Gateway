@@ -69,10 +69,9 @@ export class RequestMonitor {
     private detail: boolean,
   ) {}
   parse() {
-    this.items = requestMetadata(this.req.body, this.req.method, this.detail && this.contentEnabled).map((rpc) => ({
-      rpc,
-      done: false,
-    }));
+    this.items = requestMetadata(this.req.body, this.req.method, this.detail && this.contentEnabled)
+      .filter((rpc) => !/^http\//i.test(rpc.method))
+      .map((rpc) => ({ rpc, done: false }));
   }
   setContentEnabled(enabled: boolean) {
     this.contentEnabled = enabled;
@@ -163,13 +162,7 @@ export class RequestMonitor {
       const error =
         this.error ||
         (aborted ? 'stream_interrupted' : failed ? 'http_' + status : outcome === 'unknown' ? 'result_unobserved' : '');
-      // HTTP/GET connection duration is not tool execution latency.
-      this.record(
-        item,
-        outcome,
-        error,
-        outcome === 'unknown' || item.rpc.method === 'http/GET' ? null : Date.now() - this.started,
-      );
+      this.record(item, outcome, error, outcome === 'unknown' ? null : Date.now() - this.started);
     }
   }
 }

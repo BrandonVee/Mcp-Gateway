@@ -328,6 +328,7 @@ code,
 
 .metric-card {
   position: relative;
+  height: 100%;
   overflow: hidden;
   transition:
     transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
@@ -388,10 +389,22 @@ code,
   --metric-bg: #fff0f0;
 }
 
+.metric-card .ant-statistic {
+  flex: 1;
+  min-width: 0;
+}
+
 .metric-card .ant-statistic-title {
   color: #69768a;
   font-size: 12px;
   font-weight: 600;
+}
+
+.metric-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .metric-card .ant-statistic-content {
@@ -405,6 +418,7 @@ code,
 .metric-icon {
   width: 42px;
   height: 42px;
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   color: var(--metric-color);

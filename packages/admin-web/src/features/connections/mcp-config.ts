@@ -17,6 +17,7 @@ export function mcpConfig(servers: ConnectionServer[], resource: string): string
       {
         type: 'streamableHttp',
         url: mcpServerUrl(server.endpoint_name ?? server.name, resource),
+        ...(server.access_auth_mode === 'api_key' ? { headers: { Authorization: 'Bearer YOUR_API_KEY' } } : {}),
       },
     ]),
   );

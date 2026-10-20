@@ -7,12 +7,14 @@ import { registerPoolConnectionRoutes } from '@/auth/modules/connections/pool/ro
 import { registerMonitoringRoutes } from '@/auth/modules/connections/routes/monitoring.js';
 import { registerRegistrationRoutes } from '@/auth/modules/connections/routes/registration.js';
 import { registerSessionsRoutes } from '@/auth/modules/connections/routes/sessions.js';
+import { registerApiKeyRoutes } from '@/auth/modules/connections/routes/api-keys.js';
 
 /** Shared browser security applies to pool connections and independently scoped upstreams. */
 export function createConnectionsRouter(): Hono {
   const router = new Hono();
   registerConnectionMiddleware(router);
   registerSessionsRoutes(router);
+  registerApiKeyRoutes(router);
   registerRegistrationRoutes(router);
   registerEmailRoutes(router);
   registerMonitoringRoutes(router);

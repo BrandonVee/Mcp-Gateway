@@ -8,7 +8,7 @@ import {
   SafetyCertificateOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import { Alert, Avatar, Badge, Card, Col, Empty, Flex, List, Row, Statistic, Tag } from 'antd';
+import { Alert, Avatar, Badge, Card, Col, Empty, Flex, List, Row, Statistic, Tag, Tooltip } from 'antd';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { api as platformApi } from '@/web/api';
 import type { AdminUser, McpServer, SystemSettings, UsageSummary, View } from '@/web/types';
@@ -236,8 +236,15 @@ function MetricCard({
           }
         }}
       >
-        <Flex justify="space-between" align="flex-start">
-          <Statistic title={title} value={value} />
+        <Flex justify="space-between" align="flex-start" gap={12}>
+          <Statistic
+            title={
+              <Tooltip title={title}>
+                <span className="metric-title">{title}</span>
+              </Tooltip>
+            }
+            value={value}
+          />
           <span className="metric-icon">{icon}</span>
         </Flex>
         <div className="metric-detail metric-parameter">

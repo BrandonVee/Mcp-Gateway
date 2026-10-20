@@ -34,6 +34,7 @@ export interface McpInstance extends Partial<ServerAuthInput> {
 }
 
 export interface ServerPolicyInput {
+  access_auth_mode?: 'none' | 'api_key' | 'oauth';
   monitoring_logs_enabled?: boolean;
   user_rate_limit_per_minute?: number;
   user_daily_quota?: number;
@@ -186,6 +187,7 @@ export interface CreateServerInput extends ServerPolicyInput {
 export type ServerAuthInput = Omit<CreateServerInput, 'name' | 'display_name' | 'description' | 'instances'>;
 
 export interface ConnectionServer {
+  access_auth_mode?: 'none' | 'api_key' | 'oauth';
   endpoint_name?: string;
   endpoint_display_name?: string;
   name: string;
@@ -194,6 +196,14 @@ export interface ConnectionServer {
   auth_mode: 'none' | 'api_key' | 'system_api_key' | 'oauth' | 'system_oauth';
   connection_status: 'not_required' | 'not_connected' | 'saved' | 'connected' | 'rejected' | 'expired';
   validated_at?: number | null;
+}
+
+export interface UserApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: number;
+  last_used_at: number | null;
 }
 
 export interface AddInstanceInput extends Partial<ServerAuthInput> {
@@ -240,6 +250,7 @@ export interface UsageFilters {
   end?: number;
   server?: string;
   tool?: string;
+  tool_match?: 'exact' | 'contains';
   user_id?: string;
   client_id?: string;
   outcome?: string;

@@ -23,6 +23,7 @@ export function createRegistryRouter(): Hono {
         name: mcpServers.name,
         displayName: mcpServers.displayName,
         authMode: mcpServers.authMode,
+        accessAuthMode: mcpServers.accessAuthMode,
         routingMode: mcpServers.routingMode,
         monitoringLogsEnabled: mcpServers.monitoringLogsEnabled,
         perMinute: mcpServers.userRateLimitPerMinute,
@@ -83,23 +84,29 @@ export function createRegistryRouter(): Hono {
     const userId = Number(c.req.query('user_id'));
     const authVersion = Number(c.req.query('auth_version') ?? '0');
     const serverName = c.req.query('server') ?? '';
+    const anonymous = c.req.query('anonymous') === '1';
     if (
       !Number.isSafeInteger(userId) ||
-      userId <= 0 ||
+      (anonymous ? userId !== 0 || authVersion !== 0 : userId <= 0) ||
       !Number.isSafeInteger(authVersion) ||
       authVersion < 0 ||
       !serverName
     )
       return c.json({ error: 'invalid_request' }, 400);
+    const [server] = await db
+      .select({ name: mcpServers.name, enabled: mcpServers.enabled, accessAuthMode: mcpServers.accessAuthMode })
+      .from(mcpServers)
+      .where(eq(mcpServers.name, serverName))
+      .limit(1);
+    if (!server?.enabled) return c.json({ error: 'access_denied' }, 403);
+    const mode = c.req.query('access_auth_mode');
+    if (mode !== undefined && mode !== server.accessAuthMode) return c.json({ error: 'access_denied' }, 403);
+    if (anonymous)
+      return server.accessAuthMode === 'none' ? c.json({ allowed: true }) : c.json({ error: 'access_denied' }, 403);
     const [user] = await db
       .select({ id: users.id, role: users.role, disabled: users.disabled, allServers: users.allServers })
       .from(users)
       .where(and(eq(users.id, userId), eq(users.authVersion, authVersion)))
-      .limit(1);
-    const [server] = await db
-      .select({ name: mcpServers.name, enabled: mcpServers.enabled })
-      .from(mcpServers)
-      .where(eq(mcpServers.name, serverName))
       .limit(1);
     if (!user || user.disabled || !server?.enabled) return c.json({ error: 'access_denied' }, 403);
     if (user.role !== 'admin' && !user.allServers) {

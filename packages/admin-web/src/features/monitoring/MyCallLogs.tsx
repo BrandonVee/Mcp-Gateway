@@ -1,10 +1,11 @@
 import dayjs, { type Dayjs } from 'dayjs';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, DatePicker, Drawer, Form, Input, Select, Space, Table, Tag, Typography } from 'antd';
 import { DownOutlined, ReloadOutlined } from '@ant-design/icons';
 import { apiForSession } from '@/web/api';
 import { useI18n } from '@/web/i18n';
 import type { PlatformSession, UsageCall, UsageFilters } from '@/web/types';
+import { ToolSearchInput } from '@/web/features/monitoring/ToolSearchInput';
 
 type CallLogForm = Omit<UsageFilters, 'hours' | 'start' | 'end'> & { timeRange: [Dayjs, Dayjs] };
 
@@ -19,6 +20,8 @@ function queryFilters({ timeRange, ...values }: CallLogForm): UsageFilters {
 
 export function MyCallLogs({ session }: { session: PlatformSession }) {
   const { t, language } = useI18n();
+  const api = useMemo(() => apiForSession(session), [session.user_id, session.auth_version]);
+  const toolMatch = useRef<'exact' | 'contains'>('contains');
   const [initialRange] = useState(() => recentRange());
   const [form] = Form.useForm<CallLogForm>();
   const [filters, setFilters] = useState<UsageFilters>(() => queryFilters({ timeRange: initialRange }));
@@ -33,7 +36,7 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
     const version = more ? generation.current : ++generation.current;
     setLoading(true);
     try {
-      const page = await apiForSession(session).myUsageCalls(filters, more ? (cursor ?? undefined) : undefined);
+      const page = await api.myUsageCalls(filters, more ? (cursor ?? undefined) : undefined);
       if (version !== generation.current) return;
       setRows((previous) =>
         more ? [...previous, ...page.events.filter((row) => !previous.some((p) => p.id === row.id))] : page.events,
@@ -59,7 +62,11 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
         form={form}
         layout="vertical"
         initialValues={{ timeRange: initialRange }}
-        onFinish={(values) => setFilters(queryFilters(values))}
+        onValuesChange={(changed) => {
+          if (Object.hasOwn(changed, 'tool')) toolMatch.current = 'contains';
+          if ((changed.timeRange?.[0] && changed.timeRange[1]) || Object.hasOwn(changed, 'outcome')) form.submit();
+        }}
+        onFinish={(values) => setFilters(queryFilters({ ...values, tool_match: toolMatch.current }))}
       >
         <Form.Item name="timeRange" label={t('usage.timeRange')} className="my-call-logs-time-range">
           <DatePicker.RangePicker
@@ -87,7 +94,7 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
           <Form.Item
             key={key}
             name={key}
-            hidden={index > 0 && !advancedFilters}
+            hidden={index > 1 && !advancedFilters}
             label={t(
               key === 'q'
                 ? 'usage.contentSearch'
@@ -98,7 +105,19 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
                     : `usage.${key}`,
             )}
           >
-            <Input allowClear />
+            {key === 'tool' ? (
+              <ToolSearchInput
+                filters={filters}
+                loadTools={api.myUsageTools}
+                onCommit={(value, match) => {
+                  form.setFieldValue('tool', value);
+                  toolMatch.current = match;
+                  form.submit();
+                }}
+              />
+            ) : (
+              <Input allowClear />
+            )}
           </Form.Item>
         ))}
         <Form.Item name="outcome" label={t('usage.result')}>
@@ -117,6 +136,7 @@ export function MyCallLogs({ session }: { session: PlatformSession }) {
           <Button
             onClick={() => {
               form.resetFields();
+              toolMatch.current = 'contains';
               const timeRange = recentRange();
               form.setFieldsValue({ timeRange });
               setFilters(queryFilters({ timeRange }));

@@ -132,6 +132,7 @@ function CreateServerDialog({
         instances: [],
         auth_mode: 'none',
         routing_mode: 'aggregate',
+        access_auth_mode: values.access_auth_mode,
         monitoring_logs_enabled: values.monitoring_logs_enabled,
         user_rate_limit_per_minute: values.user_rate_limit_per_minute,
         user_daily_quota: values.user_daily_quota,
@@ -180,9 +181,10 @@ function CreateServerDialog({
           api_key_header: 'authorization',
           api_key_prefix: 'Bearer ',
           monitoring_logs_enabled: false,
-          user_rate_limit_per_minute: 120,
+          access_auth_mode: 'oauth',
+          user_rate_limit_per_minute: 0,
           user_daily_quota: 0,
-          user_max_concurrent: 5,
+          user_max_concurrent: 0,
         }}
       >
         <div className="dialog-form-grid">
@@ -329,6 +331,7 @@ function EditServerDialog({
             routing_mode: values.routing_mode,
             description: values.description.trim(),
             monitoring_logs_enabled: values.monitoring_logs_enabled,
+            access_auth_mode: values.access_auth_mode,
             user_rate_limit_per_minute: values.user_rate_limit_per_minute,
             user_daily_quota: values.user_daily_quota,
             user_max_concurrent: values.user_max_concurrent,
@@ -348,9 +351,10 @@ function EditServerDialog({
           description: server.description ?? '',
           routing_mode: server.routing_mode ?? 'aggregate',
           monitoring_logs_enabled: server.monitoring_logs_enabled ?? false,
-          user_rate_limit_per_minute: server.user_rate_limit_per_minute ?? 120,
+          access_auth_mode: server.access_auth_mode ?? 'oauth',
+          user_rate_limit_per_minute: server.user_rate_limit_per_minute ?? 0,
           user_daily_quota: server.user_daily_quota ?? 0,
-          user_max_concurrent: server.user_max_concurrent ?? 5,
+          user_max_concurrent: server.user_max_concurrent ?? 0,
         }}
       >
         <div className="dialog-form-grid">
@@ -413,6 +417,28 @@ function ServerPolicyFields() {
   ];
   return (
     <>
+      <Form.Item
+        name="access_auth_mode"
+        label={t('serverDialog.gatewayAuth')}
+        className="dialog-field-full"
+        extra={t('serverDialog.gatewayAuthHelp')}
+        rules={[{ required: true }]}
+      >
+        <Select
+          options={[
+            { value: 'oauth', label: 'OAuth' },
+            { value: 'api_key', label: t('serverDialog.gatewayApiKey') },
+            { value: 'none', label: t('serverDialog.gatewayNone') },
+          ]}
+        />
+      </Form.Item>
+      <Form.Item noStyle shouldUpdate={(previous, next) => previous.access_auth_mode !== next.access_auth_mode}>
+        {({ getFieldValue }) =>
+          getFieldValue('access_auth_mode') === 'none' ? (
+            <Alert className="dialog-field-full" type="info" showIcon message={t('serverDialog.gatewayNoneHelp')} />
+          ) : null
+        }
+      </Form.Item>
       <Form.Item
         name="user_rate_limit_per_minute"
         label={t('serverDialog.userRateLimit')}

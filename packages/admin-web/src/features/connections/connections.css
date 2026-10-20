@@ -1,4 +1,20 @@
 /* The navigation and tools stay in place; only results scroll. */
+.user-api-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.api-key-secret {
+  display: flex;
+  gap: 8px;
+  margin-block: 20px 12px;
+}
+
+.api-key-secret > .ant-input-affix-wrapper {
+  min-width: 0;
+}
+
 .connections-page {
   display: grid;
   grid-template-columns: 208px minmax(0, 1fr);
@@ -408,7 +424,7 @@
 
 .connections-page .my-call-logs-form {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   flex-shrink: 0;
   gap: 12px 16px;
   max-height: 44dvh;
@@ -443,7 +459,7 @@
 .my-call-logs-results {
   flex: 1;
   min-height: 0;
-  padding: 20px 28px;
+  padding: 0 28px 20px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -557,7 +573,7 @@
   }
 
   .my-call-logs-results {
-    padding: 16px;
+    padding: 0 16px 16px;
   }
 
   .my-call-logs-actions .ant-btn {

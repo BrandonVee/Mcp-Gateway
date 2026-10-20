@@ -4,7 +4,7 @@ import { test, type TestContext } from 'node:test';
 import { applySystemSettings, currentSystemSettings, type CallEvent, type McpServerConfig } from '@/shared/index.js';
 import { env, serverConfigs } from '@/gateway/config.js';
 import { redis } from '@/gateway/lb.js';
-import { monitoringRedis, registerMonitoring } from '@/gateway/monitoring.js';
+import { monitoringRedis, registerMonitoring, RequestMonitor } from '@/gateway/monitoring.js';
 import { registerMcpRoutes } from '@/gateway/routes/mcp.js';
 
 const Fastify = createRequire(new URL('../packages/gateway/package.json', import.meta.url))('fastify');
@@ -206,6 +206,25 @@ test('parallel tools in the same session both reach upstream before either finis
     responses.map((r) => r.statusCode),
     [200, 200],
   );
+});
+
+test('HTTP transport requests do not create tool monitoring events while real tool calls remain recorded', async (t) => {
+  const f = await fixture(t);
+  const count = f.events.length;
+  for (const [method, body, status] of [
+    ['GET', undefined, 200],
+    ['DELETE', undefined, 204],
+    ['POST', Buffer.from('invalid'), 400],
+  ] as const) {
+    const monitor = new RequestMonitor({ method, body, url: '/mcp/aggregate-regression' } as any, true);
+    monitor.parse();
+    monitor.finish(status);
+  }
+  assert.equal(f.events.length, count);
+  assert.equal((await f.rpc('tools/call', { name: 'fast' })).statusCode, 200);
+  assert.equal(f.events.length, count + 1);
+  assert.equal(f.events.at(-1)!.method, 'tools/call');
+  assert.equal(f.events.at(-1)!.tool, 'fast');
 });
 
 test('aggregate monitoring records successful, tool-error and JSON-RPC-error results exactly once', async (t) => {

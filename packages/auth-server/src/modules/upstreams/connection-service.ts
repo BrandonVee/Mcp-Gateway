@@ -22,7 +22,7 @@ import {
   tokenExpiry,
 } from '@/auth/modules/upstreams/token-exchange.js';
 
-export type Identity = { id: number; authVersion: number; role: 'admin' | 'user' };
+export type Identity = { id: number; authVersion: number; role: 'admin' | 'user'; anonymous?: boolean };
 
 /** Parent -> upstream -> user -> grant -> credential: the common lock order. */
 export async function lockUpstream(tx: AuthTransaction, id: string, user: Identity, revision?: number) {
@@ -40,6 +40,16 @@ export async function lockUpstream(tx: AuthTransaction, id: string, user: Identi
     (revision !== undefined && upstream.authRevision !== revision)
   )
     return null;
+  if (user.anonymous) {
+    if (
+      user.id !== 0 ||
+      user.authVersion !== 0 ||
+      parent.accessAuthMode !== 'none' ||
+      !['none', 'system_api_key', 'system_oauth'].includes(upstream.authMode)
+    )
+      return null;
+    return { upstream, parent, account: null };
+  }
   const [account] = await tx.select().from(users).where(eq(users.id, user.id)).for('share');
   if (!account || account.disabled || account.authVersion !== user.authVersion) return null;
   if (account.role !== 'admin' && !account.allServers) {

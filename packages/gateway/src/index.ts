@@ -75,11 +75,16 @@ await app.register(async (instance) => {
   instance.addHook('onRequest', authHook);
   instance.get('/servers', async (req) => ({
     servers: [...serverConfigs.values()]
-      .filter((server) => hasServerAccess(req.mcpAuth, server.name))
+      .filter(
+        (server) =>
+          server.accessAuthMode === 'none' ||
+          ((server.accessAuthMode ?? 'oauth') === req.mcpAccessMode && hasServerAccess(req.mcpAuth, server.name)),
+      )
       .map((server) => ({
         name: server.name,
         instances: server.instances.length,
         url: `/mcp/${server.name}`,
+        access_auth_mode: server.accessAuthMode ?? 'oauth',
       })),
   }));
   registerMcpRoutes(instance);

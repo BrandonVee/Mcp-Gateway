@@ -4,7 +4,9 @@ export function monitoringFilters(c: Context, table: 'metrics' | 'events', fixed
   const hours = c.req.query('hours') === undefined ? 24 : Number(c.req.query('hours'));
   if (![1, 24, 168, 720, 8760].includes(hours)) throw new Error('invalid hours');
   const params: unknown[] = [Date.now() - (fixedMinutes ?? hours * 60) * 60000];
-  const clauses = [`${table === 'metrics' ? 'minute' : 'started_at'} >= $1`];
+  const clauses = [`${table === 'metrics' ? 'minute' : 'started_at'} >= $1`, "method NOT ILIKE 'http/%'"];
+  const toolMatch = c.req.query('tool_match') ?? 'exact';
+  if (!['exact', 'contains'].includes(toolMatch)) throw new Error('invalid tool match');
   for (const key of [
     'server',
     'tool',
@@ -19,8 +21,13 @@ export function monitoringFilters(c: Context, table: 'metrics' | 'events', fixed
     if (key === 'user_id' && (!Number.isSafeInteger(Number(value)) || Number(value) < 0))
       throw new Error('invalid user');
     if (key === 'outcome' && !['success', 'failed', 'unknown'].includes(value)) throw new Error('invalid outcome');
-    params.push(key === 'user_id' ? Number(value) : value);
-    clauses.push(`${key}=$${params.length}`);
+    if (key === 'tool' && toolMatch === 'contains') {
+      params.push('%' + value.replace(/[\\%_]/g, '\\$&') + '%');
+      clauses.push(`tool ILIKE $${params.length}`);
+    } else {
+      params.push(key === 'user_id' ? Number(value) : value);
+      clauses.push(`${key}=$${params.length}`);
+    }
   }
   if (table === 'events') {
     const query = c.req.query('q');
@@ -83,4 +90,17 @@ export function callLogQuery(c: Context, userId?: number) {
     }
   }
   return { params, clauses };
+}
+
+/** Suggestions use the same time, service and identity boundaries as the log list. */
+export function toolNamesQuery(c: Context, userId?: number) {
+  const query = callLogQuery(c, userId);
+  query.clauses.push("method='tools/call'", "tool<>''");
+  const search = c.req.query('tool_search') ?? '';
+  if (search.length > 128 || /[\x00-\x1f\x7f]/.test(search)) throw new Error('invalid tool search');
+  if (search) {
+    query.params.push('%' + search.replace(/[\\%_]/g, '\\$&') + '%');
+    query.clauses.push(`tool ILIKE $${query.params.length}`);
+  }
+  return query;
 }

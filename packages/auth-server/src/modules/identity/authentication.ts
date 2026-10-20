@@ -9,6 +9,7 @@ import {
   refreshTokens,
   upstreamOAuthStates,
   users,
+  userApiKeys,
   userServerAccess,
 } from '@/auth/infrastructure/database/schema.js';
 import { scryptHash, scryptVerify } from '@/auth/infrastructure/security/password.js';
@@ -40,6 +41,7 @@ export async function withAuthenticatedUser<T>(
 }
 
 export async function revokeUserAuthentication(tx: AuthTransaction, userId: number): Promise<void> {
+  await tx.delete(userApiKeys).where(eq(userApiKeys.userId, userId));
   await tx.delete(loginSessions).where(eq(loginSessions.userId, userId));
   await tx.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
   await tx.delete(authCodes).where(eq(authCodes.userId, userId));

@@ -18,6 +18,7 @@ export const serverDescription = z.string({ invalid_type_error: DESCRIPTION_MESS
 
 export const signupAccess = z.boolean({ invalid_type_error: 'signup_access must be a boolean' });
 const serverPolicyFields = {
+  access_auth_mode: z.enum(['none', 'api_key', 'oauth']).optional(),
   monitoring_logs_enabled: z.boolean().optional(),
   user_rate_limit_per_minute: z.number().int().min(0).max(100000).optional(),
   user_daily_quota: z.number().int().min(0).max(100000000).optional(),
