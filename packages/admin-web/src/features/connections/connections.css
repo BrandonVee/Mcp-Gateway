@@ -228,34 +228,37 @@
 }
 
 .connections-page .connections-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--surface);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  align-items: stretch;
+  gap: 18px;
 }
 
 .connections-page .connection-card.ant-card {
-  min-height: 0;
-  border: 0 !important;
-  border-radius: 0;
+  min-width: 0;
+  min-height: 280px;
+  height: 100%;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px;
   background: var(--surface) !important;
   box-shadow: none;
   transform: none;
 }
 
-.connections-page .connection-card.ant-card + .connection-card {
-  border-top: 1px solid var(--line) !important;
+.connections-page .connection-card.ant-card:hover {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line)) !important;
 }
 
 .connections-page .connection-card > .ant-card-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 380px);
-  align-items: center;
-  gap: 24px;
-  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 20px;
+  padding: 20px;
+}
+
+.connection-info {
+  flex: 1;
 }
 
 .connection-info,
@@ -265,16 +268,19 @@
 
 .connection-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px 12px;
 }
 
 .connections-page .connection-card h2 {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   max-width: 100%;
   color: var(--ink);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -292,11 +298,14 @@
 }
 
 .connection-details {
-  margin: 12px 0 0;
+  margin: 16px 0 0;
 }
 
 .connection-details dt {
-  display: none;
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .connection-details dd {
@@ -308,9 +317,12 @@
   color: var(--muted);
   font-size: 12px;
   line-height: 1.6;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
   overflow-wrap: anywhere;
   user-select: text;
-  background: transparent;
+  background: var(--surface-soft);
 }
 
 .connections-page .connection-card .service-description-compact {
@@ -333,12 +345,13 @@
 
 .connections-page .connection-bottom {
   display: flex;
-  justify-content: flex-end;
-  align-content: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin: 0;
-  padding: 0;
-  border: 0;
+  margin: auto 0 0;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--line);
 }
 
 .connections-page .connection-bottom > span {
@@ -349,7 +362,19 @@
   font-size: 12px;
   font-weight: 400;
   letter-spacing: 0;
-  text-align: right;
+  text-align: left;
+}
+
+.connections-page .connection-bottom .ant-btn {
+  height: 36px;
+  padding-inline: 10px;
+  font-size: 13px;
+}
+
+.connections-page .connection-bottom .ant-btn-icon-only {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
 }
 
 .connections-page .connections-note {
@@ -430,21 +455,6 @@
 }
 
 @media (max-width: 1100px) {
-  .connections-page .connection-card > .ant-card-body {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-  }
-
-  .connections-page .connection-bottom {
-    justify-content: flex-start;
-  }
-
-  .connections-page .connection-bottom > span {
-    flex-basis: auto;
-    margin-right: auto;
-    text-align: left;
-  }
-
   .connections-page .my-call-logs-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
