@@ -1,31 +1,37 @@
-# Mcp-Gateway
+# MCP Gateway
 
-MCP 统一认证与多入口网关，集中管理服务接入、访问权限和用户连接。
+集中管理 MCP 服务、访问权限和上游凭据，为客户端提供统一入口。
 
-一条部署命令即可在服务器上跑起来：统一应用镜像包含管理网页、Nginx、Auth Server 和 Gateway，只提供一个 HTTP 入口（默认 `127.0.0.1:8080`），由你自己的 Nginx 提供 HTTPS。
+[![CI](https://github.com/BrandonVee/Mcp-Gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/BrandonVee/Mcp-Gateway/actions/workflows/ci.yml)
 
-```text
-                       ┌─ /mcp/search    ──> 外部搜索服务实例池
-MCP Client ── OAuth ──>│  Gateway
-                       └─ /mcp/knowledge ──> 外部知识库服务
-                              │
-                              └─ 校验统一 Auth Server 签发的 JWT
+[快速部署](#快速部署) · [认证与访问控制](#认证与访问控制) · [日常使用](#日常使用) · [开发与测试](#开发与测试) · [详细文档](#详细文档)
+
+一个应用镜像包含管理网页、认证服务、MCP 网关和内部 Nginx，PostgreSQL 与 Redis 独立运行。支持 `linux/amd64` 和 `linux/arm64`，生产环境只需对外提供一个 HTTPS 地址。
+
+```mermaid
+flowchart LR
+    Client["MCP 客户端"] --> Access["本系统入口认证<br/>OAuth / 用户 API Key / 免认证"]
+    Access --> Gateway["逻辑服务<br/>/mcp/{service}"]
+    Gateway --> A["MCP Server A<br/>独立上游认证"]
+    Gateway --> B["MCP Server B<br/>独立上游认证"]
 ```
 
-## 核心特性
+## 能做什么
 
-- **统一身份**：OAuth 2.1 Authorization Code + PKCE，一份登录同时用于管理后台与 MCP 客户端。
-- **多入口路由**：按逻辑 Server 注册外部 MCP Endpoint，支持多实例、粘性会话与健康探测。
-- **细粒度授权**：用户与 Server 多对多授权，支持通配符与即时撤销。
-- **上游凭据**：按用户加密保存 API Key 或 OAuth 令牌，请求时注入，平台令牌不外泄。
-- **管理后台**：用户、服务、授权、连接、调用监控与管理操作审计。支持亮色、深色和跟随系统；登录页、管理端及个人连接中心的外观按钮会记住当前浏览器的选择。
-- **中英文界面**：登录页、管理台与连接中心共用语言切换。
+| 能力       | 说明                                                                        |
+| ---------- | --------------------------------------------------------------------------- |
+| 服务接入   | 多上游工具聚合、实例池、粘性会话与健康探测。                                |
+| 入口认证   | 每个 MCP 服务独立选择 OAuth、用户 API Key 或免认证，默认 OAuth。            |
+| 上游凭据   | 分别配置个人或管理员统一使用的 API Key / OAuth 凭据，加密保存并按请求注入。 |
+| 用户与权限 | 用户和服务的多对多授权、通配符、账号禁用与权限即时回收。                    |
+| 调用与运维 | 调用日志、用量统计、限流与配额、告警通知、管理操作审计。                    |
+| 管理界面   | 管理后台与个人连接中心，中英文切换，亮色、深色及跟随系统。                  |
 
-## 服务器部署（推荐）
+## 快速部署
 
-除下载项目外，以下命令均在项目根目录执行。服务器需要 **Docker Engine、Docker Compose 插件和 Git**，无需在宿主机安装 Node.js 或 pnpm；另外准备域名、HTTPS 证书和反向代理。
+### 方式一：一键部署应用与数据库
 
-### 1. 下载项目并启动
+服务器准备 **Docker Engine、Docker Compose 插件和 Git**，以及域名、HTTPS 证书与反向代理。宿主机不需要安装 Node.js 或 pnpm。
 
 ```bash
 git clone https://github.com/BrandonVee/Mcp-Gateway.git
@@ -33,25 +39,56 @@ cd Mcp-Gateway
 ./scripts/deploy.sh
 ```
 
-脚本默认拉取已发布镜像 `brandonvee/mcp-gateway:latest`（支持 `linux/amd64` 与 `linux/arm64`）。需要固定版本或改用源码构建时：
+按提示确认 HTTP 端口、镜像来源和初始管理员密码：
+
+- 默认拉取 `brandonvee/mcp-gateway:latest`，同时启动 PostgreSQL 和 Redis。
+- HTTP 默认监听 `127.0.0.1:8080`。远程访问使用 HTTPS 反向代理。
+- 管理员用户名为 `admin`，密码至少 16 个字符，留空则自动生成。
+- 配置保存在 `deploy/single-host/`，其中 `runtime.env` 权限为 `0600`。自定义目录可设置 `MCP_DEPLOY_DIR`。
+
+启动后检查健康状态：
 
 ```bash
-MCP_VERSION=v0.1.2 ./scripts/deploy.sh --yes   # 固定到已发布版本
-MCP_IMAGE_PREFIX= ./scripts/deploy.sh --yes    # 用当前代码本机构建
-```
-
-交互模式下只需填写 **HTTP 端口**（默认 `8080`，仅监听回环地址）和 **首次管理员密码**（用户名固定 `admin`，至少 16 个字符，留空自动生成）；仓库、镜像名和版本都已内置 —— 拉取已发布镜像时**默认就是最新版本**，回车即可，需要固定版本时再输入 `vX.Y.Z` 或提交号。自动化部署用 `--yes` 跳过提示，同样使用最新版本。配置保存在 `deploy/single-host/`：`runtime.env`（权限 `0600`）与 `config.json`，自定义目录用 `MCP_DEPLOY_DIR`。
-
-部署完成后确认状态：
-
-```bash
-docker compose --env-file deploy/single-host/runtime.env -f deploy/compose.single-host.yml ps
 curl --fail http://127.0.0.1:8080/healthz
 ```
 
-### 2. 配置 HTTPS 反向代理
+脚本也支持非交互执行和本机构建：
 
-在宿主机已有的 HTTPS `server` 中加入以下内容（修改过 HTTP 端口时同步调整 `proxy_pass`）：
+```bash
+./scripts/deploy.sh --yes                    # 使用最新发布镜像
+MCP_VERSION=vX.Y.Z ./scripts/deploy.sh --yes  # 将 vX.Y.Z 替换为已发布版本
+MCP_IMAGE_PREFIX= ./scripts/deploy.sh --yes   # 从当前代码构建
+```
+
+### 方式二：仅启动应用，连接已有数据库
+
+无需克隆仓库，准备好容器可访问的 PostgreSQL 和 Redis 后执行：
+
+```bash
+docker volume create mcp-gateway-data
+docker run -d --name mcp-gateway-server \
+  --restart unless-stopped --stop-timeout 15 \
+  --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+  -p 127.0.0.1:8080:8080 -v mcp-gateway-data:/app/data \
+  brandonvee/mcp-gateway:latest
+
+docker logs mcp-gateway-server
+```
+
+在日志中找到 `[setup] initialization key:`，打开初始化页面，依次验证 PostgreSQL、Redis，设置管理员账号并保存。远程初始化可通过 SSH 隧道访问：
+
+```bash
+ssh -L 18080:127.0.0.1:8080 用户@服务器
+# 然后在自己的电脑打开 http://127.0.0.1:18080
+```
+
+连接地址必须从容器内可访问：容器中的 `localhost` 指应用自身。初始化配置和凭据加密密钥保存在 `mcp-gateway-data` 卷，升级时保留并备份该卷。
+
+需要不克隆仓库、同时启动应用和数据库的完整 Compose 示例，见 [Docker Hub 使用说明](docs/dockerhub.md)。
+
+### 配置 HTTPS 与首次登录
+
+两种部署方式都需要配置 HTTPS。将以下内容加入宿主机已有的 HTTPS `server`，按实际 HTTP 端口调整 `proxy_pass`：
 
 ```nginx
 location / {
@@ -69,227 +106,149 @@ location / {
 
 ```bash
 sudo nginx -t
-sudo systemctl reload nginx                    # Linux / systemd 示例
+sudo systemctl reload nginx                   # Linux / systemd 示例
 curl --fail https://mcp.example.com/healthz    # 替换为实际域名
 ```
 
-### 3. 登录并完成系统设置
+通过 HTTPS 登录后台，在**系统设置**中完成以下配置：
 
-通过 HTTPS 地址打开后台，使用初始管理员登录（初始密码也保存在 `runtime.env` 的 `ADMIN_PASSWORD`），系统会引导进入**系统设置**：
+1. **对外访问地址**：填写公开的 HTTPS 根地址，例如 `https://mcp.example.com`。
+2. **可信上游主机**：白名单默认开启，每行填写一个上游主机名或 IP；开启但名单为空时拒绝所有上游。
+3. 按需调整用户注册、调用采集与保留、告警和通知选项，保存设置。
 
-1. **对外访问地址**：填写 Nginx 对外的 HTTPS 根地址，例如 `https://mcp.example.com`；OAuth、MCP 入口与连接中心统一使用此地址。
-2. **启用上游白名单**：默认开启。开启时在**可信上游主机**填写计划接入的 MCP 服务主机名或 IP，每行一个；名单为空时拒绝所有上游。
-3. 按需调整**用户注册**、**调用采集与保留**、**告警阈值**，保存设置。
+未保存对外访问地址时，管理后台可用，OAuth 与 MCP 接入返回 `503 system_not_configured`。更换地址后，已有 MCP 客户端需要重新授权。
 
-未保存访问地址时，管理后台可用，OAuth 与 MCP 接入返回 `503 system_not_configured`。设置持久化在 PostgreSQL 中，重启后继续生效；更换地址后已有 MCP 客户端需重新授权。
+宿主机反向代理部署应配置 `AUTH_TRUSTED_PROXY_IPS`，以正确识别客户端 IP，详见 [Docker 部署说明](docs/dockerhub.md)。
 
-想接入已有 PostgreSQL / Redis 而不是让脚本创建，改用网页初始化：`docker compose -f deploy/compose.setup.yml up -d`，用日志中的初始化密钥在网页完成连接与管理员设置，详见 [Docker Hub 使用说明](docs/dockerhub.md)。
+## 认证与访问控制
 
-### 升级与备份
+**客户端访问本系统**与**本系统访问上游**是两层独立认证。入口选择 OAuth，不要求上游也使用 OAuth；用户访问密钥也不等于上游 API Key。
 
-```bash
-./scripts/backup.sh                            # 升级前备份数据库、配置和密钥
-./scripts/deploy.sh                            # 源码构建部署前先 git pull --ff-only
-./scripts/deploy.sh --yes                      # 镜像部署：重跑即升级到最新版本
-```
+### 客户端 → 本系统
 
-镜像部署默认跟随 `latest`，每次重跑都会拉最新已发布版本；需要固定版本时用 `MCP_VERSION=v0.3.2 ./scripts/deploy.sh --yes`（也可在交互提示里输入版本）。本机构建仍按当前代码的提交号打标签。
+在服务注册或编辑中的**本系统访问认证**选择：
 
-部署脚本默认开启网页更新，登录后在「系统设置 → 系统更新」可直接更新到最新镜像，无需额外设置环境变量。需要关闭时使用 `MCP_UPDATE_ENABLED=false ./scripts/deploy.sh --yes`，该选择会保存并在后续部署中沿用。详见 [网页端一键更新](docs/production.md#网页端一键更新默认开启)。
+| 方式              | 客户端如何连接                                                                 | 访问范围                     |
+| ----------------- | ------------------------------------------------------------------------------ | ---------------------------- |
+| **OAuth（默认）** | 按客户端提示登录，使用 Authorization Code + PKCE。                             | 当前账号获准访问的服务。     |
+| **用户 API Key**  | 在「个人连接中心 → 访问密钥」创建，以 `Authorization: Bearer <API Key>` 访问。 | 沿用密钥所属账号的服务权限。 |
+| **免认证**        | 直接连接 MCP 地址。                                                            | 该服务允许匿名访问。         |
 
-备份默认写入 `backups/`，包含 PostgreSQL、配置和凭据加密密钥（权限 `0600`，保留 14 天，**不含 Redis 会话**）。定时备份与恢复步骤见 [备份与恢复](docs/production.md#备份与恢复)。不要用 `down -v` 停止生产部署，它会删除数据库卷。
+访问密钥的完整内容仅在创建时显示，数据库只保存哈希。撤销密钥、禁用账号或重置密码后，后续请求失效。免认证服务的上游只能使用无需认证或管理员统一配置的凭据，不会读取个人上游凭据。
 
-健康检查失败、注册表不可用、Redis 异常、上游连接失败、监控积压或告警未通知时，按 [故障排查](docs/troubleshooting.md) 处理。
+### 本系统 → 上游 MCP Server
 
-### 常见部署问题
+每个上游分别配置认证，可选择无需认证、管理员统一 API Key / OAuth，或用户个人 API Key / OAuth。需要个人凭据时，用户先在连接中心完成连接；未连接会返回 `409 connection_required` 和连接地址。
 
-| 现象                                 | 排查与处理                                                           |
-| ------------------------------------ | -------------------------------------------------------------------- |
-| 无法通过服务器 IP 访问 `8080`        | 默认只监听回环地址，使用已配置的 HTTPS 域名；初始化可使用 SSH 隧道。 |
-| 管理员提示凭据无效                   | 核对该部署的密码；已有数据库账号不会因修改 `ADMIN_PASSWORD` 被重置。 |
-| MCP 返回 `503 system_not_configured` | 在“系统设置”保存真实 HTTPS 对外访问地址。                            |
-| 无法注册上游服务                     | 检查白名单开关、可信上游主机和容器到上游的连通性。                   |
-| 应用未就绪或容器 unhealthy           | 用对应 Compose 文件查看 `ps` 与应用日志，再检查 PostgreSQL / Redis。 |
+### 限流与配额
 
-## Docker 部署（不用克隆源码）
+新服务的**每分钟请求数、每日工具调用配额、最大并发数默认均为 `0`，表示不限制**。填写正整数后生效，已有服务的限制不会被升级覆盖。
 
-只需要 Docker 和 Compose 时，直接用已发布镜像 `brandonvee/mcp-gateway` 启动三个容器：应用、PostgreSQL、Redis。
-
-新建目录并生成密钥（只执行一次，不要覆盖已有 `.env`）：
-
-```bash
-mkdir mcp-gateway && cd mcp-gateway
-umask 077
-{
-  echo MCP_VERSION=latest
-  echo POSTGRES_PASSWORD=$(openssl rand -hex 32)
-  echo REDIS_PASSWORD=$(openssl rand -hex 32)
-  echo INTERNAL_API_TOKEN=$(openssl rand -hex 32)
-  echo CREDENTIAL_BROKER_TOKEN=$(openssl rand -hex 32)
-  echo CREDENTIAL_ENCRYPT_KEY=$(openssl rand -hex 32)
-  echo ADMIN_PASSWORD=$(openssl rand -hex 32)
-} > .env
-```
-
-保存为 `compose.yml`：
-
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: mcp
-      POSTGRES_USER: mcp
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
-    volumes: ['postgres_data:/var/lib/postgresql/data']
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U mcp -d mcp']
-      interval: 3s
-      timeout: 3s
-      retries: 30
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ['sh', '-c', 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
-    environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
-    volumes: ['redis_data:/data']
-    healthcheck:
-      test: ['CMD-SHELL', 'REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG']
-      interval: 3s
-      timeout: 3s
-      retries: 30
-  mcp-server:
-    container_name: ${COMPOSE_PROJECT_NAME:-mcp-gateway}-server
-    image: brandonvee/mcp-gateway:${MCP_VERSION:-latest}
-    restart: unless-stopped
-    stop_grace_period: 15s
-    read_only: true
-    tmpfs: ['/tmp']
-    cap_drop: ['ALL']
-    security_opt: ['no-new-privileges:true']
-    environment:
-      DATABASE_URL: postgres://mcp:${POSTGRES_PASSWORD:?}@postgres:5432/mcp
-      REDIS_URL: redis://:${REDIS_PASSWORD:?}@redis:6379/0
-      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?}
-      CREDENTIAL_BROKER_TOKEN: ${CREDENTIAL_BROKER_TOKEN:?}
-      CREDENTIAL_ENCRYPT_KEY: ${CREDENTIAL_ENCRYPT_KEY:?}
-      ADMIN_USERNAME: admin
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?}
-      AUTH_TRUSTED_PROXY_IPS: ${AUTH_TRUSTED_PROXY_IPS:-}
-    ports: ['127.0.0.1:8080:8080']
-    depends_on:
-      postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
-volumes:
-  postgres_data:
-  redis_data:
-```
-
-```bash
-docker compose up -d --wait
-curl --fail http://127.0.0.1:8080/healthz
-```
-
-管理员为 `admin`，初始密码在 `.env` 的 `ADMIN_PASSWORD`。之后与一键部署相同：配置 HTTPS 反向代理并登录，在“系统设置”填写对外访问地址。升级：
-
-```bash
-docker compose pull mcp-server
-docker compose up -d --wait mcp-server
-```
-
-调用限流与统计依赖真实客户端 IP；由宿主机 Nginx 代理时，把 `AUTH_TRUSTED_PROXY_IPS` 填为 Nginx 所在网络的网关地址后重建应用（见 [Docker Hub 使用说明](docs/dockerhub.md)）。该文档还包含备份与固定版本说明。
-
-### 只跑应用镜像，在网页里连接已有数据库
-
-已有 PostgreSQL / Redis，或想先起容器再填连接信息时，只启动一个应用容器即可，不需要写任何环境变量：
-
-```bash
-docker volume create mcp-gateway-data
-docker run -d --name mcp-gateway-server --restart unless-stopped --stop-timeout 15 \
-  --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
-  -p 127.0.0.1:8080:8080 -v mcp-gateway-data:/app/data \
-  brandonvee/mcp-gateway:latest
-docker logs mcp-gateway-server
-```
-
-也可以用仓库里的 `deploy/compose.setup.yml`（`docker compose -f deploy/compose.setup.yml up -d`），内容同上。
-
-1. 在日志中找到 `[setup] initialization key:` 后面的初始化密钥。
-2. 打开 `http://127.0.0.1:8080`；远程部署可在自己电脑上执行 `ssh -L 18080:127.0.0.1:8080 用户@服务器`，再访问 `http://127.0.0.1:18080`。
-3. 输入初始化密钥，点击“验证并继续”。
-4. 依次填写 PostgreSQL、Redis 参数，**每一步独立测试通过后才进入下一步**；可返回修改，已填内容保留。
-5. 设置管理员账号与至少 16 个字符的密码，点击“保存并启动”：程序会重测两项连接、生成应用密钥、保存配置并自动进入管理页面。
-6. 之后与上面相同：配置 HTTPS 反向代理并登录，在“系统设置”填写对外访问地址。
-
-注意事项：
-
-- **地址要从容器内访问。** `127.0.0.1` / `localhost` 指应用容器自身；另一容器用同一 Docker 网络的服务名，宿主机上的数据库可用 `host.docker.internal`（Linux 需在 `docker run` 加 `--add-host host.docker.internal:host-gateway`，并确认数据库监听地址与防火墙）。
-- 配置与凭据加密密钥保存在 `mcp-gateway-data` 卷的 `/app/data/bootstrap.json`，**必须与该卷一起备份**；初始化后网页配置接口关闭，重启或重建容器会读取同一个卷。不要用空卷连接已有业务库，否则之前保存的上游凭据无法解密。
-- 升级时保留该卷：拉取新镜像后停止并删除旧容器，再用相同参数重建，不需要重新初始化。
-- 等待初始化时 `/healthz` 返回 `mode: setup, ready: false`；初始化后才提供完整健康状态。管理员登录使用安全 Cookie，需要 HTTPS 域名（或上面的 SSH 隧道完成初始化）。
+认证访问按用户和服务单独计数，免认证访问按来源 IP 计数。每日配额按已受理的工具调用计数，包含失败调用，在 UTC 零点重置。
 
 ## 日常使用
 
-### 注册 MCP 服务
+### 接入第一个 MCP 服务
 
-在管理后台**服务**页注册实际 MCP Endpoint（外部 Streamable HTTP 地址，支持多实例）。项目不内置 MCP Server，新数据库的服务列表为空。客户端入口为：
+新数据库的服务列表为空，需要接入已有的 MCP Server；应用镜像不内置业务 MCP 服务。
 
-```text
-https://mcp.example.com/mcp/{SERVER_NAME}
-```
+1. 在**服务注册**创建逻辑端点，设置名称、描述、本系统访问认证和限流策略。
+2. 为端点添加 MCP Server，填写 Gateway 可访问的 HTTP/HTTPS Streamable MCP 地址，分别配置上游认证。
+3. 为使用 OAuth 或用户 API Key 的账号分配服务权限。通配符 `*` 表示全部服务。
+4. 需要个人上游凭据时，在**个人连接中心**配置 API Key 或完成 OAuth 授权。
+5. 从连接中心复制 MCP 配置，粘贴到客户端的 `mcpServers` 字段。
 
-### 创建用户与分配权限
-
-管理员可创建用户、重置密码、禁用账号，并从用户或服务两个视角分配可访问的 Server；通配符 `*` 表示全部 Server。最后一名启用管理员不可禁用或删除。
-
-没有账号的用户可以自行注册：**登录页**的“还没有账号？立即注册”，或 MCP 客户端 OAuth 登录页的“创建账号”。两者规则一致，注册成功即登录，账号为普通用户。系统设置的**允许自行注册**默认开启，关闭后两个入口都会隐藏。管理员可在服务上开启**新注册用户默认可访问**，让新用户自动获得该服务权限。
-
-### 客户端接入
-
-服务的**本系统访问认证**独立于上游认证，默认 **OAuth**。在客户端的 `mcpServers` 中粘贴连接中心复制的配置，首次连接会跳转 OAuth 登录：
+客户端统一连接 Gateway 地址，例如：
 
 ```json
 {
   "mcpServers": {
-    "external-search": { "url": "https://mcp.example.com/mcp/external-search" }
+    "external-search": {
+      "type": "streamableHttp",
+      "url": "https://mcp.example.com/mcp/external-search"
+    }
   }
 }
 ```
 
-也可在服务注册或编辑时选择 **用户 API Key** 或 **免认证**：
+OAuth 服务首次连接会提示登录；API Key 服务复制的配置含 `YOUR_API_KEY` 占位符，替换为本系统访问密钥后使用；免认证服务无需登录。
 
-- **用户 API Key**：在个人连接中心的**访问密钥**中创建密钥，以 `Authorization: Bearer <API Key>` 访问。复制的客户端配置含 `YOUR_API_KEY` 占位符，需要替换。密钥沿用所属账号的服务权限，撤销、账号禁用或密码重置后失效；完整密钥仅在创建时返回，数据库只保存哈希。
-- **免认证**：客户端可直接访问 MCP 地址。上游只能使用无需认证或管理员统一配置的凭据，不会读取个人上游凭据。
+### 用户、日志与告警
 
-新服务的每分钟请求数、每日工具调用配额、最大并发数均默认 **0**，表示不限制。已有服务的显式限制保持原值。填写正整数后按用户和服务单独计数；免认证访问按来源 IP 计数。
+- **用户与授权**：创建账号、分配服务、重置密码、禁用或删除用户。最后一名启用管理员受到保护。
+- **自行注册**：系统设置中的注册开关默认开启。服务可设置“新注册用户默认可访问”，已有用户权限保持不变。
+- **调用日志**：按时间、服务、工具和结果筛选，支持工具名称模糊搜索；下拉筛选与完整时间范围选择后自动查询。
+- **用量统计**：工具调用量只统计 `tools/call`，初始化与工具发现不计入；输入输出记录受系统和服务的采集开关控制。
+- **告警与审计**：配置调用错误率、延迟阈值和通知，查看管理员操作记录。
 
-### 上游需要凭据时
+## 升级与备份
 
-服务配置了 API Key 或 OAuth 时，用户在**个人连接中心**（管理员从侧边栏进入）为该服务连接自己的凭据；凭据加密保存，只在该用户的请求中注入上游。用户未连接时 Gateway 返回 `409 connection_required` 并给出连接地址。
+一键部署默认开启网页更新，可在「系统设置 → 系统更新」选择镜像版本。使用部署脚本时，也可在项目根目录执行：
 
-## 本地开发
+```bash
+./scripts/backup.sh
+./scripts/deploy.sh --yes
+```
 
-需要 **Node.js 20.19+ 或 ≥ 22.12、pnpm 10.33.0**，以及可用的 PostgreSQL 和 Redis：
+默认镜像部署会拉取 `latest`；固定版本使用 `MCP_VERSION=vX.Y.Z`。从源码构建时，先更新本地代码，再运行部署脚本。已有账号的密码不会因修改 `ADMIN_PASSWORD` 被重置。
+
+一键部署的备份默认写入 `backups/`，包含数据库、配置和凭据加密密钥，保留 14 天，不包含 Redis 会话。使用网页初始化的部署还应备份 `/app/data` 数据卷。停止生产服务时不要使用 `down -v`，它会删除数据卷。
+
+完整步骤见 [网页端更新](docs/production.md#网页端一键更新默认开启)、[备份与恢复](docs/production.md#备份与恢复)。
+
+## 开发与测试
+
+需要 **Node.js 20.19+（20.x）或 ≥ 22.12、pnpm 10.33.0**。以下示例用 Docker 运行 PostgreSQL 和 Redis，在宿主机运行应用：
 
 ```bash
 pnpm install --frozen-lockfile
 docker compose up -d --wait postgres redis
-pnpm dev:local            # 打开 http://localhost:5173，默认管理员 admin / admin123
-pnpm typecheck && pnpm test:unit
 ```
 
-其他开发方式（全部本机服务、整套容器开发）、客户端验证脚本与冒烟测试见 [开发文档](docs/development.md)。
+在 `.env.local` 中配置连接地址，保留该文件中已有的应用密钥：
 
-## 文档
+```dotenv
+DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp
+REDIS_URL=redis://127.0.0.1:6380
+```
 
-| 文档                                                   | 内容                                                 |
-| ------------------------------------------------------ | ---------------------------------------------------- |
-| [生产部署与上线检查](docs/production.md)               | 分离部署、外部数据库、网络与密钥、备份恢复、自动发布 |
-| [故障排查](docs/troubleshooting.md)                    | Registry、Redis、上游、监控与告警通知问题            |
-| [架构与运行机制](docs/architecture.md)                 | 权限模型、状态存储、实例池、配置文件、日志与监控     |
-| [上游服务接入与用户凭据](docs/upstream-connections.md) | 注册外部 MCP Server、API Key / OAuth 连接、凭据加密  |
-| [管理 API 与管理端](docs/admin-api.md)                 | 管理接口清单、授权与账号生命周期、前端能力           |
-| [本地开发与测试](docs/development.md)                  | 三种开发方式、客户端验证、冒烟测试                   |
-| [Docker Hub 使用说明](docs/dockerhub.md)               | 直接用镜像启动、连接已有数据库                       |
+```bash
+pnpm dev:local            # http://localhost:5173
+```
+
+首次空库的开发账号为 `admin` / `admin123`，已有数据库使用原账号密码。应用启动时自动执行数据库迁移；`dev:local` 会补充缺失的本地应用密钥。
+
+代码检查与构建：
+
+```bash
+pnpm format:check
+pnpm typecheck
+pnpm test:unit
+pnpm build:admin
+pnpm build:runtime
+```
+
+全部使用本机服务、完整容器开发和端到端测试，见 [开发文档](docs/development.md)。
+
+## 常见问题
+
+| 现象                                 | 处理                                                                         |
+| ------------------------------------ | ---------------------------------------------------------------------------- |
+| 无法通过服务器 IP 访问 `8080`        | 默认只监听回环地址，使用 HTTPS 域名；首次初始化可通过 SSH 隧道访问。         |
+| 管理员提示凭据无效                   | 核对部署时的密码；修改启动变量不会重置已有账号。                             |
+| MCP 返回 `503 system_not_configured` | 在系统设置保存真实的 HTTPS 对外访问地址。                                    |
+| 上游无法注册或连接                   | 检查可信上游白名单，以及从 Gateway 容器到上游的连通性。                      |
+| MCP 返回 `409 connection_required`   | 在个人连接中心为该上游补充个人凭据。                                         |
+| 容器 unhealthy、调用异常或告警未送达 | 查看 Compose 服务状态与日志，再按 [故障排查](docs/troubleshooting.md) 检查。 |
+
+## 详细文档
+
+| 文档                                                   | 内容                                          |
+| ------------------------------------------------------ | --------------------------------------------- |
+| [Docker Hub 使用说明](docs/dockerhub.md)               | 镜像启动、完整 Compose 示例、已有数据库接入。 |
+| [生产部署与上线检查](docs/production.md)               | 部署配置、网页更新、备份恢复、CI 与自动发布。 |
+| [故障排查](docs/troubleshooting.md)                    | 注册表、Redis、上游、监控与告警问题。         |
+| [架构与运行机制](docs/architecture.md)                 | 路由、权限、状态存储与运行机制。              |
+| [上游服务接入与用户凭据](docs/upstream-connections.md) | 聚合与实例池、独立上游认证和凭据管理。        |
+| [管理 API 与管理端](docs/admin-api.md)                 | 管理接口、账号生命周期与前端能力。            |
+| [本地开发与测试](docs/development.md)                  | 开发环境、验证脚本与端到端测试。              |
