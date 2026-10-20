@@ -124,11 +124,13 @@ export function LoginPage({
             <em>{t('auth.capabilityPath')}</em>
           </Typography.Title>
           <div className="story-steps">
-            {([
-              ['auth.stepAuthentication', 'auth.stepAuthenticationDescription'],
-              ['auth.stepRouting', 'auth.stepRoutingDescription'],
-              ['auth.stepObservability', 'auth.stepObservabilityDescription'],
-            ] as const).map(([label, description]) => (
+            {(
+              [
+                ['auth.stepAuthentication', 'auth.stepAuthenticationDescription'],
+                ['auth.stepRouting', 'auth.stepRoutingDescription'],
+                ['auth.stepObservability', 'auth.stepObservabilityDescription'],
+              ] as const
+            ).map(([label, description]) => (
               <div key={label}>
                 <strong>{t(label)}</strong>
                 <small>{t(description)}</small>

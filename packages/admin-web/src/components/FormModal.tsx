@@ -1,5 +1,4 @@
 import { Modal, type ModalProps } from 'antd';
-import '@/web/components/form-modal.css';
 
 interface FormModalProps extends ModalProps {
   wide?: boolean;
