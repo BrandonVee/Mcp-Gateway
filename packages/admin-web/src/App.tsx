@@ -92,7 +92,9 @@ function SessionRouter() {
   const identity = usePlatformSession();
   if (identity.error)
     return (
-      <DataLoadError message={identity.error} loading={identity.checking} onRetry={() => void identity.refresh()} />
+      <div className="load-error-screen">
+        <DataLoadError message={identity.error} loading={identity.checking} onRetry={() => void identity.refresh()} />
+      </div>
     );
   if (identity.session === undefined) return <BootScreen />;
   if (!identity.session)

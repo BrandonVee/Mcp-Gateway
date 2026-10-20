@@ -24,10 +24,29 @@ textarea {
 .access-list-heading,
 .monitor-status-top span,
 .monitor-log-head,
-.instance-copy strong {
+.instance-copy strong,
+.route-origin strong,
+.server-heading small,
+.identity-copy small,
+.access-summary strong,
+.monitor-checked,
+.connection-index,
+.connections-loading,
+.story-index,
+.story-steps > div > span {
   font-family: var(--font-ui);
   font-weight: 500;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+}
+
+/* Status chips and initials read as UI, not as terminal output. */
+.ant-tag,
+.route-node .ant-tag,
+.scope-tag,
+.user-avatar,
+.server-card-header .ant-switch {
+  font-family: var(--font-ui);
+  letter-spacing: 0;
 }
 
 .page-heading h2.ant-typography,
@@ -153,13 +172,18 @@ textarea {
 /* Honor reduced motion without removing keyboard focus or theme colors. */
 @media (prefers-reduced-motion: reduce) {
   .page-enter,
+  .page-enter > *,
+  .page-enter > .ant-row > .ant-col,
   .boot-mark {
     animation: none;
   }
 
   .server-card:hover,
   .connection-card:hover,
-  .route-node:hover {
+  .metric-card:hover,
+  .route-node:hover,
+  .ant-btn:hover,
+  .ant-btn:active {
     transform: none;
   }
 }
