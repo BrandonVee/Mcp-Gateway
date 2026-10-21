@@ -65,7 +65,7 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-    networks: [control]
+    networks: [control, mcp-gateway]
 
 volumes:
   postgres_data:
@@ -73,3 +73,6 @@ volumes:
 
 networks:
   control:
+  mcp-gateway:
+    name: mcp-gateway
+    external: true

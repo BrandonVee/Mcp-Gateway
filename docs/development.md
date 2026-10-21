@@ -34,6 +34,7 @@
 
 ```bash
 pnpm install --frozen-lockfile
+bash scripts/ensure-mcp-network.sh
 docker compose up -d --wait postgres redis
 if [ ! -f .env.local ]; then cp .env.local.example .env.local; fi
 ```
@@ -71,12 +72,14 @@ pnpm dev:local
 ## 方式三：整套开发环境运行在 Docker
 
 ```bash
-pnpm dev:detached  # 等价于 docker compose up -d --build
+pnpm dev:detached  # 先确保共享网络存在，再执行 docker compose up -d --build
 pnpm dev:logs
 # 停止开发容器：pnpm dev:down
 ```
 
 此方式使用根目录 `docker-compose.yml`、源码挂载和 Vite 开发服务器。打开 <http://localhost:5173>；默认管理员见 `config/docker.json`。宿主机不安装 pnpm 时也可直接执行对应的 Docker Compose 命令。
+
+Auth 和 Gateway 容器会加入共享的 `mcp-gateway` bridge 网络；`pnpm dev` 和 `pnpm dev:detached` 自动创建它。直接运行 Compose 前先执行 `bash scripts/ensure-mcp-network.sh`。其他 MCP 容器加入同一网络后，可通过 `http://容器名:容器内部端口/mcp` 接入，并在系统设置中允许对应的上游主机。`pnpm dev:local` 的应用仍运行在宿主机，访问容器时使用发布到宿主机的端口。
 
 ## 常见启动问题与检查
 

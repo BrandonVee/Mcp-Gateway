@@ -198,7 +198,7 @@ export async function startSetupServer({
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     );
     const json = (status, body) => {
       res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -212,10 +212,10 @@ export async function startSetupServer({
         '/setup': ['index.html', 'text/html'],
         '/setup.js': ['setup.js', 'text/javascript'],
         '/setup.css': ['setup.css', 'text/css'],
-        '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
+        '/brand-mark.png': ['brand-mark.png', 'image/png'],
       }[path];
       if (!asset) return json(404, { error: 'not_found' });
-      res.writeHead(200, { 'Content-Type': asset[1] + '; charset=utf-8' });
+      res.writeHead(200, { 'Content-Type': asset[1].startsWith('text/') ? asset[1] + '; charset=utf-8' : asset[1] });
       return res.end(readFileSync(new URL(asset[0], assets)));
     }
     if (

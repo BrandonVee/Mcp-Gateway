@@ -7,8 +7,8 @@
     "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
-    "dev": "docker compose up --build",
-    "dev:detached": "docker compose up -d --build",
+    "dev": "bash scripts/ensure-mcp-network.sh && docker compose up --build",
+    "dev:detached": "bash scripts/ensure-mcp-network.sh && docker compose up -d --build",
     "dev:local": "node scripts/dev-local.mjs",
     "dev:down": "docker compose down",
     "dev:logs": "docker compose logs -f",

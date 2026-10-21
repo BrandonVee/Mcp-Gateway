@@ -29,3 +29,10 @@ services:
       UPSTREAM_MAX_ACTIVE_REQUESTS: ${UPSTREAM_MAX_ACTIVE_REQUESTS:-100}
     ports:
       - '127.0.0.1:${MCP_HTTP_PORT:-8080}:8080'
+    networks: [default, mcp-gateway]
+
+networks:
+  default:
+  mcp-gateway:
+    name: mcp-gateway
+    external: true

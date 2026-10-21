@@ -257,7 +257,7 @@ function UpstreamAllowlistHint({ settings, onAddUpstreamHost, busy }: UpstreamAl
     <Alert
       type="warning"
       showIcon
-      className="dialog-alert"
+      className="dialog-alert dialog-field-full"
       message={t('serverDialog.upstreamHostBlocked', { host })}
       description={
         (error?.host === host ? error.message : null) ??
@@ -543,14 +543,12 @@ function EditInstanceDialog({
           >
             <Input prefix={<LinkOutlined />} autoFocus />
           </Form.Item>
-          <div className="dialog-field-full">
-            <UpstreamAllowlistHint {...allowlist} busy={busy} />
-            <UpstreamConnectionTest {...allowlist} busy={busy} instanceId={instance.id} />
-          </div>
+          <UpstreamAllowlistHint {...allowlist} busy={busy} />
         </div>
         <div>
           <AuthFormFields server={{ ...server, ...instance } as McpServer} />
         </div>
+        <UpstreamConnectionTest {...allowlist} busy={busy} instanceId={instance.id} />
       </Form>
     </FormModal>
   );
@@ -1060,14 +1058,12 @@ function AddInstanceDialog({
           >
             <Input prefix={<LinkOutlined />} placeholder="https://host.example/mcp" />
           </Form.Item>
-          <div className="dialog-field-full">
-            <UpstreamAllowlistHint {...allowlist} busy={busy} />
-            <UpstreamConnectionTest {...allowlist} busy={busy} />
-          </div>
+          <UpstreamAllowlistHint {...allowlist} busy={busy} />
         </div>
         <div>
           <AuthFormFields />
         </div>
+        <UpstreamConnectionTest {...allowlist} busy={busy} />
       </Form>
     </FormModal>
   );

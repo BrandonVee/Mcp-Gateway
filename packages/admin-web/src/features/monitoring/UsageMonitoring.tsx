@@ -15,6 +15,7 @@ import { UsageSummaryCards } from '@/web/features/monitoring/UsageSummaryCards';
 import { useI18n } from '@/web/i18n';
 import type { AlertEvent, UsageCall, UsageFilters, UsageSummary } from '@/web/types';
 import { ToolSearchInput } from '@/web/features/monitoring/ToolSearchInput';
+import { pollWhileVisible } from '@/web/utils/polling';
 
 export function UsageMonitoring() {
   const { t, language } = useI18n();
@@ -48,15 +49,12 @@ export function UsageMonitoring() {
       .catch(() => {});
   }, []);
   useEffect(() => {
-    let active = true,
-      fetching = false;
+    let active = true;
     paged.current = false;
     setHistorical(false);
     setLoading(true);
     setLoadingMore(false);
     const refresh = async () => {
-      if (fetching) return;
-      fetching = true;
       try {
         const [summary, calls, alerts] = await Promise.allSettled([
           api.usageSummary(filters, dimension),
@@ -80,15 +78,13 @@ export function UsageMonitoring() {
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : String(cause));
       } finally {
-        fetching = false;
         if (active) setLoading(false);
       }
     };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 10000);
+    const stopPolling = pollWhileVisible(refresh, 10000);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      stopPolling();
     };
   }, [filtersKey, dimension, tab, revision]);
 

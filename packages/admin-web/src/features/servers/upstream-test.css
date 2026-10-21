@@ -5,6 +5,13 @@
   margin-bottom: 24px;
 }
 
+.dialog-form-columns > .upstream-connection-test {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
 .upstream-test-actions {
   display: flex;
   align-items: center;
@@ -16,9 +23,33 @@
   flex-shrink: 0;
 }
 
-.upstream-test-actions .ant-typography {
-  flex: 1 1 200px;
+.upstream-test-help.ant-typography {
   font-size: 12px;
+}
+
+.upstream-test-outcome {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.upstream-test-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-size: 13px;
+}
+
+.upstream-test-success .anticon {
+  flex-shrink: 0;
+}
+
+.upstream-test-duration.ant-typography {
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .upstream-test-result {
@@ -26,4 +57,75 @@
   flex-direction: column;
   gap: 4px;
   overflow-wrap: anywhere;
+}
+
+.upstream-test-details {
+  min-width: 0;
+}
+
+.upstream-catalogs {
+  margin-top: 12px;
+}
+
+.upstream-catalogs .ant-collapse-body {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.upstream-catalog-list,
+.upstream-prompt-arguments ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.upstream-catalog-list > li + li {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.upstream-catalog-name {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-weight: 600;
+}
+
+.upstream-catalog-list p,
+.upstream-catalog-empty {
+  margin: 4px 0 0;
+  white-space: pre-line;
+}
+
+.upstream-catalog-list code,
+.upstream-catalog-list p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.upstream-catalog-uri,
+.upstream-catalog-mime {
+  display: block;
+  margin-top: 4px;
+}
+
+.upstream-catalog-mime,
+.upstream-catalog-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.upstream-prompt-arguments {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.upstream-prompt-arguments li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 4px;
 }

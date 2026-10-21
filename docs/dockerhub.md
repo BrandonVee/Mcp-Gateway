@@ -12,9 +12,11 @@
 准备好 PostgreSQL（建议 16）数据库、具备建表及创建 schema 权限的专用账号，以及可读写并执行 Lua 的 Redis（建议 7）账号。首次配置不需要事先填写环境变量。
 
 ```bash
+docker network create mcp-gateway
 docker volume create mcp-gateway-data
 docker run -d \
   --name mcp-gateway-server \
+  --network mcp-gateway \
   --restart unless-stopped \
   --stop-timeout 15 \
   --read-only --tmpfs /tmp \
@@ -111,17 +113,27 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+    networks: [default, mcp-gateway]
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  default:
+  mcp-gateway:
+    name: mcp-gateway
+    external: true
 ```
 
 ```bash
+docker network create mcp-gateway
 docker compose up -d --wait
 curl --fail http://127.0.0.1:8080/healthz
 ```
 
 管理员账号为 `admin`，初始密码在 `.env` 的 `ADMIN_PASSWORD` 中；配置 HTTPS 入口后登录，然后填写后台系统设置。数据库和 Redis 端口未发布到公网。已有源码的部署也可执行 `./scripts/deploy.sh`，选择拉取镜像：前缀 `brandonvee/`、名称 `mcp-gateway`、版本 `latest`。
+
+共享网络 `mcp-gateway` 供其他 MCP 容器接入；如果网络已存在，可跳过创建命令。执行 `docker network connect mcp-gateway <容器名>` 后，上游地址使用 `http://<容器名>:<容器内部端口>/mcp`，并在系统设置中允许该上游主机。其他 Compose 项目应把服务加入 `name: mcp-gateway`、`external: true` 的网络，以便重建后仍可连接。
 
 ## HTTPS 入口
 

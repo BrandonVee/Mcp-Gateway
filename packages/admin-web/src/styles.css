@@ -164,30 +164,17 @@ code,
   justify-content: center;
 }
 
+.brand-mark {
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 25%;
+  background: #070b13;
+}
+
 .brand-symbol {
   width: 32px;
   height: 32px;
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  color: #ffffff;
-  background: linear-gradient(135deg, #1d92ff 0%, #085cc0 100%);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 11px;
-  box-shadow:
-    0 8px 24px rgba(11, 107, 203, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  font-size: 19px;
-  transition:
-    transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.brand:hover .brand-symbol {
-  transform: translateY(-1px) scale(1.03);
-  box-shadow:
-    0 10px 28px rgba(11, 107, 203, 0.48),
-    0 0 18px rgba(47, 140, 255, 0.4);
 }
 
 .brand-copy {
@@ -1311,11 +1298,6 @@ code,
 .login-brand-mark {
   width: 40px;
   height: 40px;
-  display: grid;
-  place-items: center;
-  background: #0b6bcb;
-  border-radius: 10px;
-  box-shadow: 0 10px 25px rgba(11, 107, 203, 0.35);
 }
 
 .login-brand strong,
@@ -1517,14 +1499,6 @@ input:-webkit-autofill:active {
 .boot-mark {
   width: 66px;
   height: 66px;
-  display: grid;
-  place-items: center;
-  color: #ffffff;
-  background: linear-gradient(145deg, #1486e9, #07519d);
-  border-radius: 17px;
-  box-shadow: 0 15px 40px rgba(11, 107, 203, 0.28);
-  font-size: 29px;
-  animation: boot-pulse 1.8s ease-in-out infinite;
 }
 
 .boot-screen .mono-label {
@@ -1534,13 +1508,6 @@ input:-webkit-autofill:active {
 
 .boot-screen .mono-label .anticon {
   margin-right: 6px;
-}
-
-@keyframes boot-pulse {
-  50% {
-    transform: translateY(-3px);
-    box-shadow: 0 20px 48px rgba(11, 107, 203, 0.36);
-  }
 }
 
 @media (max-width: 1100px) {

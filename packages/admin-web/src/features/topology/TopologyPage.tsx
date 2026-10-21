@@ -5,6 +5,7 @@ import { useI18n } from '@/web/i18n';
 import type { TopologyInstance, TopologyServer, TopologySnapshot } from '@/web/types';
 import { TopologyGraph, type TopologyDimension, type TopologySelection } from '@/web/features/topology/TopologyGraph';
 import '@/web/features/topology/topology.css';
+import { pollWhileVisible } from '@/web/utils/polling';
 
 const WINDOWS = [1, 5, 15, 30];
 
@@ -28,11 +29,8 @@ export function TopologyPage() {
   const [selection, setSelection] = useState<TopologySelection | null>(null);
 
   useEffect(() => {
-    let active = true,
-      fetching = false;
+    let active = true;
     const refresh = async () => {
-      if (fetching) return;
-      fetching = true;
       try {
         const snapshot = await api.topologySnapshot(windowMinutes);
         if (!active) return;
@@ -41,15 +39,13 @@ export function TopologyPage() {
       } catch (cause) {
         if (active) setError(cause instanceof Error ? cause.message : String(cause));
       } finally {
-        fetching = false;
         if (active) setLoading(false);
       }
     };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 5000);
+    const stopPolling = pollWhileVisible(refresh, 5000);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      stopPolling();
     };
   }, [windowMinutes]);
 

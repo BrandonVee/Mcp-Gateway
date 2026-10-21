@@ -3,23 +3,14 @@ import {
   sameUpstreamProbeDraft,
   type UpstreamProbeDraft,
 } from '@/web/features/servers/upstream-probe-draft';
-import { ApiOutlined } from '@ant-design/icons';
+import { ApiOutlined, CheckCircleFilled } from '@ant-design/icons';
 import { Alert, Button, Form, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/web/i18n';
-import { upstreamTestMessages } from '@/web/features/servers/upstream-test-messages';
+import { UpstreamTestDetails } from '@/web/features/servers/UpstreamTestDetails';
 import type { SystemSettings, UpstreamTestResult, UpstreamTestAuthInput } from '@/web/types';
 import { isEndpointUrl } from '@/shared/security/urls.js';
 import { untrustedUpstreamHost } from '@/web/features/servers/upstream-allowlist';
-
-export function loopbackUpstreamEndpoint(value: string): boolean {
-  try {
-    const host = new URL(value).hostname;
-    return host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || host.startsWith('127.');
-  } catch {
-    return false;
-  }
-}
 
 export function UpstreamConnectionTest({
   settings,
@@ -101,9 +92,6 @@ export function UpstreamConnectionTest({
 
   return (
     <div className="upstream-connection-test">
-      {loopbackUpstreamEndpoint(url) && (
-        <Alert type="info" showIcon message={t('mcpTest.loopbackTitle')} description={t('mcpTest.loopbackHelp')} />
-      )}
       <div className="upstream-test-actions">
         <Button
           icon={<ApiOutlined />}
@@ -113,29 +101,34 @@ export function UpstreamConnectionTest({
         >
           {t('mcpTest.action')}
         </Button>
-        <Typography.Text type="secondary">{t('mcpTest.help')}</Typography.Text>
+        {result?.ok && (
+          <div className="upstream-test-outcome" role="status">
+            <span className="upstream-test-success">
+              <CheckCircleFilled aria-hidden />
+              {t('mcpTest.success')}
+            </span>
+            <Typography.Text className="upstream-test-duration" type="secondary">
+              {t('mcpTest.duration', { duration: result.duration_ms })}
+            </Typography.Text>
+          </div>
+        )}
       </div>
+      {!result && !error && (
+        <Typography.Text className="upstream-test-help" type="secondary">
+          {t('mcpTest.help')}
+        </Typography.Text>
+      )}
       {error && <Alert type="error" showIcon message={error} />}
-      {result && (
+      {result?.ok ? (
+        <UpstreamTestDetails result={result} showDuration={false} />
+      ) : result ? (
         <Alert
           showIcon
-          type={result.ok ? 'success' : result.reason === 'auth_required' ? 'warning' : 'error'}
-          message={result.ok ? t('mcpTest.success') : t('mcpTest.failed')}
-          description={
-            <div className="upstream-test-result" role="status">
-              {!result.ok && (
-                <span>{t(upstreamTestMessages[result.reason], { status: result.http_status ?? '—' })}</span>
-              )}
-              {result.server && (
-                <span>{t('mcpTest.server', { name: result.server.name, version: result.server.version })}</span>
-              )}
-              {result.tools_count !== null && <span>{t('mcpTest.tools', { count: result.tools_count })}</span>}
-              <span>{t('mcpTest.duration', { duration: result.duration_ms })}</span>
-              {result.ok && <span>{t('mcpTest.scope')}</span>}
-            </div>
-          }
+          type={result.reason === 'auth_required' ? 'warning' : 'error'}
+          message={t('mcpTest.failed')}
+          description={<UpstreamTestDetails result={result} />}
         />
-      )}
+      ) : null}
     </div>
   );
 }

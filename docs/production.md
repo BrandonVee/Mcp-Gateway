@@ -27,6 +27,7 @@ MCP_VERSION=local ./scripts/deploy.sh --yes --use-local-image
 只启动应用、接入已有 PostgreSQL / Redis 时，可使用浏览器引导：
 
 ```bash
+bash scripts/ensure-mcp-network.sh
 docker compose -f deploy/compose.setup.yml up -d
 docker compose -f deploy/compose.setup.yml logs mcp-server
 ```
@@ -40,6 +41,7 @@ docker compose -f deploy/compose.setup.yml logs mcp-server
 复制 `deploy/app.env.example` 为权限 `0600` 的 `deploy/app.env`，填写外部 PostgreSQL/Redis 地址、三组独立随机密钥、初始管理员密码、镜像版本和可信代理。宿主机 Nginx 将统一 HTTPS 域名转发到 8080，系统访问地址和可信上游在后台设置。该方式只启动一个应用容器：
 
 ```bash
+bash scripts/ensure-mcp-network.sh
 docker compose --env-file deploy/app.env -f deploy/compose.app.yml config --quiet
 docker compose --env-file deploy/app.env -f deploy/compose.app.yml build
 docker compose --env-file deploy/app.env -f deploy/compose.app.yml up -d --wait
@@ -133,6 +135,23 @@ ADMIN_BOOTSTRAP_RECOVERY=true ADMIN_PASSWORD='替换为新的强密码，至少1
 当代理会在 `X-Forwarded-For` 追加客户端地址时，`AUTH_TRUSTED_PROXY_IPS` 必须包含 Auth 看到的直接代理以及转发链中的其他可信代理 IP 或 CIDR；未列入的来源所提交的 XFF 被忽略。只配置实际代理网段，代理须清除客户端传入的伪造转发头，再生成可信链。上线前用两个不同客户端验证限流身份归属，避免把所有用户错误地归到一个代理 IP。Auth 的登录、Token、动态客户端注册采用 Redis 共享限流；Redis 不可用时 Auth 的就绪探针失败，相关写入口返回 503。
 
 ## 网络、密钥与容量
+
+应用容器使用共享的外部 bridge 网络 `mcp-gateway` 连接其他 MCP 容器，同时保留原有数据库网络。`scripts/deploy.sh` 自动创建共享网络；手动运行 Compose 前执行 `bash scripts/ensure-mcp-network.sh`。外部网络不会随单个 Compose 项目的 `down` 被删除。
+
+已有上游容器可执行 `docker network connect mcp-gateway <容器名>` 加入网络；Gateway 中填写 `http://<容器名>:<容器内部端口>/mcp`，并在系统设置的可信上游主机中添加该容器名。上游服务须监听容器的 `0.0.0.0` 地址。为使重建容器后仍保持连接，在上游项目的 Compose 中声明同一个外部网络：
+
+```yaml
+services:
+  your-mcp-service:
+    # 保留该服务已有的镜像、环境变量和其他网络配置。
+    networks: [default, mcp-gateway]
+
+networks:
+  default:
+  mcp-gateway:
+    name: mcp-gateway
+    external: true
+```
 
 Auth 和 Gateway 的 `INTERNAL_API_TOKEN`、`CREDENTIAL_BROKER_TOKEN` 必须一致，两个令牌彼此不同。统一镜像的启动器只向 Auth 子进程传递加密密钥和数据库凭据；分离模式下加密密钥仅配置给 Auth。不要复用开发 Compose 内的默认值，也不要将 `.env.local` 放进镜像；`.dockerignore` 已排除它。PostgreSQL、Redis 和 Auth 的 `/internal/*` 应留在受限网络。
 

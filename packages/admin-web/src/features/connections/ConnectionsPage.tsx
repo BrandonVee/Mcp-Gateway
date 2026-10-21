@@ -19,7 +19,9 @@ import {
 } from '@ant-design/icons';
 import { ApiError, apiForSession } from '@/web/api';
 import type { ConnectionServer, PlatformSession, UpstreamTestResult } from '@/web/types';
+import { UpstreamTestDetails } from '@/web/features/servers/UpstreamTestDetails';
 import { DataLoadError } from '@/web/components/DataLoadState';
+import { BrandMark } from '@/web/components/BrandMark';
 import { useI18n } from '@/web/i18n';
 import { ServiceDescription } from '@/web/components/ServiceDescription';
 import { FormModal } from '@/web/components/FormModal';
@@ -223,9 +225,7 @@ export function ConnectionsPage({
     <main className="connections-page">
       <aside className="connections-sidebar">
         <div className="connections-brand">
-          <span className="connections-mark">
-            <ApiOutlined />
-          </span>
+          <BrandMark className="connections-mark" />
           <div>
             <strong>{t('app.documentTitle')}</strong>
             <small>{t('connections.title')}</small>
@@ -464,6 +464,7 @@ export function ConnectionsPage({
                               message={t(upstreamTestMessages[testResults[server.name].reason], {
                                 status: testResults[server.name].http_status ?? '—',
                               })}
+                              description={<UpstreamTestDetails result={testResults[server.name]} />}
                             />
                           )}
                         </div>

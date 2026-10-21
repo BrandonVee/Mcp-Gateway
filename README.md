@@ -65,8 +65,10 @@ MCP_IMAGE_PREFIX= ./scripts/deploy.sh --yes   # 从当前代码构建
 无需克隆仓库，准备好容器可访问的 PostgreSQL 和 Redis 后执行：
 
 ```bash
+docker network create mcp-gateway
 docker volume create mcp-gateway-data
 docker run -d --name mcp-gateway-server \
+  --network mcp-gateway \
   --restart unless-stopped --stop-timeout 15 \
   --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
   -p 127.0.0.1:8080:8080 -v mcp-gateway-data:/app/data \
@@ -202,6 +204,7 @@ OAuth 服务首次连接会提示登录；API Key 服务复制的配置含 `YOUR
 
 ```bash
 pnpm install --frozen-lockfile
+bash scripts/ensure-mcp-network.sh
 docker compose up -d --wait postgres redis
 ```
 

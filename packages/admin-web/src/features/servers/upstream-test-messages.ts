@@ -16,6 +16,8 @@ export const upstreamTestMessages: Record<UpstreamTestResult['reason'], MessageK
   redirect: 'mcpTest.redirect',
   invalid_mcp: 'mcpTest.invalidMcp',
   tools_failed: 'mcpTest.toolsFailed',
+  resources_failed: 'mcpTest.resourcesFailed',
+  prompts_failed: 'mcpTest.promptsFailed',
   response_too_large: 'mcpTest.responseTooLarge',
   gateway_unavailable: 'mcpTest.gatewayUnavailable',
   busy: 'mcpTest.busy',

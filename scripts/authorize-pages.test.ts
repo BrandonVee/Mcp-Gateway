@@ -50,7 +50,7 @@ test('all authorization pages escape untrusted input and preserve hidden PKCE fi
   ]) {
     assert.ok(html.includes('name="state" value="&quot;&gt;&lt;img src=x onerror=alert(1)&gt;"'));
     assert.ok(html.includes(`name="code_challenge" value="${q.code_challenge}"`));
-    assert.equal(html.includes('<img'), false);
+    assert.doesNotMatch(html, /<img\b[^>]*\bonerror\s*=/i);
     assert.equal(html.includes('<script'), false);
     assert.ok(html.includes('name="viewport"'));
   }

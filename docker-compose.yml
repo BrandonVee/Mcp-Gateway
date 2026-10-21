@@ -77,6 +77,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks: [default, mcp-gateway]
 
   gateway:
     build: .
@@ -96,6 +97,13 @@ services:
         condition: service_healthy
       auth:
         condition: service_healthy
+    networks: [default, mcp-gateway]
 
 volumes:
   postgres_data:
+
+networks:
+  default:
+  mcp-gateway:
+    name: mcp-gateway
+    external: true

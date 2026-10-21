@@ -1,6 +1,5 @@
 import {
   ArrowRightOutlined,
-  CloudServerOutlined,
   LockOutlined,
   MailOutlined,
   SafetyCertificateOutlined,
@@ -11,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/web/api';
 import { useI18n } from '@/web/i18n';
 import { LanguageSwitcher } from '@/web/components/LanguageSwitcher';
+import { BrandMark } from '@/web/components/BrandMark';
 import { ThemeSwitcher } from '@/web/components/ThemeSwitcher';
 import type { PlatformSession } from '@/web/types';
 
@@ -109,9 +109,7 @@ export function LoginPage({
       <section className="login-story">
         <div className="story-glow" />
         <div className="login-brand">
-          <span className="login-brand-mark">
-            <CloudServerOutlined />
-          </span>
+          <BrandMark className="login-brand-mark" size={40} />
           <span>
             <strong>{t('app.documentTitle')}</strong>
             <small>{t('auth.unifiedControlPlane')}</small>

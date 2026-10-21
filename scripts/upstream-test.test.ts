@@ -5,8 +5,7 @@ import { test, type TestContext } from 'node:test';
 import { testUpstreamMcp, upstreamTestFailure } from '@/gateway/upstream-test.js';
 import { registerUpstreamTestRoute } from '@/gateway/routes/upstream-test.js';
 import { requestUpstreamTest } from '@/auth/modules/upstreams/connection-test.js';
-import { validateUpstreamEndpoint } from '@/shared/index.js';
-import { loopbackUpstreamEndpoint } from '@/web/features/servers/UpstreamConnectionTest';
+import { validateUpstreamEndpoint, upstreamTestResultSchema } from '@/shared/index.js';
 
 const Fastify = createRequire(new URL('../packages/gateway/package.json', import.meta.url))('fastify');
 
@@ -27,7 +26,20 @@ async function httpFixture(t: TestContext, handler: (req: IncomingMessage, res: 
 
 async function mcpFixture(
   t: TestContext,
-  options: { sse?: boolean; stateful?: boolean; toolError?: boolean; tools?: boolean } = {},
+  options: {
+    sse?: boolean;
+    stateful?: boolean;
+    toolError?: boolean;
+    tools?: boolean;
+    resources?: boolean;
+    prompts?: boolean;
+    paginated?: boolean;
+    repeatCursor?: boolean;
+    templatesUnsupported?: boolean;
+    errorMethod?: string;
+    httpErrorMethod?: string;
+    largeDescriptions?: boolean;
+  } = {},
 ) {
   const methods: string[] = [];
   let terminated = false;
@@ -54,18 +66,82 @@ async function mcpFixture(
         res.writeHead(202).end();
         return;
       }
+      if (rpc.method === options.httpErrorMethod) {
+        res.writeHead(401).end('private-upstream-detail');
+        return;
+      }
       if (options.stateful && rpc.method === 'initialize') res.setHeader('mcp-session-id', 'diagnostic-session');
+      const secondPage = rpc.params?.cursor === 'second-page';
+      const suffix = secondPage ? 'second' : 'first';
+      const description = options.largeDescriptions ? 'x'.repeat(600_000) : `Description for ${suffix}`;
+      const pages: Record<string, object> = {
+        'tools/list': {
+          tools: [
+            {
+              name: options.paginated ? `read_${suffix}` : 'read_fixture',
+              description,
+              inputSchema: { type: 'object' },
+              _meta: { internal: 'not-discovery-metadata' },
+            },
+          ],
+        },
+        'resources/list': {
+          resources: [
+            {
+              name: `resource_${suffix}`,
+              title: `Resource ${suffix}`,
+              uri: `fixture://${suffix}`,
+              description,
+              mimeType: 'text/plain',
+            },
+          ],
+        },
+        'resources/templates/list': {
+          resourceTemplates: [
+            {
+              name: `template_${suffix}`,
+              uriTemplate: `fixture://${suffix}/{id}`,
+              description,
+              mimeType: 'application/json',
+            },
+          ],
+        },
+        'prompts/list': {
+          prompts: [
+            {
+              name: `prompt_${suffix}`,
+              description,
+              arguments: [
+                { name: 'query', description: 'The query to explain', required: true },
+                { name: 'language', required: false },
+              ],
+            },
+          ],
+        },
+      };
       const result =
         rpc.method === 'initialize'
           ? {
               protocolVersion: rpc.params.protocolVersion,
-              capabilities: options.tools === false ? {} : { tools: {} },
+              capabilities: {
+                ...(options.tools === false ? {} : { tools: {} }),
+                ...(options.resources ? { resources: {} } : {}),
+                ...(options.prompts ? { prompts: {} } : {}),
+              },
               serverInfo: { name: 'fixture-mcp', version: '1.2.3' },
             }
-          : { tools: [{ name: 'read_fixture', inputSchema: { type: 'object' } }] };
+          : {
+              ...pages[rpc.method],
+              ...((options.paginated && !secondPage) || options.repeatCursor ? { nextCursor: 'second-page' } : {}),
+            };
+      const unsupported = options.templatesUnsupported && rpc.method === 'resources/templates/list';
       const message = JSON.stringify(
-        options.toolError && rpc.method === 'tools/list'
-          ? { jsonrpc: '2.0', id: rpc.id, error: { code: -32603, message: 'private-upstream-detail' } }
+        (options.toolError && rpc.method === 'tools/list') || options.errorMethod === rpc.method || unsupported
+          ? {
+              jsonrpc: '2.0',
+              id: rpc.id,
+              error: { code: unsupported ? -32601 : -32603, message: 'private-upstream-detail' },
+            }
           : { jsonrpc: '2.0', id: rpc.id, result },
       );
       if (options.sse) {
@@ -97,6 +173,7 @@ test('MCP tests initialize JSON and SSE endpoints, discover tools and clean up s
       assert.equal(result.ok, true, JSON.stringify(result));
       assert.deepEqual(result.server, { name: 'fixture-mcp', version: '1.2.3' });
       assert.equal(result.tools_count, 1);
+      assert.equal(result.tools?.[0].name, 'read_fixture');
       assert.deepEqual(fixture.methods, ['initialize', 'notifications/initialized', 'tools/list']);
       assert.equal(fixture.terminated, stateful);
       assert.equal(result.http_status, 200);
@@ -105,12 +182,132 @@ test('MCP tests initialize JSON and SSE endpoints, discover tools and clean up s
   }
 });
 
-test('resource-only MCP servers pass initialization without an unsupported tools/list request', async (t) => {
-  const fixture = await mcpFixture(t, { tools: false });
+test('resource-only MCP servers discover resources without an unsupported tools/list request', async (t) => {
+  const fixture = await mcpFixture(t, { tools: false, resources: true });
   const result = await testUpstreamMcp(fixture.endpoint);
   assert.equal(result.ok, true);
   assert.equal(result.tools_count, null);
-  assert.deepEqual(fixture.methods, ['initialize', 'notifications/initialized']);
+  assert.equal(result.tools, null);
+  assert.equal(result.resources?.[0].uri, 'fixture://first');
+  assert.equal(result.resource_templates?.[0].uriTemplate, 'fixture://first/{id}');
+  assert.equal(result.prompts, null);
+  assert.deepEqual(fixture.methods, [
+    'initialize',
+    'notifications/initialized',
+    'resources/list',
+    'resources/templates/list',
+  ]);
+});
+
+test('discovery lists every page of tools, resources, templates and prompts without invoking them', async (t) => {
+  for (const sse of [false, true]) {
+    const fixture = await mcpFixture(t, { sse, stateful: true, resources: true, prompts: true, paginated: true });
+    const result = await testUpstreamMcp(fixture.endpoint);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.tools_count, 2);
+    assert.deepEqual(
+      result.tools?.map((entry) => entry.name),
+      ['read_first', 'read_second'],
+    );
+    assert.deepEqual(
+      result.resources?.map((entry) => entry.uri),
+      ['fixture://first', 'fixture://second'],
+    );
+    assert.equal(result.resources?.[0].title, 'Resource first');
+    assert.equal(result.resources?.[0].mimeType, 'text/plain');
+    assert.equal(result.resource_templates?.length, 2);
+    assert.equal(result.resource_templates?.[1].uriTemplate, 'fixture://second/{id}');
+    assert.equal(result.prompts?.length, 2);
+    assert.deepEqual(result.prompts?.[0].arguments, [
+      { name: 'query', description: 'The query to explain', required: true },
+      { name: 'language', required: false },
+    ]);
+    assert.doesNotMatch(JSON.stringify(result), /not-discovery-metadata/);
+    assert.equal(upstreamTestResultSchema.safeParse(result).success, true);
+    assert.equal(fixture.terminated, true);
+    for (const method of ['tools/list', 'resources/list', 'resources/templates/list', 'prompts/list'])
+      assert.equal(fixture.methods.filter((value) => value === method).length, 2, method);
+    assert.ok(
+      fixture.methods.every((method) =>
+        [
+          'initialize',
+          'notifications/initialized',
+          'tools/list',
+          'resources/list',
+          'resources/templates/list',
+          'prompts/list',
+        ].includes(method),
+      ),
+    );
+  }
+});
+
+test('prompt-only and capability-free servers skip unadvertised discovery methods', async (t) => {
+  const promptOnly = await mcpFixture(t, { tools: false, prompts: true });
+  const result = await testUpstreamMcp(promptOnly.endpoint);
+  assert.equal(result.ok, true);
+  assert.equal(result.tools, null);
+  assert.equal(result.resources, null);
+  assert.equal(result.prompts?.[0].name, 'prompt_first');
+  assert.deepEqual(promptOnly.methods, ['initialize', 'notifications/initialized', 'prompts/list']);
+  const empty = await mcpFixture(t, { tools: false });
+  assert.equal((await testUpstreamMcp(empty.endpoint)).ok, true);
+  assert.deepEqual(empty.methods, ['initialize', 'notifications/initialized']);
+});
+
+test('static resource servers can omit resource-template support', async (t) => {
+  const fixture = await mcpFixture(t, { resources: true, templatesUnsupported: true });
+  const result = await testUpstreamMcp(fixture.endpoint);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.resources?.length, 1);
+  assert.deepEqual(result.resource_templates, []);
+});
+
+test('resource and prompt failures identify the failed list and retain other discovered metadata', async (t) => {
+  for (const [method, reason, stage] of [
+    ['resources/list', 'resources_failed', 'resources'],
+    ['resources/templates/list', 'resources_failed', 'resource_templates'],
+    ['prompts/list', 'prompts_failed', 'prompts'],
+  ]) {
+    const fixture = await mcpFixture(t, { resources: true, prompts: true, errorMethod: method });
+    const result = await testUpstreamMcp(fixture.endpoint);
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, reason);
+    assert.equal(result.stage, stage);
+    assert.equal(result.tools_count, 1);
+    assert.doesNotMatch(JSON.stringify(result), /private-upstream-detail/);
+  }
+});
+
+test('repeated pagination cursors fail promptly instead of looping or reporting a partial list', async (t) => {
+  const fixture = await mcpFixture(t, { repeatCursor: true });
+  const result = await testUpstreamMcp(fixture.endpoint, 1000);
+  assert.equal(result.reason, 'tools_failed');
+  assert.equal(result.tools, null);
+  assert.equal(result.tools_count, null);
+  assert.equal(fixture.methods.filter((method) => method === 'tools/list').length, 2);
+});
+
+test('parallel discovery preserves the failed request HTTP status instead of a successful sibling status', async (t) => {
+  for (const [method, stage] of [
+    ['tools/list', 'tools'],
+    ['resources/list', 'resources'],
+    ['prompts/list', 'prompts'],
+  ]) {
+    const fixture = await mcpFixture(t, { resources: true, prompts: true, httpErrorMethod: method });
+    const result = await testUpstreamMcp(fixture.endpoint);
+    assert.equal(result.reason, 'auth_required');
+    assert.equal(result.stage, stage);
+    assert.equal(result.http_status, 401);
+    assert.doesNotMatch(JSON.stringify(result), /private-upstream-detail/);
+  }
+});
+
+test('the combined metadata from paginated responses respects the probe size limit', async (t) => {
+  const fixture = await mcpFixture(t, { paginated: true, largeDescriptions: true });
+  const result = await testUpstreamMcp(fixture.endpoint);
+  assert.equal(result.reason, 'response_too_large');
+  assert.equal(result.tools, null);
 });
 
 test('tool discovery failure is distinct from initialization and never exposes upstream error text', async (t) => {
@@ -176,15 +373,6 @@ test('DNS and certificate errors are classified without disclosing exception mes
   assert.equal(upstreamTestFailure({ cause: { code: 'CERT_HAS_EXPIRED' } }), 'tls');
   assert.equal(upstreamTestFailure({ code: 'UND_ERR_CONNECT_TIMEOUT' }), 'timeout');
   assert.equal(upstreamTestFailure({ cause: { code: 'EHOSTUNREACH' } }), 'network');
-  for (const url of [
-    'http://127.0.0.1:8766/mcp/fx',
-    'http://127.2.3.4/mcp',
-    'http://[::1]/mcp',
-    'http://localhost/mcp',
-    'http://2130706433/mcp',
-  ])
-    assert.equal(loopbackUpstreamEndpoint(url), true);
-  assert.equal(loopbackUpstreamEndpoint('http://fx-app-1:8765/mcp/fx'), false);
 });
 
 test('gateway probe route requires the internal token, refreshes policy and never probes blocked hosts', async (t) => {

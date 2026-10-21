@@ -7,6 +7,12 @@ import {
 } from '@/shared/security/credentials.js';
 import { z } from 'zod';
 
+const discoveryEntrySchema = z.object({
+  name: z.string(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+});
+
 export const upstreamTestResultSchema = z
   .object({
     ok: z.boolean(),
@@ -25,16 +31,37 @@ export const upstreamTestResultSchema = z
       'redirect',
       'invalid_mcp',
       'tools_failed',
+      'resources_failed',
+      'prompts_failed',
       'response_too_large',
       'gateway_unavailable',
       'busy',
     ]),
-    stage: z.enum(['initialize', 'tools', 'gateway']),
+    stage: z.enum(['initialize', 'tools', 'resources', 'resource_templates', 'prompts', 'gateway']),
     duration_ms: z.number().int().min(0).max(120_000),
     http_status: z.number().int().min(100).max(599).nullable(),
     server: z.object({ name: z.string().max(128), version: z.string().max(128) }).nullable(),
     protocol_version: z.string().max(64).nullable(),
     tools_count: z.number().int().min(0).nullable(),
+    tools: z.array(discoveryEntrySchema).nullable().default(null),
+    resources: z
+      .array(discoveryEntrySchema.extend({ uri: z.string(), mimeType: z.string().optional() }))
+      .nullable()
+      .default(null),
+    resource_templates: z
+      .array(discoveryEntrySchema.extend({ uriTemplate: z.string(), mimeType: z.string().optional() }))
+      .nullable()
+      .default(null),
+    prompts: z
+      .array(
+        discoveryEntrySchema.extend({
+          arguments: z
+            .array(z.object({ name: z.string(), description: z.string().optional(), required: z.boolean().optional() }))
+            .optional(),
+        }),
+      )
+      .nullable()
+      .default(null),
   })
   .refine((value) => value.ok === (value.reason === 'ok'));
 
@@ -50,6 +77,10 @@ export function unavailableUpstreamTest(reason: 'gateway_unavailable' | 'busy'):
     server: null,
     protocol_version: null,
     tools_count: null,
+    tools: null,
+    resources: null,
+    resource_templates: null,
+    prompts: null,
   };
 }
 

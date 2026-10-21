@@ -647,9 +647,6 @@
 :root[data-theme='light'] .story-steps > div > span {
   color: var(--blue);
 }
-:root[data-theme='light'] .login-brand-mark {
-  color: #ffffff;
-}
 :root[data-theme='light'] .login-form-area {
   background: radial-gradient(circle at 78% 14%, #e5effc, transparent 50%), var(--canvas);
 }

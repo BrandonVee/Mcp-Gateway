@@ -6,11 +6,9 @@ import type {
   SystemSettings,
   AdminConnection,
   AdminUser,
-  GatewayHealth,
   McpServer,
   SystemUpdateStatus,
   SystemSettingsInput,
-  AuthHealth,
 } from '@/web/types';
 import { mutateAndRefresh } from '@/web/utils/operations';
 
@@ -24,8 +22,6 @@ export function useControlPlane(
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [servers, setServers] = useState<McpServer[]>([]);
   const [connections, setConnections] = useState<AdminConnection[]>([]);
-  const [health, setHealth] = useState<GatewayHealth | null>(null);
-  const [authHealth, setAuthHealth] = useState<AuthHealth | null>(null);
   const [update, setUpdate] = useState<SystemUpdateStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -36,32 +32,18 @@ export function useControlPlane(
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const [userData, serverData, connectionData, gatewayHealth, settingsData, updateData, authHealthData] =
-        await Promise.all([
-          api.users(),
-          api.servers(),
-          api.adminConnections(),
-          api.gatewayHealth().catch((error): GatewayHealth => ({
-            ok: false,
-            redis: false,
-            registry: {
-              lastError:
-                error instanceof Error
-                  ? error.message
-                  : getTranslation('errors.couldNotReadGatewayStatus', getCurrentLanguage()),
-            },
-          })),
-          api.systemSettings(),
-          // Deployments that disable web updates answer 503 for this endpoint.
-          api.systemUpdate().catch(() => null),
-          api.authHealth().catch(() => null),
-        ]);
+      const [userData, serverData, connectionData, settingsData, updateData] = await Promise.all([
+        api.users(),
+        api.servers(),
+        api.adminConnections(),
+        api.systemSettings(),
+        // Deployments that disable web updates answer 503 for this endpoint.
+        api.systemUpdate().catch(() => null),
+      ]);
       setSettings(settingsData);
       setUsers(userData.users);
       setServers(serverData.servers);
       setConnections(connectionData.connections);
-      setHealth(gatewayHealth);
-      setAuthHealth(authHealthData);
       setUpdate(updateData);
     } catch (error) {
       setLoadError(
@@ -154,8 +136,6 @@ export function useControlPlane(
       setUsers([]);
       setServers([]);
       setConnections([]);
-      setHealth(null);
-      setAuthHealth(null);
       setUpdate(null);
       setLoadError(null);
     } finally {
@@ -169,8 +149,6 @@ export function useControlPlane(
     users,
     servers,
     connections,
-    health,
-    authHealth,
     update,
     busy,
     loggingOut,

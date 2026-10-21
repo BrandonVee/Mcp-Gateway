@@ -23,10 +23,19 @@ header {
   margin-bottom: 28px;
 }
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  vertical-align: middle;
   font-weight: 750;
   color: #2440a0;
 }
+.brand img {
+  display: block;
+  border-radius: 8px;
+}
 .badge {
+  vertical-align: middle;
   font-size: 12px;
   margin-left: 12px;
   padding: 4px 9px;

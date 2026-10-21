@@ -241,6 +241,7 @@ if $prepare_only; then
   exit 0
 fi
 
+bash "$root/scripts/ensure-mcp-network.sh"
 compose up -d --wait postgres redis
 # Redis and Postgres are up, so the control network now has a subnet: trust it as
 # the proxy hop instead of trusting every forwarded client IP.

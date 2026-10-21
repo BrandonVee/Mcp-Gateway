@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import {
   SettingOutlined,
-  AppstoreOutlined,
   CloudServerOutlined,
   DashboardOutlined,
   LogoutOutlined,
@@ -21,6 +20,7 @@ import { Button, Dropdown, Layout, Menu, Space, Tooltip, Typography } from 'antd
 import { useEffect, useState } from 'react';
 import type { View } from '@/web/types';
 import { CommandPalette } from '@/web/components/CommandPalette';
+import { BrandMark } from '@/web/components/BrandMark';
 import { LanguageSwitcher } from '@/web/components/LanguageSwitcher';
 import { ThemeSwitcher } from '@/web/components/ThemeSwitcher';
 import { useColorMode } from '@/web/color-mode';
@@ -106,9 +106,7 @@ export function AppShell({
         onBreakpoint={(broken) => setCollapsed(broken)}
       >
         <div className={collapsed ? 'brand compact' : 'brand'}>
-          <span className="brand-symbol">
-            <AppstoreOutlined />
-          </span>
+          <BrandMark className="brand-symbol" />
           {!collapsed && (
             <span className="brand-copy">
               <strong>{t('app.documentTitle')}</strong>

@@ -47,7 +47,7 @@ services:
       interval: 10s
       timeout: 4s
       retries: 6
-    networks: [control]
+    networks: [control, mcp-gateway]
 
   gateway:
     image: ${MCP_IMAGE_PREFIX:-}mcp-runtime:${MCP_VERSION:?set MCP_VERSION}
@@ -89,7 +89,7 @@ services:
       interval: 10s
       timeout: 4s
       retries: 6
-    networks: [control]
+    networks: [control, mcp-gateway]
 
   admin-web:
     image: ${MCP_IMAGE_PREFIX:-}mcp-admin-web:${MCP_VERSION:?set MCP_VERSION}
@@ -119,3 +119,6 @@ services:
 
 networks:
   control:
+  mcp-gateway:
+    name: mcp-gateway
+    external: true

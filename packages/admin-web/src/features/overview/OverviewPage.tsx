@@ -14,6 +14,7 @@ import type { api as platformApi } from '@/web/api';
 import type { AdminUser, McpServer, SystemSettings, UsageSummary, View } from '@/web/types';
 import { routableInstances } from '@/web/features/servers/upstream-allowlist';
 import { initials } from '@/web/utils/format';
+import { pollWhileVisible } from '@/web/utils/polling';
 
 interface OverviewPageProps {
   users: AdminUser[];
@@ -28,11 +29,8 @@ export function OverviewPage({ users, servers, settings, api, onNavigate }: Over
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [usageError, setUsageError] = useState('');
   useEffect(() => {
-    let active = true,
-      fetching = false;
+    let active = true;
     const refresh = async () => {
-      if (fetching) return;
-      fetching = true;
       try {
         const result = await api.usageSummary({ hours: 24 }, 'server');
         if (active) {
@@ -41,15 +39,12 @@ export function OverviewPage({ users, servers, settings, api, onNavigate }: Over
         }
       } catch (error) {
         if (active) setUsageError(error instanceof Error ? error.message : t('common.refreshFailed'));
-      } finally {
-        fetching = false;
       }
     };
-    void refresh();
-    const timer = window.setInterval(() => void refresh(), 10000);
+    const stopPolling = pollWhileVisible(refresh, 10000);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      stopPolling();
     };
   }, [api, t]);
   const stats = usage?.enabled ? usage.summary : null;

@@ -223,6 +223,11 @@ function ControlPlane({
 
   const dataUnavailable =
     Boolean(controlPlane.loadError) && controlPlane.users.length === 0 && controlPlane.servers.length === 0;
+  const userDialogOpen =
+    dialog.type === 'create-user' ||
+    dialog.type === 'edit-user' ||
+    dialog.type === 'assign-user' ||
+    dialog.type === 'reset-password';
 
   return (
     <AppShell
@@ -262,217 +267,232 @@ function ControlPlane({
               }
             />
           )}
-          {view === 'settings' && controlPlane.settings && (
-            <SettingsPage
-              settings={controlPlane.settings}
-              update={controlPlane.update}
-              updating={updating}
-              onSave={async (body) => {
-                let saved: SystemSettings | null = null;
-                const success = await execute(async () => {
-                  saved = await controlPlane.saveSystemSettings(body);
-                }, t('settings.saved'));
-                return success ? saved : null;
-              }}
-              onDirtyChange={setSettingsDirty}
-              onUpdate={startUpdate}
-              onCheckUpdate={controlPlane.refreshUpdate}
-              onTestEmail={async (to, smtp) => {
-                await controlPlane.api.testEmail(to, smtp);
-              }}
-            />
-          )}
-          {view === 'overview' && (
-            <OverviewPage
-              api={controlPlane.api}
-              onNavigate={navigate}
-              users={controlPlane.users}
-              servers={controlPlane.servers}
-              settings={controlPlane.settings}
-            />
-          )}
+          <Suspense fallback={<PageSkeleton />}>
+            {view === 'settings' && controlPlane.settings && (
+              <SettingsPage
+                settings={controlPlane.settings}
+                update={controlPlane.update}
+                updating={updating}
+                onSave={async (body) => {
+                  let saved: SystemSettings | null = null;
+                  const success = await execute(async () => {
+                    saved = await controlPlane.saveSystemSettings(body);
+                  }, t('settings.saved'));
+                  return success ? saved : null;
+                }}
+                onDirtyChange={setSettingsDirty}
+                onUpdate={startUpdate}
+                onCheckUpdate={controlPlane.refreshUpdate}
+                onTestEmail={async (to, smtp) => {
+                  await controlPlane.api.testEmail(to, smtp);
+                }}
+              />
+            )}
+            {view === 'overview' && (
+              <OverviewPage
+                api={controlPlane.api}
+                onNavigate={navigate}
+                users={controlPlane.users}
+                servers={controlPlane.servers}
+                settings={controlPlane.settings}
+              />
+            )}
 
-          {view === 'users' && (
-            <UsersPage
-              users={controlPlane.users}
-              busy={controlPlane.busy}
-              onCreate={() => setDialog({ type: 'create-user' })}
-              onEdit={(user) => setDialog({ type: 'edit-user', user })}
-              onAssign={(user) => setDialog({ type: 'assign-user', user })}
-              onPassword={(user) => setDialog({ type: 'reset-password', user })}
-              onToggle={(user) => {
-                const update = () =>
-                  execute(
-                    () => controlPlane.api.updateUser(user.id, { disabled: !user.disabled }),
-                    user.disabled ? t('app.userSignEnabled') : t('app.userSignDisabled'),
-                  );
-                if (user.disabled) void update();
-                else
+            {view === 'users' && (
+              <UsersPage
+                users={controlPlane.users}
+                busy={controlPlane.busy}
+                onCreate={() => setDialog({ type: 'create-user' })}
+                onEdit={(user) => setDialog({ type: 'edit-user', user })}
+                onAssign={(user) => setDialog({ type: 'assign-user', user })}
+                onPassword={(user) => setDialog({ type: 'reset-password', user })}
+                onToggle={(user) => {
+                  const update = () =>
+                    execute(
+                      () => controlPlane.api.updateUser(user.id, { disabled: !user.disabled }),
+                      user.disabled ? t('app.userSignEnabled') : t('app.userSignDisabled'),
+                    );
+                  if (user.disabled) void update();
+                  else
+                    modal.confirm({
+                      title: t('app.disableSignName', { name: user.username }),
+                      content: t('app.userLoseSignMcpAccess'),
+                      okText: t('app.disableSign'),
+                      okButtonProps: { danger: true },
+                      cancelText: t('common.cancel'),
+                      onOk: () => confirmResult(update()),
+                    });
+                }}
+                onDelete={(user) =>
                   modal.confirm({
-                    title: t('app.disableSignName', { name: user.username }),
-                    content: t('app.userLoseSignMcpAccess'),
-                    okText: t('app.disableSign'),
+                    title: t('app.deleteUserName', { name: user.username }),
+                    content: t('app.deleteUserRemovesServerGrants'),
+                    okText: t('app.delete'),
                     okButtonProps: { danger: true },
                     cancelText: t('common.cancel'),
-                    onOk: () => confirmResult(update()),
-                  });
-              }}
-              onDelete={(user) =>
-                modal.confirm({
-                  title: t('app.deleteUserName', { name: user.username }),
-                  content: t('app.deleteUserRemovesServerGrants'),
-                  okText: t('app.delete'),
-                  okButtonProps: { danger: true },
-                  cancelText: t('common.cancel'),
-                  onOk: () => confirmResult(execute(() => controlPlane.api.deleteUser(user.id), t('app.userDeleted'))),
-                })
-              }
-            />
-          )}
+                    onOk: () =>
+                      confirmResult(execute(() => controlPlane.api.deleteUser(user.id), t('app.userDeleted'))),
+                  })
+                }
+              />
+            )}
 
-          {view === 'servers' && (
-            <ServersPage
-              servers={controlPlane.servers}
-              users={controlPlane.users}
-              busy={controlPlane.busy}
-              settings={controlPlane.settings}
-              onAddUpstreamHost={addUpstreamHost}
-              onOpenSettings={() => navigate('settings')}
-              onCreate={() => setDialog({ type: 'create-server' })}
-              onEdit={(server) => setDialog({ type: 'edit-server', server })}
-              onEditInstance={(server, instance) => setDialog({ type: 'edit-instance', server, instance })}
-              onAddInstance={(server) => setDialog({ type: 'add-instance', server })}
-              onSystemOAuth={(instance) => {
-                void controlPlane.api
-                  .startOAuth(instance.id)
-                  .then((result) => window.location.assign(result.authorization_url))
-                  .catch((error) =>
-                    message.error(error instanceof Error ? error.message : t('common.operationFailed')),
-                  );
-              }}
-              onConfigureAuth={(server) => setDialog({ type: 'configure-server-auth', server })}
-              onConfigureUsers={(server) => setDialog({ type: 'configure-server-users', server })}
-              onToggle={(server) =>
-                execute(
-                  () =>
-                    controlPlane.api.updateServer(server.name, {
-                      enabled: !server.enabled,
-                    }),
-                  server.enabled ? t('app.serverPaused') : t('app.serverEnabled'),
-                )
-              }
-              onToggleInstance={(server, instance) =>
-                execute(
-                  () =>
-                    controlPlane.api.updateInstance(server.name, instance.id, {
-                      enabled: !instance.enabled,
-                    }),
-                  t('app.instanceStatusUpdated'),
-                )
-              }
-              onDeleteInstance={(server, instance) =>
-                modal.confirm({
-                  title: t('app.deleteInstanceId', { id: instance.id }),
-                  content: t('app.gatewayStopForwardingRequestsInstance'),
-                  okText: t('app.delete'),
-                  okButtonProps: { danger: true },
-                  cancelText: t('common.cancel'),
-                  onOk: () =>
-                    confirmResult(
-                      execute(
-                        () => controlPlane.api.deleteInstance(server.name, instance.id),
-                        t('app.instanceDeleted'),
+            {view === 'servers' && (
+              <ServersPage
+                servers={controlPlane.servers}
+                users={controlPlane.users}
+                busy={controlPlane.busy}
+                settings={controlPlane.settings}
+                onAddUpstreamHost={addUpstreamHost}
+                onOpenSettings={() => navigate('settings')}
+                onCreate={() => setDialog({ type: 'create-server' })}
+                onEdit={(server) => setDialog({ type: 'edit-server', server })}
+                onEditInstance={(server, instance) => setDialog({ type: 'edit-instance', server, instance })}
+                onAddInstance={(server) => setDialog({ type: 'add-instance', server })}
+                onSystemOAuth={(instance) => {
+                  void controlPlane.api
+                    .startOAuth(instance.id)
+                    .then((result) => window.location.assign(result.authorization_url))
+                    .catch((error) =>
+                      message.error(error instanceof Error ? error.message : t('common.operationFailed')),
+                    );
+                }}
+                onConfigureAuth={(server) => setDialog({ type: 'configure-server-auth', server })}
+                onConfigureUsers={(server) => setDialog({ type: 'configure-server-users', server })}
+                onToggle={(server) =>
+                  execute(
+                    () =>
+                      controlPlane.api.updateServer(server.name, {
+                        enabled: !server.enabled,
+                      }),
+                    server.enabled ? t('app.serverPaused') : t('app.serverEnabled'),
+                  )
+                }
+                onToggleInstance={(server, instance) =>
+                  execute(
+                    () =>
+                      controlPlane.api.updateInstance(server.name, instance.id, {
+                        enabled: !instance.enabled,
+                      }),
+                    t('app.instanceStatusUpdated'),
+                  )
+                }
+                onDeleteInstance={(server, instance) =>
+                  modal.confirm({
+                    title: t('app.deleteInstanceId', { id: instance.id }),
+                    content: t('app.gatewayStopForwardingRequestsInstance'),
+                    okText: t('app.delete'),
+                    okButtonProps: { danger: true },
+                    cancelText: t('common.cancel'),
+                    onOk: () =>
+                      confirmResult(
+                        execute(
+                          () => controlPlane.api.deleteInstance(server.name, instance.id),
+                          t('app.instanceDeleted'),
+                        ),
                       ),
-                    ),
-                })
-              }
-              onDelete={(server) =>
-                modal.confirm({
-                  title: t('app.deleteServerName', { name: server.name }),
-                  content: t('app.instancesUserGrantsDeletedCannot'),
-                  okText: t('app.delete'),
-                  okButtonProps: { danger: true },
-                  cancelText: t('common.cancel'),
-                  onOk: () =>
-                    confirmResult(execute(() => controlPlane.api.deleteServer(server.name), t('app.serverDeleted'))),
-                })
-              }
-            />
-          )}
+                  })
+                }
+                onDelete={(server) =>
+                  modal.confirm({
+                    title: t('app.deleteServerName', { name: server.name }),
+                    content: t('app.instancesUserGrantsDeletedCannot'),
+                    okText: t('app.delete'),
+                    okButtonProps: { danger: true },
+                    cancelText: t('common.cancel'),
+                    onOk: () =>
+                      confirmResult(execute(() => controlPlane.api.deleteServer(server.name), t('app.serverDeleted'))),
+                  })
+                }
+              />
+            )}
 
-          {view === 'credentials' && (
-            <ConnectionsAdminPage
-              users={controlPlane.users}
-              servers={controlPlane.servers}
-              connections={controlPlane.connections}
-              busy={controlPlane.busy}
-              onRevoke={(user, server) =>
-                modal.confirm({
-                  title: t('app.revokeUserServerConnection', { user: user.username, server: server.display_name }),
-                  content: t('app.storedApiKeyOauthToken'),
-                  okText: t('app.revokeConnection'),
-                  okButtonProps: { danger: true },
-                  cancelText: t('common.cancel'),
-                  onOk: () =>
-                    confirmResult(
-                      execute(
-                        () => controlPlane.api.revokeConnection(user.id, server.name, server.upstream_id),
-                        t('app.connectionRevoked'),
+            {view === 'credentials' && (
+              <ConnectionsAdminPage
+                users={controlPlane.users}
+                servers={controlPlane.servers}
+                connections={controlPlane.connections}
+                busy={controlPlane.busy}
+                onRevoke={(user, server) =>
+                  modal.confirm({
+                    title: t('app.revokeUserServerConnection', { user: user.username, server: server.display_name }),
+                    content: t('app.storedApiKeyOauthToken'),
+                    okText: t('app.revokeConnection'),
+                    okButtonProps: { danger: true },
+                    cancelText: t('common.cancel'),
+                    onOk: () =>
+                      confirmResult(
+                        execute(
+                          () => controlPlane.api.revokeConnection(user.id, server.name, server.upstream_id),
+                          t('app.connectionRevoked'),
+                        ),
                       ),
-                    ),
-                })
-              }
-            />
-          )}
+                  })
+                }
+              />
+            )}
 
-          {view === 'topology' && <TopologyPage />}
+            {view === 'topology' && <TopologyPage />}
 
-          {view === 'monitoring' && <MonitoringPage />}
-          {view === 'audit' && <AuditPage />}
+            {view === 'monitoring' && <MonitoringPage />}
+            {view === 'audit' && <AuditPage />}
+          </Suspense>
 
-          <UserDialogs
-            state={dialog}
-            servers={controlPlane.servers}
-            busy={controlPlane.busy}
-            onClose={() => setDialog({ type: null })}
-            onCreate={(data) => execute(() => controlPlane.api.createUser(data), t('app.userCreated'))}
-            onEdit={(user, data) => execute(() => controlPlane.api.updateUser(user.id, data), t('app.userUpdated'))}
-            onAssign={(user, servers) =>
-              execute(() => controlPlane.api.setUserServers(user.id, servers), t('app.accessGrantsUpdated'))
-            }
-            onPassword={(user, password) =>
-              execute(() => controlPlane.api.updateUser(user.id, { password }), t('app.passwordReset'))
-            }
-          />
+          <Suspense fallback={null}>
+            {userDialogOpen && (
+              <UserDialogs
+                state={dialog}
+                servers={controlPlane.servers}
+                busy={controlPlane.busy}
+                onClose={() => setDialog({ type: null })}
+                onCreate={(data) => execute(() => controlPlane.api.createUser(data), t('app.userCreated'))}
+                onEdit={(user, data) => execute(() => controlPlane.api.updateUser(user.id, data), t('app.userUpdated'))}
+                onAssign={(user, servers) =>
+                  execute(() => controlPlane.api.setUserServers(user.id, servers), t('app.accessGrantsUpdated'))
+                }
+                onPassword={(user, password) =>
+                  execute(() => controlPlane.api.updateUser(user.id, { password }), t('app.passwordReset'))
+                }
+              />
+            )}
 
-          <ServerDialogs
-            state={dialog}
-            users={controlPlane.users}
-            settings={controlPlane.settings}
-            onAddUpstreamHost={addUpstreamHost}
-            onTestUpstream={controlPlane.api.testUpstream}
-            busy={controlPlane.busy}
-            onClose={() => setDialog({ type: null })}
-            onCreate={(data) => execute(() => controlPlane.api.createServer(data), t('app.mcpServerRegistered'))}
-            onEdit={(server, data) =>
-              execute(() => controlPlane.api.updateServer(server.name, data), t('servers.infoSaved'))
-            }
-            onEditInstance={(server, instance, data) =>
-              execute(() => controlPlane.api.updateInstance(server.name, instance.id, data), t('servers.instanceSaved'))
-            }
-            onAddInstance={(server, data) =>
-              execute(() => controlPlane.api.addInstance(server.name, data), t('app.instanceAdded'))
-            }
-            onConfigureAuth={(server, data) =>
-              execute(() => controlPlane.api.updateServer(server.name, data), t('app.authenticationSettingsUpdated'))
-            }
-            onConfigureUsers={(server, userIds, signupAccess) =>
-              execute(
-                () => controlPlane.api.setServerUsers(server.name, userIds, signupAccess),
-                t('app.userGrantsUpdated'),
-              )
-            }
-          />
+            {dialog.type !== null && !userDialogOpen && (
+              <ServerDialogs
+                state={dialog}
+                users={controlPlane.users}
+                settings={controlPlane.settings}
+                onAddUpstreamHost={addUpstreamHost}
+                onTestUpstream={controlPlane.api.testUpstream}
+                busy={controlPlane.busy}
+                onClose={() => setDialog({ type: null })}
+                onCreate={(data) => execute(() => controlPlane.api.createServer(data), t('app.mcpServerRegistered'))}
+                onEdit={(server, data) =>
+                  execute(() => controlPlane.api.updateServer(server.name, data), t('servers.infoSaved'))
+                }
+                onEditInstance={(server, instance, data) =>
+                  execute(
+                    () => controlPlane.api.updateInstance(server.name, instance.id, data),
+                    t('servers.instanceSaved'),
+                  )
+                }
+                onAddInstance={(server, data) =>
+                  execute(() => controlPlane.api.addInstance(server.name, data), t('app.instanceAdded'))
+                }
+                onConfigureAuth={(server, data) =>
+                  execute(
+                    () => controlPlane.api.updateServer(server.name, data),
+                    t('app.authenticationSettingsUpdated'),
+                  )
+                }
+                onConfigureUsers={(server, userIds, signupAccess) =>
+                  execute(
+                    () => controlPlane.api.setServerUsers(server.name, userIds, signupAccess),
+                    t('app.userGrantsUpdated'),
+                  )
+                }
+              />
+            )}
+          </Suspense>
         </>
       )}
     </AppShell>

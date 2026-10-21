@@ -402,28 +402,6 @@ body {
   border-bottom-color: #142139;
 }
 
-.brand-symbol {
-  position: relative;
-  background: linear-gradient(145deg, #36a3ff 0%, #2464f0 55%, #183ca3 100%);
-  border-color: rgba(116, 198, 255, 0.28);
-  box-shadow:
-    0 0 0 1px rgba(55, 156, 255, 0.16),
-    0 0 30px rgba(47, 140, 255, 0.3);
-}
-
-.brand-symbol::after {
-  content: '';
-  position: absolute;
-  right: -3px;
-  top: -3px;
-  width: 8px;
-  height: 8px;
-  background: #5df6cc;
-  border: 2px solid #07101e;
-  border-radius: 50%;
-  box-shadow: 0 0 12px #20d99a;
-}
-
 .brand-copy small,
 .sider-section-label {
   color: #526783;
@@ -1039,12 +1017,6 @@ body {
     38px 38px,
     38px 38px,
     auto;
-}
-
-.boot-mark {
-  box-shadow:
-    0 0 0 1px rgba(105, 197, 255, 0.2),
-    0 0 45px rgba(47, 140, 255, 0.32);
 }
 
 @media (max-width: 1100px) {
