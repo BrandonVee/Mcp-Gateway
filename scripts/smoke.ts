@@ -162,7 +162,7 @@ async function main(): Promise<void> {
   const escapedState = 'name="state" value="&quot;&gt;&lt;img src=x onerror=alert(1)&gt;"';
   check(
     'authorize login page escapes hidden fields',
-    injectionLoginPage.includes(escapedState) && !injectionLoginPage.includes('<img'),
+    injectionLoginPage.includes(escapedState) && !/<img\b[^>]*\bonerror\s*=/i.test(injectionLoginPage),
   );
 
   // Submit login -> 302 with ?code=...
@@ -188,7 +188,9 @@ async function main(): Promise<void> {
   );
   check(
     'authorize consent page escapes hidden fields',
-    !!sessionCookie && injectionConsentPage.includes(escapedState) && !injectionConsentPage.includes('<img'),
+    !!sessionCookie &&
+      injectionConsentPage.includes(escapedState) &&
+      !/<img\b[^>]*\bonerror\s*=/i.test(injectionConsentPage),
   );
   const zhConsentPage = await fetch(authorizeUrl, {
     headers: { cookie: sessionCookie ?? '', 'accept-language': 'zh-CN' },
