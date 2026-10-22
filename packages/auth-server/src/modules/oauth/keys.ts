@@ -1,12 +1,12 @@
 import { eq } from 'drizzle-orm';
-import { exportJWK, importPKCS8, importSPKI, type JWK, type KeyLike } from 'jose';
+import { exportJWK, importPKCS8, importSPKI, type CryptoKey, type JWK, type KeyObject } from 'jose';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { db } from '@/auth/infrastructure/database/client.js';
 import { meta } from '@/auth/infrastructure/database/schema.js';
 
 export interface SigningKeys {
   kid: string;
-  privateKey: KeyLike;
+  privateKey: CryptoKey | KeyObject;
   publicJwk: JWK;
 }
 

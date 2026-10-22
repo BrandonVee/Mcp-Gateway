@@ -1,3 +1,7 @@
 packages:
   - packages/*
   - tests/fixtures
+
+overrides:
+  # drizzle-kit still pulls an esbuild version affected by GHSA-67mh-4wv8-2f99.
+  '@esbuild-kit/core-utils>esbuild': ^0.28.2

@@ -37,6 +37,8 @@ jobs:
 
   single-host:
     needs: verify
+    # Deployment rehearsals belong to the full regression suite.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -82,6 +84,7 @@ jobs:
     env:
       COMPOSE_PROJECT_NAME: mcp-ci
       COMPOSE_FILE: .github/compose.app-ci.yml
+      FULL_REGRESSION: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
       # The runner registers this URL; the gateway resolves it inside Compose.
       REPORTS_UPSTREAM_URL: http://mcp-reports:3003
     steps:
@@ -105,14 +108,16 @@ jobs:
             pnpm --filter @mcp/test-upstream seed --docker
       - name: Wait for application readiness
         run: |
+          # Fixture seeding happens after startup; wait for the gateway registry to refresh too.
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:5173/ > /dev/null \
               && curl --fail --silent http://127.0.0.1:5173/api/health > /dev/null \
-              && curl --fail --silent http://127.0.0.1:5173/gateway/health > /dev/null; then
+              && curl --fail --silent http://127.0.0.1:5173/gateway/health > /dev/null \
+              && curl --fail --silent http://127.0.0.1:8000/.well-known/oauth-protected-resource/mcp/demo > /dev/null; then
               break
             fi
             if [ "$attempt" -eq 30 ]; then
-              echo "Admin web or its API proxies did not become ready" >&2
+              echo "Admin web, its API proxies or the seeded gateway route did not become ready" >&2
               exit 1
             fi
             sleep 2
@@ -120,30 +125,44 @@ jobs:
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5173/api/internal/mcp-servers)" = 404
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5173/gateway/mcp/demo)" = 404
       - name: Verify account lifecycle and last-administrator protection
+        if: env.FULL_REGRESSION == 'true'
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-auth-lifecycle.ts
       - name: Verify admin workflows and shared system API keys
+        if: env.FULL_REGRESSION == 'true'
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-admin-business.ts
       - name: Verify grouped upstream authentication, aggregation and migration
+        if: env.FULL_REGRESSION == 'true'
         run: |
           DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-upstream-groups.ts
           DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp pnpm exec tsx scripts/smoke-upstream-migration.ts
       - name: Verify gateway OAuth, user access keys, public access and zero limits
+        if: env.FULL_REGRESSION == 'true'
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-gateway-access.ts
       - name: Verify upstream OAuth lifecycle and revocation races
+        if: env.FULL_REGRESSION == 'true'
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-oauth-lifecycle.ts
       - name: Verify credential validation, concurrent sessions, user quotas and recurring alerts
+        if: env.FULL_REGRESSION == 'true'
         run: DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 pnpm exec tsx scripts/smoke-gateway-reliability.ts
       # The broader smoke test deliberately exhausts /register's shared IP
       # limit. Run signup first so its OAuth client registration has quota.
       - name: Verify self-registration and default service grants
+        if: env.FULL_REGRESSION == 'true'
         run: ADMIN_PASSWORD=admin123 SIGNUP_UPSTREAM_HOST=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}') pnpm exec tsx scripts/smoke-signup.ts
       - name: Verify call monitoring and collection switches
+        if: env.FULL_REGRESSION == 'true'
         run: ADMIN_PASSWORD=admin123 DATABASE_URL=postgres://mcp:mcp-dev-password@127.0.0.1:5433/mcp REDIS_URL=redis://127.0.0.1:6380 SIGNUP_UPSTREAM_HOST=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}') pnpm exec tsx scripts/smoke-monitoring.ts
       - name: Verify server edits, route renames and persisted permissions
+        if: env.FULL_REGRESSION == 'true'
         run: pnpm exec tsx scripts/smoke-server-edit.ts
       - name: Verify grant revocation rejects live access tokens
+        if: env.FULL_REGRESSION == 'true'
         run: ADMIN_PASSWORD=admin123 pnpm exec tsx scripts/smoke-grant-revocation.ts
-      - name: Run end-to-end smoke test against built images
+      - name: Verify core login, MCP calls and access boundaries
+        if: env.FULL_REGRESSION != 'true'
+        run: pnpm smoke --core
+      - name: Run full end-to-end regression against built images
+        if: env.FULL_REGRESSION == 'true'
         run: pnpm smoke
       - name: Show service logs on failure
         if: failure()

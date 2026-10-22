@@ -6,8 +6,15 @@
  *      (simulates the browser login POST), exchange the code for tokens
  *   3. MCP via gateway: initialize -> tools/list -> tools/call "server_info" x4
  *      (alternating instance ids proves round-robin load balancing)
+ *
+ * Pass --core for the PR suite: readiness, OAuth login, MCP tool calls and
+ * basic access boundaries, without load balancing or administrative workflows.
  */
 import { createHash, randomBytes } from 'node:crypto';
+
+const args = new Set(process.argv.slice(2));
+if ([...args].some((arg) => arg !== '--core')) throw new Error('Usage: pnpm smoke [--core]');
+const coreOnly = args.has('--core');
 
 const GW = process.env.GATEWAY_URL ?? 'http://localhost:8000';
 const AUTH = process.env.AUTH_URL ?? 'http://localhost:9001';
@@ -330,6 +337,27 @@ async function main(): Promise<void> {
   const add = await rpc('tools/call', { name: 'add', arguments: { a: 20, b: 22 } }, 3);
   check('tools/call add(20,22)', add?.result?.content?.[0]?.text === '42');
 
+  // These access boundaries are required in both the core and full suites.
+  const bad = await fetch(`${GW}/mcp/demo`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer not-a-token' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 99, method: 'ping' }),
+  });
+  check('gateway rejects bad token (401)', bad.status === 401);
+  const forbidden = await fetch(`${AUTH}/admin/users`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
+  check('non-admin blocked from admin API (403)', forbidden.status === 403);
+  const unassigned = await fetch(`${GW}/mcp/reports`, {
+    method: 'POST',
+    headers: mcpHeaders,
+    body: JSON.stringify({ jsonrpc: '2.0', id: 100, method: 'ping' }),
+  });
+  check('user cannot access an unassigned server (403)', unassigned.status === 403);
+
+  if (coreOnly) {
+    console.log(`\n${process.exitCode ? 'CORE SMOKE TEST FAILED' : 'CORE SMOKE TESTS PASSED'}`);
+    return;
+  }
+
   // Session stickiness: every call inside one session hits the same instance.
   const sticky = new Set<string>();
   for (let i = 0; i < 4; i++) {
@@ -375,14 +403,6 @@ async function main(): Promise<void> {
     lbPass = allInstances.size > 1;
   }
   check('load balancing across instances', lbPass, `seen: ${[...allInstances].join(', ')}`);
-
-  // Unauthenticated request with a garbage token must be rejected.
-  const bad = await fetch(`${GW}/mcp/demo`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: 'Bearer not-a-token' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 99, method: 'ping' }),
-  });
-  check('gateway rejects bad token (401)', bad.status === 401);
 
   // --- 4. admin bootstrap & user management --------------------------------
   const pkceLogin = async (username: string, password: string): Promise<{ submit: Response; verifier: string }> => {
@@ -1013,8 +1033,6 @@ async function main(): Promise<void> {
   const revokedSession = await fetch(`${AUTH}/me/session`, { headers: { cookie: personalCookie } });
   check('disabled user browser session is revoked', revokedSession.status === 401);
 
-  const forbidden = await fetch(`${AUTH}/admin/users`, { headers: { authorization: `Bearer ${tokens.access_token}` } });
-  check('non-admin blocked from admin API (403)', forbidden.status === 403);
   const forbiddenAudit = await fetch(`${AUTH}/admin/audit-events`, {
     headers: { authorization: `Bearer ${tokens.access_token}` },
   });

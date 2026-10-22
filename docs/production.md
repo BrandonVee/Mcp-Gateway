@@ -165,7 +165,13 @@ Auth 和 Gateway 的 `INTERNAL_API_TOKEN`、`CREDENTIAL_BROKER_TOKEN` 必须一�
 
 ## 持续集成
 
-`.github/workflows/ci.yml` **只做验证，不发布**。它在每次推送和拉取请求中运行类型检查、单元测试、前端及 Node 运行包构建和生产依赖审计；通过后以独立的 `mcp-ci` Compose 项目构建统一应用镜像，检查 Nginx 内的前端产物，并使用 `.github/compose.app-ci.yml` 从镜像文件启动服务（不挂载源码、不使用 watch 进程）运行端到端 smoke 测试；测试上游使用独立的 `test-upstream` 镜像目标，不包含在生产 runtime 镜像中。Docker 镜像使用锁文件和 `pnpm install --frozen-lockfile`。另有 `single-host` 任务实际执行一键部署，验证首次后台设置、注册总开关、OAuth 地址变更、旧令牌失效、重启持久化、数据库和加密密钥的备份恢复、内部端口隔离、整体健康检查、故障重启、正常停止和五容器迁移。调用监控测试覆盖 JSON/SSE、HTTP 200 工具错误、未知结果、去重、元数据隐私、排行和采集开关；注册及监控测试先于会故意耗尽动态客户端注册额度的完整 smoke 测试。此流程验证构建与功能，不代替真实域名、真实上游和生产流量验收。在本机复现 CI 时也应设置独立的 `COMPOSE_PROJECT_NAME`；`docker compose down -v` 会删除该项目的 PostgreSQL 卷。
+`.github/workflows/ci.yml` 按层验证代码与构建产物，main 分支推送通过完整验证后自动触发 `release.yml` 发布流程。
+
+每次推送和拉取请求都运行格式、字体覆盖、类型检查、单元测试、前端及 Node 运行包构建和生产依赖审计；通过后以独立的 `mcp-ci` Compose 项目构建统一应用镜像，检查前端产物及 Nginx 路由，并使用 `.github/compose.app-ci.yml` 从镜像文件启动服务（不挂载源码、不使用 watch 进程）。PR 和非 main 分支推送执行 `pnpm smoke --core`，覆盖服务就绪、OAuth 登录、MCP 工具调用和基本权限检查；测试上游使用独立的 `test-upstream` 镜像目标，不包含在生产 runtime 镜像中。Docker 镜像使用锁文件和 `pnpm install --frozen-lockfile`。
+
+main 分支推送和手动 CI 执行完整回归，包括全部专项集成测试、`pnpm smoke` 及 `single-host` 一键部署演练。后者验证首次后台设置、注册总开关、OAuth 地址变更、旧令牌失效、重启持久化、数据库和加密密钥的备份恢复、内部端口隔离、整体健康检查、故障重启、正常停止和五容器迁移。调用监控测试覆盖 JSON/SSE、HTTP 200 工具错误、未知结果、去重、元数据隐私、排行和采集开关；注册及监控测试先于会故意耗尽动态客户端注册额度的完整 smoke 测试。自动发布仍依赖 `verify`、`single-host`、`smoke` 全部通过。
+
+此流程验证构建与功能，不代替真实域名、真实上游和生产流量验收。在本机复现 CI 时也应设置独立的 `COMPOSE_PROJECT_NAME`；`docker compose down -v` 会删除该项目的 PostgreSQL 卷。
 
 ## 备份与恢复
 

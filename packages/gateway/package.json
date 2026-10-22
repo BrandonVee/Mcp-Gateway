@@ -11,9 +11,9 @@
   "dependencies": {
     "@mcp/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "fastify": "^5.2.1",
+    "fastify": "^5.12.7",
     "ioredis": "^5.4.2",
-    "jose": "^5.9.6",
+    "jose": "^6.2.13",
     "p-limit": "^7.3.3",
     "undici": "^7.3.0",
     "zod": "^3.25.76"

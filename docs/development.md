@@ -114,7 +114,9 @@ MCP_USER=alice MCP_PASSWORD='<用户密码>' pnpm token
 
 ## 冒烟测试
 
-测试上游、测试用户与注册数据位于 `tests/fixtures/`，仅用于独立测试数据库，不参与 `pnpm dev:local`、默认 Docker Compose 或生产 runtime 镜像。CI 通过 `.github/compose.app-ci.yml` 显式启动测试上游并导入测试数据，再运行 `pnpm smoke`。
+测试上游、测试用户与注册数据位于 `tests/fixtures/`，仅用于独立测试数据库，不参与 `pnpm dev:local`、默认 Docker Compose 或生产 runtime 镜像。CI 通过 `.github/compose.app-ci.yml` 显式启动测试上游并导入测试数据。
+
+PR 和非 main 分支推送运行 `pnpm smoke --core`，验证服务就绪、OAuth 登录、MCP 工具发现与调用，以及无效令牌、未授权服务和管理员接口的访问限制。推送到 main 或手动运行 CI 时执行完整回归：`pnpm smoke`、其余专项集成测试，以及 `single-host` 的部署、升级和备份恢复演练。自动发布必须等待完整验证通过。
 
 隔离数据库回归测试覆盖旧库升级、同名账号重建、认证版本撤销、最后管理员并发保护、跨标签页身份切换，以及上游 OAuth 短寿命令牌、暂时错误恢复和回调/刷新/撤销并发；结束后删除测试库或 schema。单元测试还覆盖 MCP 会话不重复返回 session header 及长 SSE 请求时的续期。
 
