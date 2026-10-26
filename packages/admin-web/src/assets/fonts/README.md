@@ -7,4 +7,4 @@ The previous bundled assets and their licenses remain here for historical refere
 - `ResourceHanRoundedCN-UI.woff2`: Chinese subset of Resource Han Rounded CN v1.910, licensed under SIL OFL 1.1 (`OFL-License.txt`). Source: https://github.com/CyanoHao/Resource-Han-Rounded/releases/tag/v1.910
 - `Nunito-UI.woff2`: Latin subset of Nunito, licensed under SIL OFL 1.1 (`Nunito-OFL.txt`). Source: https://github.com/google/fonts/tree/main/ofl/nunito
 
-`scripts/ui-font.py` and its existing CI coverage check maintain the archived Chinese subset. Refresh it with `uv run --with 'fonttools[woff]' python scripts/ui-font.py --source /path/to/ResourceHanRoundedCN-VF.otf` when needed. The active UI font stack does not depend on this subset.
+`scripts/ui-font.py` remains available to check or refresh the archived Chinese subset manually. Refresh it with `uv run --with 'fonttools[woff]' python scripts/ui-font.py --source /path/to/ResourceHanRoundedCN-VF.otf` when needed. The active UI font stack does not depend on this subset, so CI does not require the archive to cover new interface text.

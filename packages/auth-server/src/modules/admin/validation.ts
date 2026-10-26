@@ -9,14 +9,11 @@ const NAME_MESSAGE = 'name must be 1-64 chars [a-zA-Z0-9._-]';
 
 export const DESCRIPTION_MESSAGE = 'description must be a string of at most 2000 characters';
 
-export const serverName = z
-  .string({ required_error: NAME_MESSAGE, invalid_type_error: NAME_MESSAGE })
-  .trim()
-  .regex(SERVER_NAME_RE, NAME_MESSAGE);
+export const serverName = z.string({ error: NAME_MESSAGE }).trim().regex(SERVER_NAME_RE, NAME_MESSAGE);
 
-export const serverDescription = z.string({ invalid_type_error: DESCRIPTION_MESSAGE }).max(2000, DESCRIPTION_MESSAGE);
+export const serverDescription = z.string({ error: DESCRIPTION_MESSAGE }).max(2000, DESCRIPTION_MESSAGE);
 
-export const signupAccess = z.boolean({ invalid_type_error: 'signup_access must be a boolean' });
+export const signupAccess = z.boolean({ error: 'signup_access must be a boolean' });
 const serverPolicyFields = {
   access_auth_mode: z.enum(['none', 'api_key', 'oauth']).optional(),
   monitoring_logs_enabled: z.boolean().optional(),
@@ -37,24 +34,21 @@ export const userCreateSchema = z.object({
   servers: z.array(z.string()).optional(),
 });
 
-export const instanceId = z
-  .string({ invalid_type_error: 'invalid_instance_payload' })
-  .trim()
-  .max(256, 'invalid_instance_payload');
+export const instanceId = z.string({ error: 'invalid_instance_payload' }).trim().max(256, 'invalid_instance_payload');
 
 export const instanceCreateSchema = z
   .object({
     display_name: z.string().trim().max(256).optional(),
     id: instanceId.optional(),
-    url: z.string({ required_error: 'invalid_upstream_endpoint', invalid_type_error: 'invalid_upstream_endpoint' }),
+    url: z.string({ error: 'invalid_upstream_endpoint' }),
   })
   .passthrough();
 
 export const instancePatchSchema = z
   .object({
     display_name: z.string().trim().max(256).optional(),
-    url: z.string({ invalid_type_error: 'invalid_upstream_endpoint' }).optional(),
-    enabled: z.boolean({ invalid_type_error: 'invalid_instance_payload' }).optional(),
+    url: z.string({ error: 'invalid_upstream_endpoint' }).optional(),
+    enabled: z.boolean({ error: 'invalid_instance_payload' }).optional(),
   })
   .passthrough();
 
@@ -63,7 +57,7 @@ export const serverCreateSchema = z
     ...serverPolicyFields,
     name: serverName,
     routing_mode: z.enum(['pool', 'aggregate']).optional(),
-    display_name: z.string({ invalid_type_error: 'display_name must be a string' }).optional(),
+    display_name: z.string({ error: 'display_name must be a string' }).optional(),
     description: serverDescription.optional(),
     signup_access: signupAccess.optional(),
     instances: z.array(instanceCreateSchema).optional(),
@@ -76,12 +70,12 @@ export const serverPatchSchema = z
     name: serverName.optional(),
     routing_mode: z.enum(['pool', 'aggregate']).optional(),
     display_name: z
-      .string({ invalid_type_error: 'display_name must be a non-empty string' })
+      .string({ error: 'display_name must be a non-empty string' })
       .trim()
       .min(1, 'display_name must be a non-empty string')
       .optional(),
     description: serverDescription.optional(),
-    enabled: z.boolean({ invalid_type_error: 'enabled must be a boolean' }).optional(),
+    enabled: z.boolean({ error: 'enabled must be a boolean' }).optional(),
     signup_access: signupAccess.optional(),
   })
   .passthrough();
