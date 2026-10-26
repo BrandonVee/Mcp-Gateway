@@ -1,3 +1,4 @@
+import { verificationEmailHtmlSchema, verificationEmailSubjectSchema } from './verification-email.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
@@ -241,6 +242,8 @@ export interface SystemSettings {
   /** Encrypted at rest (credential envelope); never sent back to browsers. */
   smtp_password?: string;
   smtp_from?: string;
+  verification_email_subject?: string;
+  verification_email_html?: string;
 }
 export const systemOptionDefaults = {
   registration_enabled: true,
@@ -259,6 +262,8 @@ export const systemOptionDefaults = {
   smtp_username: '',
   smtp_password: '',
   smtp_from: '',
+  verification_email_subject: '',
+  verification_email_html: '',
 };
 export function runtimeSettings() {
   return { ...systemOptionDefaults, ...currentSystemSettings() };
@@ -379,6 +384,8 @@ const systemSettingsSchema = (production: boolean) =>
     // Accepts plaintext (encrypted before persistence) or the stored envelope.
     smtp_password: z.string().max(4096).optional(),
     smtp_from: z.string().max(254).optional(),
+    verification_email_subject: verificationEmailSubjectSchema.optional(),
+    verification_email_html: verificationEmailHtmlSchema.optional(),
   });
 
 export function normalizeSystemSettings(

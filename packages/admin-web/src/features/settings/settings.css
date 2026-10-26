@@ -1,5 +1,6 @@
 .settings-page {
   --settings-gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
 }
 .settings-page > .ant-form {
   min-width: 0;
@@ -409,4 +410,89 @@
 
 .settings-category-tabs > .ant-tabs-nav {
   margin-bottom: 0;
+}
+
+.settings-email-template {
+  --template-text: #d4e3f4;
+  --template-secondary: #91a6c0;
+  --template-border: #20314a;
+  border-top: 1px solid var(--template-border);
+  padding-top: 24px;
+  min-width: 0;
+}
+.settings-template-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.settings-template-heading h4 {
+  margin: 0;
+  color: var(--template-text);
+  font-size: 15px;
+}
+.settings-template-heading p,
+.settings-template-note {
+  margin: 6px 0 0;
+  color: var(--template-secondary);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.settings-template-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.settings-template-fields {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.settings-template-code {
+  font: 12px/1.7 var(--mono);
+  tab-size: 2;
+}
+.settings-template-preview {
+  min-width: 0;
+}
+.settings-template-subject {
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--template-border);
+  border-radius: 8px;
+  color: var(--template-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.settings-template-preview-canvas {
+  display: flex;
+  justify-content: center;
+  border: 1px solid var(--template-border);
+  border-radius: 8px;
+  background: #e3e9f1;
+  overflow: hidden;
+}
+.settings-template-preview iframe {
+  display: block;
+  width: 100%;
+  height: 780px;
+  border: 0;
+  background: white;
+}
+.settings-template-preview iframe.is-mobile {
+  max-width: 390px;
+}
+@media (max-width: 1150px) {
+  .settings-template-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+:root[data-theme='light'] .settings-email-template {
+  --template-text: #162033;
+  --template-secondary: #687386;
+  --template-border: #dce3ed;
 }

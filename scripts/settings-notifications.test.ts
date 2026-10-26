@@ -54,8 +54,9 @@ test('SMTP draft test passes draft credentials to transport and closes it on suc
     assert.equal(options.host, smtp.smtp_host);
     assert.equal(options.auth.pass, 'draft-password');
     return {
-      sendMail: async (mail: { to: string }) => {
+      sendMail: async (mail: { to: string; html?: string }) => {
         assert.equal(mail.to, 'test@example.com');
+        assert.equal(mail.html, '<p>012345</p>');
         if (fail) throw new Error('relay rejected');
       },
       close: () => closed++,
@@ -63,10 +64,10 @@ test('SMTP draft test passes draft credentials to transport and closes it on suc
   };
   try {
     const config = { ...smtp, public_url: 'https://example.com', upstream_hosts: [] };
-    await sendMailWithSettings(config, 'draft-password', 'test@example.com', 'test', 'message');
+    await sendMailWithSettings(config, 'draft-password', 'test@example.com', 'test', 'message', '<p>012345</p>');
     fail = true;
     await assert.rejects(
-      sendMailWithSettings(config, 'draft-password', 'test@example.com', 'test', 'message'),
+      sendMailWithSettings(config, 'draft-password', 'test@example.com', 'test', 'message', '<p>012345</p>'),
       /relay rejected/,
     );
     assert.equal(closed, 2);

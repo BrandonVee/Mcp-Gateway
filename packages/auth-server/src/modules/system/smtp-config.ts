@@ -1,7 +1,10 @@
 import { z } from 'zod';
+import { verificationEmailHtmlSchema, verificationEmailSubjectSchema } from '@/shared/verification-email.js';
 
 /** Only SMTP fields are accepted for a transient test; no settings are persisted. */
 export const smtpTestConfigSchema = z.object({
+  verification_email_subject: verificationEmailSubjectSchema.optional(),
+  verification_email_html: verificationEmailHtmlSchema.optional(),
   smtp_host: z
     .string()
     .trim()

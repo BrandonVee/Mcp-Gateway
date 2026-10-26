@@ -124,6 +124,6 @@ export async function sendSignupEmailCode(
       set: { codeHash: hashSignupCode(code), expiresAt: now + 600000, createdAt: now },
     });
   const mail = verificationCodeMail(code);
-  await sendMail(normalized, mail.subject, mail.text);
+  await sendMail(normalized, mail.subject, mail.text, mail.html);
   return 'sent';
 }

@@ -15,6 +15,8 @@ import {
   SendOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
+import { EmailTemplateEditor } from './EmailTemplateEditor';
+import { DEFAULT_VERIFICATION_EMAIL_HTML, DEFAULT_VERIFICATION_EMAIL_SUBJECT } from '@/shared/verification-email';
 import { useI18n } from '@/web/i18n';
 import type { SmtpSettingsInput, SystemSettings, SystemSettingsInput, SystemUpdateStatus } from '@/web/types';
 import '@/web/features/settings/settings.css';
@@ -151,9 +153,13 @@ export function SettingsPage({
         'smtp_password',
         'smtp_from',
         'smtp_secure',
+        'verification_email_subject',
+        'verification_email_html',
       ]);
       const draft = form.getFieldsValue(true);
       await onTestEmail(testTo.trim(), {
+        verification_email_subject: draft.verification_email_subject,
+        verification_email_html: draft.verification_email_html,
         smtp_host: draft.smtp_host?.trim(),
         smtp_port: draft.smtp_port,
         smtp_secure: draft.smtp_secure,
@@ -194,6 +200,8 @@ export function SettingsPage({
       smtp_username: settings.smtp_username ?? '',
       smtp_password: '',
       smtp_from: settings.smtp_from ?? '',
+      verification_email_subject: settings.verification_email_subject || DEFAULT_VERIFICATION_EMAIL_SUBJECT,
+      verification_email_html: settings.verification_email_html || DEFAULT_VERIFICATION_EMAIL_HTML,
     }),
     [settings],
   );
@@ -272,7 +280,7 @@ export function SettingsPage({
         onFinishFailed={({ errorFields }) => {
           const key = String(errorFields[0]?.name[0] ?? '');
           setCategory(
-            key.startsWith('smtp_')
+            key.startsWith('smtp_') || key.startsWith('verification_email_')
               ? 'smtp'
               : key.startsWith('alert_') || ['monitoring_error_rate', 'monitoring_slow_ms'].includes(key)
                 ? 'alerts'
@@ -458,7 +466,8 @@ export function SettingsPage({
               <InfoCircleOutlined />
               <p>{t(mailReady ? 'settings.smtpReady' : 'settings.smtpNotConfigured')}</p>
             </div>
-            <Flex gap={8} align="center">
+            <EmailTemplateEditor disabled={!settings.managed || saving || updating} onChange={() => setDirty(true)} />
+            <Flex gap={8} align="center" wrap>
               <Input
                 value={testTo}
                 onChange={(event) => setTestTo(event.target.value)}

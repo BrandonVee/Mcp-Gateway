@@ -10,7 +10,12 @@ import {
   systemOptionDefaults,
   upstreamAllowlistEnabled,
 } from '@mcp/shared';
-import { mailConfigured, sendMail, sendMailWithSettings } from '@/auth/infrastructure/mail/mailer.js';
+import {
+  mailConfigured,
+  sendMail,
+  sendMailWithSettings,
+  verificationCodeMail,
+} from '@/auth/infrastructure/mail/mailer.js';
 import { decryptCredential, encryptCredential } from '@/auth/infrastructure/security/credential-crypto.js';
 import { addUpstreamHost, currentSystemSettings, saveSystemSettings } from '@/auth/modules/system/settings.js';
 import { canReuseSmtpPassword, smtpTestConfigSchema } from '@/auth/modules/system/smtp-config.js';
@@ -84,9 +89,12 @@ export function registerSettingsRoutes(router: AdminRouter, deps: AdminDeps) {
     const parsed = smtp === undefined ? null : smtpTestConfigSchema.safeParse(smtp);
     if (parsed && !parsed.success) return c.json({ error: 'invalid_smtp_settings' }, 400);
     if (!parsed && !mailConfigured()) return c.json({ error: 'smtp_not_configured' }, 409);
-    const subject = 'MCP Gateway SMTP 测试 / SMTP test';
-    const text =
-      '这是一封测试邮件，说明 SMTP 配置可以发送邮件。\nThis test message confirms your SMTP configuration works.';
+    const mail = verificationCodeMail('123456', {
+      ...currentSystemSettings(),
+      ...(parsed?.success ? parsed.data : {}),
+    });
+    const subject = `[TEST] ${mail.subject}`;
+    const text = `测试邮件 / Test email\n${mail.text}`;
     try {
       if (parsed?.success) {
         const saved = currentSystemSettings();
@@ -105,9 +113,9 @@ export function registerSettingsRoutes(router: AdminRouter, deps: AdminDeps) {
               ? decryptCredential(saved.smtp_password)
               : ''
             : config.smtp_password;
-        await sendMailWithSettings({ ...saved, ...config }, password, to, subject, text);
+        await sendMailWithSettings({ ...saved, ...config }, password, to, subject, text, mail.html);
       } else {
-        await sendMail(to, subject, text);
+        await sendMail(to, subject, text, mail.html);
       }
       return c.json({ ok: true });
     } catch (error) {

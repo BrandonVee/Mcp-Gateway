@@ -325,6 +325,23 @@ export const messages = {
   'auth.signup.sendCode': 'Send code',
   'auth.signup.codeSent': 'Code sent. Valid for 10 minutes.',
   'auth.signup.resendCountdown': 'Resend in {seconds}s',
+  'settings.emailTemplate': 'Verification email template',
+  'settings.emailTemplateHelp':
+    'Used for registration and account email verification. Save to apply, or test the current draft.',
+  'settings.emailTemplateReset': 'Restore default',
+  'settings.emailTemplateResetConfirm': 'Replace the current draft with the default template?',
+  'settings.emailTemplateSubject': 'Email subject',
+  'settings.emailTemplateHtml': 'HTML body',
+  'settings.emailTemplateVariables':
+    'Variables: {{code}} verification code (required), {{expires_minutes}} expiry in minutes. Leave blank to use the default.',
+  'settings.emailTemplateSubjectInvalid': 'Use a single-line subject with at most 200 characters',
+  'settings.emailTemplateHtmlInvalid': 'Include {{code}} in the HTML body and use at most 100,000 characters',
+  'settings.emailTemplatePreview': 'Template preview',
+  'settings.emailTemplatePreviewSize': 'Preview device',
+  'settings.emailTemplateDesktop': 'Desktop',
+  'settings.emailTemplateMobile': 'Mobile',
+  'settings.emailTemplatePreviewHelp':
+    'Sample code: 123456 · Expires in 10 minutes. Scripts and external resources are disabled; email clients may render differently.',
   'settings.smtpModule': 'Email configuration',
   'settings.smtpDescription': 'Configure the SMTP relay used for registration verification and account notices',
   'settings.smtpHost': 'SMTP server',
@@ -347,7 +364,8 @@ export const messages = {
   'settings.smtpNotConfigured':
     'Sender email is not configured. Verification emails are skipped; everything else works.',
   'settings.optional': 'Optional',
-  'settings.smtpTestDraft': 'Test the current SMTP draft without saving. A blank password uses the saved password.',
+  'settings.smtpTestDraft':
+    'Test the current SMTP and email template drafts with sample code 123456 without saving. A blank password uses the saved password.',
   'api.smtpTestPasswordRequired': 'The SMTP relay or account has changed. Enter its password before testing.',
   'api.invalidSmtpSettings': 'Invalid SMTP configuration. Check the server, port, and sender.',
   'settings.smtpTest': 'Send test email',

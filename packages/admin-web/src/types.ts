@@ -236,6 +236,8 @@ export interface SystemSettings {
   smtp_password?: string;
   smtp_password_configured?: boolean;
   smtp_from?: string;
+  verification_email_subject?: string;
+  verification_email_html?: string;
 }
 export type SystemSettingsInput = Omit<
   SystemSettings,
@@ -381,5 +383,12 @@ export interface TopologySnapshot {
 
 export type SmtpSettingsInput = Pick<
   SystemSettingsInput,
-  'smtp_host' | 'smtp_port' | 'smtp_secure' | 'smtp_username' | 'smtp_password' | 'smtp_from'
+  | 'smtp_host'
+  | 'smtp_port'
+  | 'smtp_secure'
+  | 'smtp_username'
+  | 'smtp_password'
+  | 'smtp_from'
+  | 'verification_email_subject'
+  | 'verification_email_html'
 >;

@@ -33,7 +33,7 @@ export async function sendEmailVerificationCode(userId: number): Promise<'sent' 
       set: { email: user.email, codeHash: hashCode(code), expiresAt: now + CODE_TTL_MS, createdAt: now },
     });
   const mail = verificationCodeMail(code);
-  await sendMail(user.email, mail.subject, mail.text);
+  await sendMail(user.email, mail.subject, mail.text, mail.html);
   return 'sent';
 }
 
