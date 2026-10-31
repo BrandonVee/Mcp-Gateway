@@ -1,8 +1,10 @@
 FROM node:22-alpine
 RUN corepack enable
 WORKDIR /app
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json tsconfig.json ./
+COPY LICENSE NOTICE THIRD_PARTY_NOTICES.md ./
 COPY packages ./packages
 COPY scripts ./scripts
 COPY config ./config

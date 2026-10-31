@@ -1,5 +1,7 @@
 .git
 .github
+.vscode
+output
 .env
 .env.*
 deploy/production.env

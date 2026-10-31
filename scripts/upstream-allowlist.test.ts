@@ -5,14 +5,14 @@ import { refreshServerConfigs, serverConfigs } from '@/gateway/config.js';
 import { validateMcpEndpoint } from '@/auth/modules/upstreams/endpoint-validation.js';
 import { normalizeUpstreamHost } from '@/shared/index.js';
 
-const endpoint = 'http://38.58.57.4:8765/mcp/hscode';
+const endpoint = 'http://203.0.113.10:8765/mcp/example';
 
 test('registration distinguishes an untrusted host from malformed URLs and Gateway loops', () => {
   const env = { MCP_UPSTREAM_ALLOWLIST_ENABLED: 'true', MCP_UPSTREAM_ALLOWED_HOSTS: 'trusted.example.com' };
   const gateway = 'https://gateway.example.com';
   assert.deepEqual(validateMcpEndpoint(endpoint, env, gateway), {
     error: 'upstream_host_not_allowed',
-    host: '38.58.57.4',
+    host: '203.0.113.10',
   });
   assert.deepEqual(validateMcpEndpoint('https://TRUSTED.example.com:8443', env, gateway), {
     url: 'https://trusted.example.com:8443/mcp',
@@ -50,7 +50,7 @@ test('quick-add accepts hostnames and IPs while rejecting schemes, ports and pat
 
 test('explicit allowlist policy applies in both production and development', () => {
   for (const NODE_ENV of ['production', 'development']) {
-    const enabled = { NODE_ENV, MCP_UPSTREAM_ALLOWLIST_ENABLED: 'true', MCP_UPSTREAM_ALLOWED_HOSTS: '38.58.57.4' };
+    const enabled = { NODE_ENV, MCP_UPSTREAM_ALLOWLIST_ENABLED: 'true', MCP_UPSTREAM_ALLOWED_HOSTS: '203.0.113.10' };
     assert.equal(normalizeUpstreamEndpoint(endpoint, enabled), endpoint);
     assert.equal(normalizeUpstreamEndpoint('https://other.example.com/mcp', enabled), null);
     assert.equal(normalizeUpstreamEndpoint(endpoint, { ...enabled, MCP_UPSTREAM_ALLOWED_HOSTS: '' }), null);

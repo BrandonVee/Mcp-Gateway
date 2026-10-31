@@ -11,8 +11,10 @@ dist/
 *.tsbuildinfo
 *.log
 .env
-.env.local
+.env.*
+!.env.*.example
 .DS_Store
+.vscode/
 data/
 backups/
 /mcp-app-*.tar

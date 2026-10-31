@@ -2,10 +2,11 @@
   "name": "@mcp/admin-web",
   "version": "0.20.2",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node ../../scripts/generate-third-party-licenses.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

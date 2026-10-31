@@ -3,6 +3,7 @@
 集中管理 MCP 服务、访问权限和上游凭据，为客户端提供统一入口。
 
 [![CI](https://github.com/BrandonVee/Mcp-Gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/BrandonVee/Mcp-Gateway/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 [快速部署](#快速部署) · [认证与访问控制](#认证与访问控制) · [日常使用](#日常使用) · [开发与测试](#开发与测试) · [详细文档](#详细文档)
 
@@ -255,3 +256,9 @@ pnpm build:runtime
 | [上游服务接入与用户凭据](docs/upstream-connections.md) | 聚合与实例池、独立上游认证和凭据管理。        |
 | [管理 API 与管理端](docs/admin-api.md)                 | 管理接口、账号生命周期与前端能力。            |
 | [本地开发与测试](docs/development.md)                  | 开发环境、验证脚本与端到端测试。              |
+
+## 参与贡献与许可证
+
+欢迎通过 [Issue](https://github.com/BrandonVee/Mcp-Gateway/issues) 反馈问题或提出改进，通过 Pull Request 贡献代码。开发流程与验证要求见 [贡献指南](CONTRIBUTING.md)；安全漏洞请按 [安全政策](SECURITY.md) 私密报告。
+
+本项目采用 [Apache License 2.0](LICENSE)，版权声明见 [NOTICE](NOTICE)。第三方依赖与归档字体保留各自许可证，详见 [第三方声明](THIRD_PARTY_NOTICES.md)。
